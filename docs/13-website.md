@@ -28,7 +28,8 @@ site/
 └── assets/
     ├── icon.png        # 应用图标
     ├── icon.svg
-    └── nimi-notes.png  # Nimi Notes 实际窗口截图
+    ├── nimi-notes.png  # Nimi Notes 实际窗口截图
+    └── fonts/          # Bricolage Grotesque(自托管,OFL)
 ```
 
 没有构建步骤。GitHub Actions 直接把 `site/` 上传为 Pages artifact。
@@ -42,6 +43,8 @@ site/
 | 首页先用 Nimi Notes 截图 | 用真实应用证明框架可用,而不是只放抽象图形 |
 | “为什么 Nim”独立章节 | 明确项目不是 Go 兼容层,而是选择 Nim 的执行模型与 FFI |
 | 状态区诚实标注切片 | 避免把 M3–M7 的部分实现写成完整完成 |
+| 标题英文使用 Bricolage Grotesque | 品牌/标题更有辨识度;中文自动回退到系统中文字体 |
+| 字体自托管,不请求 Google Fonts | 无第三方请求、无隐私/可用性依赖;OFL 允许分发 |
 | 文档链接指向 GitHub markdown | 文档持续更新,不在站点重复维护全文 |
 | 自定义域名 + CNAME 文件 | Pages 设置与 artifact 都携带域名;便于迁移 |
 
