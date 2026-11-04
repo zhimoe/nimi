@@ -58,7 +58,16 @@ open http://127.0.0.1:8765/
 http://127.0.0.1:8765/?reveal=1
 ```
 
-## 5. GitHub Pages 部署
+## 5. 当前状态(2026-11-04)
+
+- 仓库已创建并公开:<https://github.com/zhimoe/nimi>。
+- `Deploy website` workflow 已成功运行,artifact 从 `site/` 部署。
+- Pages 已启用,Source 为 GitHub Actions,custom domain 已设为 `nimi.zhi.moe`。
+- **DNS 仍待添加**:`nimi.zhi.moe` 目前为 NXDOMAIN,需要在 Cloudflare
+  添加下面的 CNAME;添加前默认 Pages 地址会 301 到该域名。
+- HTTPS 证书由 GitHub Pages 在 DNS 生效后自动签发,之后可开启 Enforce HTTPS。
+
+## 6. GitHub Pages 部署
 
 工作流:`.github/workflows/pages.yml`
 
@@ -75,7 +84,7 @@ push main (site/** 或 workflow 变更)
 - Custom domain: `nimi.zhi.moe`
 - Enforce HTTPS: DNS 与证书就绪后开启
 
-## 6. DNS(Cloudflare)
+## 7. DNS(Cloudflare)
 
 在 Cloudflare 的 `zhi.moe` zone 添加:
 
@@ -90,7 +99,7 @@ push main (site/** 或 workflow 变更)
 - 不要用 A 记录指向 GitHub Pages 的 IP;子域名用 CNAME 更直接。
 - DNS 生效后,GitHub Pages 会自动签发 HTTPS 证书;可能需要几分钟到几十分钟。
 
-## 7. 验证
+## 8. 验证
 
 ```sh
 # 首页与文档页
@@ -111,7 +120,7 @@ curl -I https://zhimoe.github.io/nimi/
 - 文档页侧边栏在桌面端 sticky,移动端折叠为顶部目录。
 - 自定义域名 HTTPS 证书有效。
 
-## 8. 已知限制 / 下一步
+## 9. 已知限制 / 下一步
 
 - 站点目前是中文单页 + 单文档页;后续可拆成多页文档与搜索。
 - 截图是 macOS 暗色主题;可补浅色主题和原生 UI 示例截图。
