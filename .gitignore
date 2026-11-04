@@ -1,0 +1,29 @@
+# Build outputs
+/nimi
+.nimi/
+dist/
+examples/*/dist/
+examples/*/.nimi/
+examples/*/main
+*.o
+*.dSYM/
+
+# Local reference clone (not part of the public repository)
+/mygo/
+
+# Spike binaries and generated images
+/spikes/*/check_bin
+/spikes/objc_hello/spike
+/spikes/blocks/spike_blocks
+/spikes/wkwebview/spike_webview
+/spikes/coretext/spike_coretext
+/spikes/coretext/coretext.png
+/spikes/nim_meta/spike_meta
+/spikes/metal/spike_metal
+/spikes/threads/t_arc
+/spikes/threads/t_orc
+/spikes/threads/t_atomicArc
+/spikes/threads/t_yrc
+
+# OS/editor noise
+.DS_Store

@@ -1,0 +1,7 @@
+{
+  "name": "Nimi Notes",
+  "slug": "nimi-notes",
+  "identifier": "com.example.nimi-notes",
+  "version": "0.1.0",
+  "main": "main.nim"
+}

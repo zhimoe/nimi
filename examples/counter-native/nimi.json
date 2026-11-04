@@ -1,0 +1,8 @@
+{
+  "name": "Counter",
+  "slug": "counter",
+  "identifier": "com.example.counter",
+  "version": "0.1.0",
+  "main": "main.nim",
+  "bindings": "frontend/nimi.ts"
+}

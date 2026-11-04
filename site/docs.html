@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>文档 — Nimi</title>
+  <meta name="description" content="Nimi 文档:安装、快速开始、IPC、原生 UI、平台架构与路线图。">
+  <link rel="canonical" href="https://nimi.zhi.moe/docs.html">
+  <link rel="icon" type="image/png" href="assets/icon.png">
+  <script>document.documentElement.classList.add("js");</script>
+  <link rel="stylesheet" href="styles.css">
+  <script src="main.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">跳到正文</a>
+
+  <header class="site-header" id="top">
+    <div class="wrap header-inner">
+      <a class="brand" href="index.html" aria-label="Nimi 首页">
+        <img src="assets/icon.png" alt="" width="30" height="30">
+        <span>Nimi</span>
+      </a>
+      <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav">
+        <span></span><span></span>
+        <span class="sr-only">打开导航</span>
+      </button>
+      <nav class="site-nav" id="site-nav" aria-label="主导航">
+        <a href="index.html#why-nim">为什么 Nim</a>
+        <a href="index.html#features">框架能力</a>
+        <a href="index.html#architecture">架构</a>
+        <a href="index.html#demo">示例</a>
+        <a href="docs.html" aria-current="page">文档</a>
+        <a class="nav-github" href="https://github.com/zhimoe/nimi" target="_blank" rel="noreferrer">
+          GitHub <span aria-hidden="true">↗</span>
+        </a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="docs-hero">
+      <div class="wrap">
+        <p class="eyebrow"><span class="pulse"></span> Documentation</p>
+        <h1>Nimi 文档<span class="accent">.</span></h1>
+        <p class="lede">
+          从源码运行第一个窗口,到 WebView IPC、原生 UI、平台后端与打包。
+          当前状态以 macOS 为主,Windows/Linux 在路线图中。
+        </p>
+      </div>
+    </section>
+
+    <div class="wrap docs-layout">
+      <aside class="docs-side" aria-label="文档目录">
+        <strong>目录</strong>
+        <a href="#install">安装</a>
+        <a href="#quickstart">快速开始</a>
+        <a href="#ipc">WebView 与 IPC</a>
+        <a href="#native-ui">原生 UI</a>
+        <a href="#structure">项目结构</a>
+        <a href="#platforms">平台与路线图</a>
+        <a href="#examples">示例</a>
+        <a href="#more">完整文档</a>
+      </aside>
+
+      <div class="docs-body">
+        <section id="install">
+          <h2>安装</h2>
+          <p>
+            当前从源码使用,尚未发布到 Nimble。需要 <strong>Nim 2.4+</strong>、
+            <strong>macOS 12+</strong> 和 Xcode Command Line Tools。
+          </p>
+          <pre><code>git clone https://github.com/zhimoe/nimi.git
+cd nimi
+nim c -o:nimi src/nimi/cli.nim
+./nimi doctor
+./nimi version</code></pre>
+          <div class="docs-callout">
+            <strong>提示:</strong> 本仓库包含只读的 <code>mygo/</code> 参考副本;
+            实际构建只需要 <code>src/</code>、<code>examples/</code> 和 <code>config.nims</code>。
+          </div>
+        </section>
+
+        <section id="quickstart">
+          <h2>快速开始</h2>
+          <p>用 CLI 创建并运行一个项目:</p>
+          <pre><code>./nimi init my-app
+./nimi dev my-app
+
+# 打包 .app + DMG
+./nimi build my-app
+open "my-app/dist/darwin-arm64/My App.app"</code></pre>
+          <p>
+            <code>nimi dev</code> 会监听 <code>.nim</code>/<code>.nims</code> 与
+            <code>nimi.json</code>,源码变化后自动重建并重启。
+            <code>nimi build</code> 生成 Info.plist、PkgInfo、图标、可选签名和 DMG。
+          </p>
+
+          <h3>直接运行仓库示例</h3>
+          <pre><code># WebView + 类型化 IPC
+nim c -r --path:src examples/hello/main.nim
+
+# 原生 UI 布局与交互
+nim c -r --path:src examples/counter-native/main.nim
+
+# Markdown 笔记应用(WebView + 原生菜单/对话框)
+nim c -r --path:src examples/notes/main.nim</code></pre>
+        </section>
+
+        <section id="ipc">
+          <h2>WebView 与类型化 IPC</h2>
+          <p>
+            Nim 侧用 <code>bindService</code> 显式暴露方法。宏在编译期读取 proc 签名,
+            生成 JSON 参数解码、结果编码和 TypeScript 客户端。
+          </p>
+          <pre><code><span class="kw">import</span> nimi
+
+<span class="kw">type</span>
+  Greeter = <span class="kw">ref object</span>
+
+<span class="kw">proc</span> greet(self: Greeter, name: <span class="ty">string</span>): <span class="ty">string</span> =
+  <span class="st">"Hello, "</span> &amp; name &amp; <span class="st">"!"</span>
+
+<span class="kw">let</span> greeter = Greeter()
+bindService(greeter, greet)</code></pre>
+          <p>页面通过注入的 bridge 调用:</p>
+          <pre><code><span class="kw">const</span> text = <span class="kw">await</span> window.nimi.call(<span class="st">"Greeter.greet"</span>, <span class="st">"Nim"</span>);</code></pre>
+          <p>
+            每个窗口有独立 secret 与 token;bridge 在 document start 注入,
+            页面无法直接访问文件系统或系统 API,只能调用显式绑定的服务。
+          </p>
+          <p>
+            运行 <code>./nimi generate my-app</code> 会生成
+            <code>frontend/nimi.ts</code> 和运行时客户端,便于在 TypeScript 项目中获得补全。
+          </p>
+        </section>
+
+        <section id="native-ui">
+          <h2>原生 UI</h2>
+          <p>
+            不需要 HTML 时,用 <code>uiView</code> 描述每帧的 Node 树。
+            布局、测量、绘制、命中、焦点和键盘都走同一套实现。
+          </p>
+          <pre><code><span class="kw">import</span> std/os
+<span class="kw">import</span> nimi
+<span class="kw">import</span> nimi/ui
+
+<span class="kw">type</span>
+  Counter = <span class="kw">ref object</span>
+    n: <span class="ty">int</span>
+
+<span class="kw">proc</span> view(s: Counter, c: Context) =
+  column(c).fill().center().gap(<span class="ty">16</span>).children(c, <span class="kw">proc</span>() =
+    text(c, $s.n).fontSize(<span class="ty">56</span>).bold()
+    row(c).gap(<span class="ty">8</span>).children(c, <span class="kw">proc</span>() =
+      button(c, <span class="st">"+"</span>, (proc() = inc s.n), key = <span class="st">"inc"</span>)
+    )
+  )
+
+<span class="kw">let</span> counter = Counter()
+<span class="kw">let</span> content = uiView(<span class="kw">proc</span>(c: Context) = view(counter, c))
+
+app.whenReady(<span class="kw">proc</span>() =
+  discard newWindow(WindowOptions(
+    title: <span class="st">"Counter"</span>,
+    width: <span class="ty">360</span>,
+    height: <span class="ty">260</span>,
+    content: content
+  ))
+)
+app.run()</code></pre>
+          <p>
+            已实现的控件包括 Text、Button、Checkbox、Switch、Slider、Progress、
+            Divider 和单行 TextInput;文本换行、Tab/Enter 焦点、鼠标拖动和
+            <code>Tester</code> 无窗口测试都已可用。
+          </p>
+        </section>
+
+        <section id="structure">
+          <h2>项目结构</h2>
+          <table class="docs-table">
+            <thead>
+              <tr><th>路径</th><th>作用</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>src/nimi/core/</code></td><td>app、window、IPC、loop、events、bridge、menu、dialog、clipboard</td></tr>
+              <tr><td><code>src/nimi/platform/</code></td><td>平台契约与 Darwin 后端(AppKit/WKWebView/CoreGraphics/CoreText)</td></tr>
+              <tr><td><code>src/nimi/ui/</code></td><td>原生 UI 布局、控件、输入、焦点与 Tester</td></tr>
+              <tr><td><code>src/nimi/scene/</code></td><td>rect/text display list</td></tr>
+              <tr><td><code>src/nimi/render/</code></td><td>CoreGraphics 场景渲染与离屏 PNG</td></tr>
+              <tr><td><code>src/nimi/text/</code></td><td>CoreText 测量与换行</td></tr>
+              <tr><td><code>src/nimi/cli.nim</code></td><td>init / generate / dev / build / doctor</td></tr>
+              <tr><td><code>docs/</code></td><td>可行性、架构、平台后端、路线图、里程碑状态</td></tr>
+              <tr><td><code>examples/notes/</code></td><td>Nimi Notes:WebView-first 完整应用</td></tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section id="platforms">
+          <h2>平台与路线图</h2>
+          <p>
+            core 只依赖 <code>platform/contract</code>。macOS 后端已经打通;
+            Windows 与 Linux 复用同一 Backend / NativeWindow / SurfaceHandler 模型。
+          </p>
+          <table class="docs-table">
+            <thead>
+              <tr><th>平台</th><th>状态</th><th>实现</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>macOS</td><td>可用(切片)</td><td>AppKit、WKWebView、CoreGraphics、CoreText、NSMenu、NSOpenPanel/NSSavePanel</td></tr>
+              <tr><td>Windows</td><td>规划(M8)</td><td>Win32、WebView2、D3D11</td></tr>
+              <tr><td>Linux</td><td>规划(M9)</td><td>GTK3、WebKitGTK、OpenGL</td></tr>
+            </tbody>
+          </table>
+          <ul>
+            <li><strong>M1:</strong> WebView + 类型化 IPC + TS 生成 + CLI + .app。</li>
+            <li><strong>M2:</strong> 原生 Surface、布局、CoreText、焦点、Tester。</li>
+            <li><strong>M3–M7:</strong> 控件、菜单/对话框/剪贴板、单行 TextInput、DMG/签名切片。</li>
+            <li><strong>剩余:</strong> 通知/托盘/快捷键、IME/TextArea/选择、完整 Metal、自动更新/公证、Windows/Linux。</li>
+          </ul>
+        </section>
+
+        <section id="examples">
+          <h2>示例</h2>
+          <p>
+            <strong>Nimi Notes</strong> 是当前的端到端验收:WKWebView 页面负责编辑与预览,
+            Nim 负责 JSON 存储、原生菜单和文件对话框,最后打包成
+            <code>Nimi Notes.app</code> 与 DMG。
+          </p>
+          <pre><code>NIMI_NOTES_DIR=/tmp/nimi-notes-smoke NIMI_SMOKE=crud \
+  nim c -r --path:src examples/notes/main.nim
+# smoke crud: ok (1 -&gt; 2)
+
+./nimi build examples/notes
+hdiutil verify examples/notes/dist/darwin-arm64/nimi-notes-0.1.0.dmg</code></pre>
+          <p>仓库里还有:</p>
+          <ul>
+            <li><code>examples/hello</code> — WKWebView + IPC + 50 次调用冒烟。</li>
+            <li><code>examples/counter-native</code> — 原生布局、鼠标、方向键、Tab+Enter。</li>
+            <li><code>examples/widgets-native</code> — Checkbox/Switch/Slider/Progress/Divider。</li>
+            <li><code>examples/form-native</code> — 原生表单、菜单、文件/消息对话框。</li>
+          </ul>
+        </section>
+
+        <section id="more">
+          <h2>完整文档</h2>
+          <p>设计与实现细节在仓库 <code>docs/</code> 下持续更新:</p>
+          <div class="docs-links">
+            <a href="https://github.com/zhimoe/nimi/blob/main/docs/00-feasibility.md" target="_blank" rel="noreferrer">00 · 可行性分析 ↗</a>
+            <a href="https://github.com/zhimoe/nimi/blob/main/docs/01-architecture.md" target="_blank" rel="noreferrer">01 · 架构设计 ↗</a>
+            <a href="https://github.com/zhimoe/nimi/blob/main/docs/02-macos-backend.md" target="_blank" rel="noreferrer">02 · macOS 后端 ↗</a>
+            <a href="https://github.com/zhimoe/nimi/blob/main/docs/03-native-ui.md" target="_blank" rel="noreferrer">03 · 原生 UI ↗</a>
+            <a href="https://github.com/zhimoe/nimi/blob/main/docs/04-tooling-and-ipc.md" target="_blank" rel="noreferrer">04 · 工具链与 IPC ↗</a>
+            <a href="https://github.com/zhimoe/nimi/blob/main/docs/05-roadmap.md" target="_blank" rel="noreferrer">05 · 实施路线图 ↗</a>
+            <a href="https://github.com/zhimoe/nimi/blob/main/docs/12-notes-demo.md" target="_blank" rel="noreferrer">12 · Nimi Notes 验收 ↗</a>
+            <a href="https://github.com/zhimoe/nimi" target="_blank" rel="noreferrer">GitHub 仓库 ↗</a>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap footer-inner">
+      <div class="footer-brand">
+        <img src="assets/icon.png" alt="" width="24" height="24">
+        <span>Nimi</span>
+        <small>Nim desktop framework</small>
+      </div>
+      <div class="footer-links">
+        <a href="index.html">首页</a>
+        <a href="https://github.com/zhimoe/nimi" target="_blank" rel="noreferrer">GitHub</a>
+        <a href="https://github.com/zhimoe/nimi/blob/main/docs/05-roadmap.md" target="_blank" rel="noreferrer">路线图</a>
+      </div>
+      <p class="footer-note">Built with Nim. Inspired by MyGo (MIT).</p>
+    </div>
+  </footer>
+</body>
+</html>

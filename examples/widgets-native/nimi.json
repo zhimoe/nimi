@@ -1,0 +1,7 @@
+{
+  "name": "Widgets",
+  "slug": "widgets",
+  "identifier": "com.example.widgets",
+  "version": "0.1.0",
+  "main": "main.nim"
+}

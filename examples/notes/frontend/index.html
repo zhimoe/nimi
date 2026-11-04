@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nimi Notes</title>
+<style>__NIMI_CSS__</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <header class="brand">
+      <div class="brand-mark">N</div>
+      <div>
+        <div class="brand-name">Nimi Notes</div>
+        <div class="brand-sub">本地 Markdown 笔记</div>
+      </div>
+    </header>
+
+    <button id="new-note" class="new-note" type="button">
+      <span class="plus">+</span>
+      <span>新建笔记</span>
+      <kbd>⌘N</kbd>
+    </button>
+
+    <label class="search">
+      <span class="search-icon">⌕</span>
+      <input id="search" type="search" placeholder="搜索笔记" autocomplete="off" spellcheck="false">
+    </label>
+
+    <nav id="note-list" class="note-list" aria-label="笔记列表"></nav>
+
+    <footer class="sidebar-footer">
+      <span id="note-count">0 篇笔记</span>
+      <button id="import" class="link-button" type="button">导入</button>
+    </footer>
+  </aside>
+
+  <main class="main">
+    <header class="toolbar">
+      <input id="title" class="title-input" type="text" placeholder="无标题笔记"
+             autocomplete="off" spellcheck="false">
+      <div class="toolbar-actions">
+        <span id="status" class="status"><span class="status-dot"></span>已保存</span>
+        <button id="export" class="tool-button" type="button">导出</button>
+        <button id="delete" class="tool-button danger" type="button">删除</button>
+      </div>
+    </header>
+
+    <section id="editor-wrap" class="editor-wrap">
+      <div class="pane editor-pane">
+        <div class="pane-label">MARKDOWN</div>
+        <textarea id="editor" spellcheck="false" placeholder="开始写作…"></textarea>
+      </div>
+      <div class="pane preview-pane">
+        <div class="pane-label">预览</div>
+        <article id="preview" class="preview"></article>
+      </div>
+    </section>
+
+    <section id="empty" class="empty hidden">
+      <div class="empty-card">
+        <div class="empty-mark">✦</div>
+        <h2>还没有打开的笔记</h2>
+        <p>从左侧选择一篇,或者新建一篇。</p>
+        <button id="empty-new" class="new-note compact" type="button">
+          <span class="plus">+</span><span>新建笔记</span>
+        </button>
+      </div>
+    </section>
+
+    <footer class="statusbar">
+      <span id="word-count">0 字</span>
+      <span id="updated"></span>
+    </footer>
+  </main>
+</div>
+
+<div id="confirm" class="modal hidden" role="dialog" aria-modal="true"
+     aria-labelledby="confirm-title">
+  <div class="modal-card">
+    <div class="modal-mark">!</div>
+    <h2 id="confirm-title">删除这篇笔记?</h2>
+    <p id="confirm-text">此操作无法撤销。</p>
+    <div class="modal-actions">
+      <button id="confirm-cancel" class="tool-button" type="button">取消</button>
+      <button id="confirm-ok" class="tool-button danger-solid" type="button">删除</button>
+    </div>
+  </div>
+</div>
+
+<script>__NIMI_JS__</script>
+</body>
+</html>
