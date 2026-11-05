@@ -8,15 +8,21 @@ type
   Rect* = object
     x*, y*, w*, h*: float32
 
+  Point* = object
+    x*, y*: float32
+
   OpKind* = enum
     opRect
     opText
     opClip
     opRestore
     opImage
+    opImageQuad
+    opPolygon
 
   Op* = object
     color*: Color
+    imagePath*: string
     case kind*: OpKind
     of opRect:
       rect*: Rect
@@ -31,8 +37,12 @@ type
     of opRestore:
       discard
     of opImage:
-      imagePath*: string
       imageRect*: Rect
+    of opImageQuad:
+      sourceRect*: Rect
+      quad*: array[4, Point]
+    of opPolygon:
+      points*: seq[Point]
 
   Scene* = object
     width*, height*: float32
@@ -59,3 +69,15 @@ proc restoreClip*(s: var Scene) =
 
 proc image*(s: var Scene, path: string, r: Rect) =
   s.ops.add Op(kind: opImage, imagePath: path, imageRect: r)
+
+proc polygon*(s: var Scene, points: seq[Point], color: Color) =
+  s.ops.add Op(kind: opPolygon, points: points, color: color)
+
+proc imageQuad*(s: var Scene, path: string, source: Rect,
+                quad: array[4, Point]) =
+  ## Draw a source rectangle from an image into an arbitrary quad. The quad is
+  ## ordered top-left, top-right, bottom-right, bottom-left. `source` is in
+  ## image pixels, top-left origin. The CPU renderer splits the quad into two
+  ## textured triangles; a future Metal renderer can consume the same op.
+  s.ops.add Op(kind: opImageQuad, imagePath: path, sourceRect: source,
+               quad: quad)

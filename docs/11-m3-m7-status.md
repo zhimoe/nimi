@@ -11,7 +11,7 @@
 
 | 里程碑 | 状态 | 已实现 | 未实现 |
 |---|---|---|---|
-| M3 | 🟡 切片 | Checkbox/Switch/Slider/Progress/Divider、Image(ImageIO)、文本换行、焦点/键盘 | Metal 渲染器;其余控件(List/Table/Tabs/Select…);动画;可访问性 |
+| M3 | 🟡 切片 | Checkbox/Switch/Slider/Progress/Divider、Image(ImageIO)、文本换行、焦点/键盘、纹理四边形、NSTimer 帧驱动、Metal 专用 mask/LayerEffect | 通用 Metal scene 合成器;其余控件(List/Table/Tabs/Select…);完整动画/可访问性 |
 | M4 | 🟡 切片 | Clipboard、菜单/对话框、屏幕/主题、窗口控制/焦点、托盘、通知、全局快捷键、动态菜单 | 剪贴板图片/文件、通知权限/点击、托盘图标、快捷键冲突提示 |
 | M5 | 🟡 切片 | `nimi://`/FileServer、资源复制、深链、Session、FSEvents、Cookie 查询、Document 控制器、protocol/watch/document 示例 | Cookie 写入/删除/并发、内容规则、单实例边界 |
 | M6 | 🟡 切片 | TextInput/TextArea(含内部滚动)、选择/剪贴板、Undo/Redo、ScrollView/滚动条、IME | 真实 IME 验证、可访问性、完整 Metal、虚拟列表 |
@@ -40,8 +40,8 @@ M2 的 Tester、离屏 PNG、焦点/键盘、文本换行继续作为 M3–M7 �
 - 新增 `tests/test_ui.nim` 的 checkbox/switch/slider 测试。
 - 新增 `examples/widgets-native`,已截图确认。
 - 新增 `ui.image` + scene `opImage` + ImageIO/CG 渲染;示例 `examples/image-native`。
-- 新增 `effects/shred` Verlet 纸带物理 + `examples/shredder` WebGL 视觉验收;原生 scene shader/LayerEffect 仍未做。
-- 详见 [原生 Image](22-m3-image.md)、[碎纸效果](25-shredder.md)。
+- 新增 `effects/shred` Verlet 纸带物理 + `examples/shredder` WebGL 视觉验收;原生 CoreGraphics 纹理四边形 + NSTimer 帧驱动 + Metal mask/LayerEffect 原型已落地。
+- 详见 [原生 Image](22-m3-image.md)、[碎纸效果](25-shredder.md)、[原生碎纸](26-native-shred.md)。
 
 ### M4 菜单与对话框
 
@@ -201,6 +201,7 @@ hdiutil attach -nobrowse -readonly .../counter-0.1.0.dmg
 - checkbox/switch/slider
 - 离屏 PNG / 换行 PNG
 - `test_shred` 纸带物理
+- `test_metal` mask/LayerEffect 离屏渲染
 
 其他:
 

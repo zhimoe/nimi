@@ -39,6 +39,23 @@ suite "render":
       check fileExists(path)
       check getFileSize(path) > 100
 
+  test "image quad png":
+    let icon = "examples/notes/resources/icon.png"
+    if fileExists(icon):
+      var s = Scene(width: 240, height: 180, clear: rgb(0.9, 0.9, 0.9))
+      s.imageQuad(icon, Rect(x: 0, y: 0, w: 32, h: 32), [
+        Point(x: 40, y: 30),
+        Point(x: 180, y: 10),
+        Point(x: 200, y: 150),
+        Point(x: 30, y: 120),
+      ])
+      let path = "/tmp/nimi_test_image_quad.png"
+      if fileExists(path):
+        removeFile(path)
+      check renderSceneToPng(s, path)
+      check fileExists(path)
+      check getFileSize(path) > 100
+
   test "wrapped text png":
     proc view(c: Context) =
       column(c).fill().padding(12, 12).children(c, proc() =

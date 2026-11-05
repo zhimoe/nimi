@@ -30,6 +30,8 @@ type
     schemeHandlers*: Table[uint64, Id]
     imeWindows*: Table[uint64, bool]
     inputContexts*: Table[pointer, Id]
+    windowTimers*: Table[uint64, Id]
+    animationLast*: Table[uint64, float64]
     nextWatchId*: uint64
     watchStreams*: Table[uint64, pointer]
     watchHandlers*: Table[uint64, proc(e: PlatformFileEvent) {.closure.}]

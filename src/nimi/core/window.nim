@@ -36,6 +36,9 @@ type
     closedListeners*: seq[proc()]
     titleListeners*: seq[proc(title: string)]
     focusListeners*: seq[proc(focused: bool)]
+    frameListeners*: seq[proc(time, dt: float64)]
+    animationActive*: bool
+    animationFps*: int
     focused*: bool
 
   Page* = ref object
@@ -179,6 +182,12 @@ proc newWindow*(opts: WindowOptions): Window =
         w.focused = false
         for fn in w.focusListeners:
           fn(false),
+    frame: proc(wid: uint64, time, dt: float64) =
+      let w = windows.getOrDefault(wid)
+      if w != nil:
+        for fn in w.frameListeners:
+          fn(time, dt)
+        w.invalidate(),
     surface: surface
   )
 
@@ -229,6 +238,28 @@ proc focusedWindow*(): Window =
   result = nil
 
 # --- Window methods --------------------------------------------------------
+
+proc startAnimation*(w: Window, fps: int = 60,
+                     fn: proc(time, dt: float64)) =
+  ## Run a main-thread frame callback and invalidate the native surface after
+  ## each tick. The Darwin backend uses an NSTimer; the callback is not tied to
+  ## the WebView or to a particular renderer.
+  if fn != nil:
+    w.frameListeners.add(fn)
+  w.animationFps = if fps > 0: fps else: 60
+  if not w.animationActive:
+    w.animationActive = true
+    if w.native != nil and w.native.startAnimation != nil:
+      w.native.startAnimation(w.animationFps)
+
+proc stopAnimation*(w: Window) =
+  w.frameListeners.setLen(0)
+  w.animationActive = false
+  if w.native != nil and w.native.stopAnimation != nil:
+    w.native.stopAnimation()
+
+proc isAnimating*(w: Window): bool =
+  w.animationActive
 
 proc setTitle*(w: Window, title: string) =
   w.options.title = title

@@ -8,7 +8,7 @@ Nimi 的目标是保留 MyGo 的架构与开发体验——系统 WebView + 类�
 
 > 当前状态:**M1 核心已实现**(macOS WebView + typed IPC + TS 生成 + CLI + hello);
 > **M2 核心切片已跑通**(原生 NSView Surface + CoreGraphics/CoreText + 布局/Text/Button + 鼠标/键盘/焦点 + 多行换行 + `Tester`/离屏 PNG + `counter-native`)。
-> **M3 控件/Image/ScrollView、M4 macOS 桌面 API(菜单/对话框/剪贴板/屏幕/主题/窗口/托盘/通知/全局快捷键)、M5 FileServer/深链/Session/文件监视/Cookie/Document、M6 TextInput/TextArea(内部滚动/滚动条)/选择/剪贴板/Undo/ScrollView/滚动条/IME、M7 `.app`/DMG/签名/CI**已落地;`examples/desktop-native` 是桌面 API 验收,`examples/form-native` 是原生 GUI 验收,`examples/notes` 是 WebView-first 的完整笔记应用,`examples/protocol-native` 是自定义协议验收,`examples/shredder` 是 WebGL 碎纸效果/物理切片验收。其余差距见 [M3–M7 状态](docs/11-m3-m7-status.md)。
+> **M3 控件/Image/ScrollView、M4 macOS 桌面 API(菜单/对话框/剪贴板/屏幕/主题/窗口/托盘/通知/全局快捷键)、M5 FileServer/深链/Session/文件监视/Cookie/Document、M6 TextInput/TextArea(内部滚动/滚动条)/选择/剪贴板/Undo/ScrollView/滚动条/IME、M7 `.app`/DMG/签名/CI**已落地;`examples/desktop-native` 是桌面 API 验收,`examples/form-native` 是原生 GUI 验收,`examples/notes` 是 WebView-first 的完整笔记应用,`examples/protocol-native` 是自定义协议验收,`examples/shredder` 是 WebGL 碎纸效果/物理切片验收,`examples/shred-native` 是 CoreGraphics 纹理四边形/原生帧驱动验收,`examples/shred-metal` 是 Metal mask + LayerEffect 验收。其余差距见 [M3–M7 状态](docs/11-m3-m7-status.md)。
 > Windows/Linux 在 M8/M9。
 > 参考实现:MyGo 0.7.4(MIT License)。
 
@@ -56,6 +56,7 @@ Nimi 的目标是保留 MyGo 的架构与开发体验——系统 WebView + 类�
 | [IME](docs/24-m6-ime.md) | NSTextInputClient、marked text、候选窗位置、fallback |
 | [原生 Image](docs/22-m3-image.md) | ImageIO、scene opImage、缓存与离屏渲染 |
 | [碎纸效果](docs/25-shredder.md) | MyGo shader 来源、Nim Verlet 物理、WebGL 纸带渲染、限制与原生效果层下一步 |
+| [原生碎纸](docs/26-native-shred.md) | NSTimer 帧驱动、scene 纹理四边形、Metal mask/LayerEffect、原生渲染验收 |
 | [Nimi Notes 验收](docs/12-notes-demo.md) | WebView-first 笔记应用:IPC/菜单/导入导出/自动保存/打包 |
 | [官网与 Pages](docs/13-website.md) | 静态站点结构、自定义域名 `nimi.zhi.moe`、DNS 与部署工作流 |
 
@@ -133,6 +134,12 @@ nim c -r --path:src examples/counter-native/main.nim
 # WebGL 碎纸效果 + Nim Verlet 物理演示(点击重置)
 nim c -r --path:src examples/shredder/main.nim
 
+# 原生碎纸:CoreGraphics 纹理四边形 + NSTimer 帧驱动
+nim c -r --path:src examples/shred-native/main.nim
+
+# 原生 Metal 碎纸:mask 纹理 + LayerEffect
+nim c -r --path:src examples/shred-metal/main.nim
+
 # 打包 .app(用 Finder 或 open 启动)
 ./nimi build examples/hello
 open "examples/hello/dist/darwin-arm64/Hello Nimi.app"
@@ -162,7 +169,7 @@ nimi/
 │   ├── effects/           # 可复用效果(碎纸物理等)
 │   ├── ui/                # Context/Tester
 │   └── cli.nim            # init/generate/dev/build/doctor
-├── tests/                 # test_ipc/test_loop/test_ui/test_render/.../test_shred
+├── tests/                 # test_ipc/test_loop/test_ui/test_render/.../test_shred/test_metal
 ├── examples/
 │   ├── hello/             # WebView + IPC 验收
 │   ├── native-smoke/      # 原生 Surface 验收
@@ -176,6 +183,8 @@ nimi/
 │   ├── scroll-native/     # ScrollView/裁剪验收
 │   ├── image-native/      # Image/ImageIO 验收
 │   ├── shredder/          # WebGL 碎纸效果 + Verlet 物理验收
+│   ├── shred-native/      # CoreGraphics 纹理四边形 + 帧驱动验收
+│   ├── shred-metal/       # Metal mask/LayerEffect 验收
 │   └── notes/             # WebView-first 笔记应用验收
 └── spikes/                # 可行性原型(可运行)
     ├── objc_hello/

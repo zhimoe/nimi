@@ -1,7 +1,7 @@
 ## NSWindow + WKWebView + the runtime-defined delegate that receives page
 ## messages and window close events.
 
-import std/[strutils, tables]
+import std/[strutils, tables, times]
 
 import ../contract
 import ../../core/bridge
@@ -33,6 +33,12 @@ proc windowWillClose(self: Id, cmd: SEL, notification: Id) {.cdecl.} =
   let id = windowLookupId(self)
   if id == 0:
     return
+  if gState.windowTimers.hasKey(id):
+    let timer = gState.windowTimers[id]
+    if timer != nil:
+      sendVoid(timer, sel("invalidate"))
+    gState.windowTimers.del(id)
+  gState.animationLast.del(id)
   let surfaceView = gState.surfaceViews.getOrDefault(id)
   if surfaceView != nil:
     let ctx = gState.inputContexts.getOrDefault(surfaceView)
@@ -68,6 +74,21 @@ proc didReceiveScriptMessage(self: Id, cmd: SEL, controller: Id,
 proc didFinishNavigation(self: Id, cmd: SEL, webView: Id,
                          navigation: Id) {.cdecl.} =
   discard
+
+proc windowAnimationTick(self: Id, cmd: SEL, timer: Id) {.cdecl.} =
+  if gState == nil:
+    return
+  let id = windowLookupId(self)
+  if id == 0:
+    return
+  let h = gState.windowHandlers.getOrDefault(id)
+  if h.frame == nil:
+    return
+  let now = epochTime()
+  let last = gState.animationLast.getOrDefault(id, now)
+  gState.animationLast[id] = now
+  let dt = if last <= 0: 0.0 else: now - last
+  h.frame(id, now, dt)
 
 proc windowDidBecomeKey(self: Id, cmd: SEL, notification: Id) {.cdecl.} =
   let id = windowLookupId(self)
@@ -422,6 +443,7 @@ proc delegateClass(): Id =
     ("windowDidResignKey:", cast[pointer](windowDidResignKey), "v@:@"),
     ("windowDidBecomeMain:", cast[pointer](windowDidBecomeMain), "v@:@"),
     ("windowDidResignMain:", cast[pointer](windowDidResignMain), "v@:@"),
+    ("animationTick:", cast[pointer](windowAnimationTick), "v@:@"),
   ])
 
 proc keyTextForCode(keyCode: int): string =
@@ -598,6 +620,24 @@ proc createWindow*(state: DarwinState, opts: PlatformWindowOptions,
     result.eval = proc(js: string) = discard
     result.requestFrame = proc() =
       sendVoidBool(surfaceView, sel("setNeedsDisplay:"), true)
+    result.startAnimation = proc(fps: int) =
+      if state.windowTimers.hasKey(id):
+        let old = state.windowTimers[id]
+        if old != nil:
+          sendVoid(old, sel("invalidate"))
+      state.animationLast[id] = epochTime()
+      let rate = if fps > 0: fps else: 60
+      let timer = scheduledTimer(1.0 / float64(rate), delegate,
+                                 "animationTick:", true)
+      if timer != nil:
+        state.windowTimers[id] = timer
+    result.stopAnimation = proc() =
+      if state.windowTimers.hasKey(id):
+        let timer = state.windowTimers[id]
+        if timer != nil:
+          sendVoid(timer, sel("invalidate"))
+        state.windowTimers.del(id)
+      state.animationLast.del(id)
     result.testClick = proc(x, y: float32) =
       let winNum = sendInt(win, sel("windowNumber"))
       let loc = NSPoint(x: CGFloat(x), y: CGFloat(frame.h - CGFloat(y)))
@@ -662,6 +702,8 @@ proc createWindow*(state: DarwinState, opts: PlatformWindowOptions,
       sendVoidId2(webView, sel("evaluateJavaScript:completionHandler:"),
                  nsString(js), nil)
     result.requestFrame = proc() = discard
+    result.startAnimation = proc(fps: int) = discard
+    result.stopAnimation = proc() = discard
     result.destroy = proc() =
       let u = state.userContentControllers.getOrDefault(id)
       if u != nil:

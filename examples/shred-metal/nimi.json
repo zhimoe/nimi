@@ -1,0 +1,7 @@
+{
+  "name": "Nimi Shred Metal",
+  "slug": "nimi-shred-metal",
+  "identifier": "com.example.nimi-shred-metal",
+  "version": "0.1.0",
+  "main": "main.nim"
+}

@@ -9,3 +9,4 @@ nim c -r --hints:off --path:src -o:/tmp/nimi_test_desktop tests/test_desktop.nim
 nim c -r --hints:off --path:src -o:/tmp/nimi_test_fileserver tests/test_fileserver.nim
 nim c -r --hints:off --path:src -o:/tmp/nimi_test_document tests/test_document.nim
 nim c -r --hints:off --path:src -o:/tmp/nimi_test_shred tests/test_shred.nim
+nim c -r --hints:off --path:src -o:/tmp/nimi_test_metal tests/test_metal.nim

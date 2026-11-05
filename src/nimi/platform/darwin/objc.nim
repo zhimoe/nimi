@@ -75,6 +75,9 @@ type
                                  length: int64, encoding: Id): Id {.cdecl.}
   MsgSendDataWithBytes* = proc(a: Id, s: SEL, bytes: pointer,
                                length: NSUInteger): Id {.cdecl.}
+  MsgSendScheduledTimer* = proc(a: Id, s: SEL, interval: float64,
+                                target: Id, selector: SEL, info: Id,
+                                repeats: bool): Id {.cdecl.}
 
 let libobjc* = loadLib("/usr/lib/libobjc.A.dylib")
 let appkit* = loadLib("/System/Library/Frameworks/AppKit.framework/AppKit")
@@ -249,6 +252,13 @@ proc initURLResponse*(url, mime: Id, length: int64,
     send0(loadClass("NSURLResponse"), sel("alloc")),
     sel("initWithURL:MIMEType:expectedContentLength:textEncodingName:"),
     url, mime, length, encoding)
+
+proc scheduledTimer*(interval: float64, target: Id, selectorName: string,
+                     repeats: bool): Id =
+  cast[MsgSendScheduledTimer](msgSend)(
+    loadClass("NSTimer"),
+    sel("scheduledTimerWithTimeInterval:target:selector:userInfo:repeats:"),
+    interval, target, sel(selectorName), nil, repeats)
 
 proc nsError*(domain: string, code: int): Id =
   cast[proc(a: Id, s: SEL, d: Id, c: NSInteger, info: Id): Id {.cdecl.}](

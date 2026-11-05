@@ -107,16 +107,15 @@ NIMI_SMOKE=shred NIMI_SNAPSHOT=/tmp/nimi-shredder.png \
 - 文字会被纸带弯折与重叠;当纸带互相遮挡时,部分字块不可见;
 - 没有纸张阴影、厚度、双边高光、运动模糊;
 - 点击重置通过页面事件;没有原生菜单/快捷键控制;
-- `ShredSim` 尚未接入原生 app,原生 PNG/Tester 还没有该效果;
 - 动画在页面 `requestAnimationFrame` 中,窗口不可见时可能被系统节流。
 
-## 6. 下一步:原生效果层
+原生版本已在 [原生碎纸](26-native-shred.md) 中补齐:CoreGraphics
+纹理四边形、NSTimer 帧驱动、Metal mask/LayerEffect 与 `effects/shred`
+原生接入。本 WebGL demo 保留为浏览器/无 Metal 环境的对照实现。
 
-1. Scene 增加可扩展绘制 op(或 `opImageQuad` + source rect),先实现
-   CPU/CoreGraphics 的纸带纹理四边形。
-2. Darwin 增加帧驱动(CVDisplayLink 或 NSTimer),提供
-   `Window.requestFrame`/`Animation` API;页面与原生共用同一时钟。
-3. 接入 `effects/shred`,把纸带点集转换为纹理四边形。
-4. 再考虑 Metal renderer、mask 纹理/`LayerEffect`,对齐 MyGo 的
-   `Slot`/`SourceTop`/mask UV 编码。
-5. 加 reduced-motion 降级:关闭动画,直接显示静态卡片。
+## 6. 后续
+
+1. reduced-motion 静态降级。
+2. 纸张阴影、厚度、运动模糊与 mask 边缘柔化。
+3. 窗口 resize 时重建 Metal mask/drawable。
+4. 通用 LayerEffect scene op 与 CVDisplayLink vsync。

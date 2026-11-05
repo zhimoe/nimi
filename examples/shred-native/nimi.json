@@ -1,0 +1,7 @@
+{
+  "name": "Nimi Shred Native",
+  "slug": "nimi-shred-native",
+  "identifier": "com.example.nimi-shred-native",
+  "version": "0.1.0",
+  "main": "main.nim"
+}

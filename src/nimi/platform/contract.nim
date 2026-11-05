@@ -72,6 +72,7 @@ type
     titleChanged*: proc(id: uint64, title: string) {.closure.}
     focused*: proc(id: uint64) {.closure.}
     blurred*: proc(id: uint64) {.closure.}
+    frame*: proc(id: uint64, time, dt: float64) {.closure.}
     surface*: SurfaceHandler
 
   AppHandler* = object
@@ -171,6 +172,8 @@ type
     loadURL*: proc(url: string) {.closure.}
     eval*: proc(js: string) {.closure.}
     requestFrame*: proc() {.closure.}
+    startAnimation*: proc(fps: int) {.closure.}
+    stopAnimation*: proc() {.closure.}
     testClick*: proc(x, y: float32) {.closure.}
     testKey*: proc(keyCode: int) {.closure.}
     testKeyText*: proc(text: string) {.closure.}
