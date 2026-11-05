@@ -12,13 +12,15 @@ type
     name: string
     remember: bool
     volume: float32
+    notes: string
     status: string
 
 proc saveTo(s: State, path: string) =
-  writeFile(path, s.name & "\n" & $s.remember & "\n" & $s.volume)
+  writeFile(path, s.name & "\n" & $s.remember & "\n" & $s.volume &
+            "\n" & s.notes)
 
 proc loadFrom(s: State, path: string) =
-  let lines = readFile(path).splitLines()
+  let lines = readFile(path).split('\n', maxsplit = 3)
   if lines.len >= 3:
     s.name = lines[0]
     s.remember = lines[1] == "true"
@@ -26,6 +28,8 @@ proc loadFrom(s: State, path: string) =
       s.volume = parseFloat(lines[2])
     except ValueError:
       discard
+    if lines.len >= 4:
+      s.notes = lines[3]
     s.status = "Loaded " & path
 
 proc saveState(s: State) =
@@ -59,6 +63,9 @@ proc view(s: State, c: Context) =
     text(c, "Volume").fontSize(12).color(muted)
     slider(c, s.volume, proc(v: float32) = s.volume = v, key = "volume").width(240)
     progress(c, s.volume, 1).width(240)
+    text(c, "Notes").fontSize(12).color(muted)
+    textArea(c, s.notes, proc(v: string) = s.notes = v,
+             key = "notes", placeholder = "Write a note…", height = 96)
     row(c).gap(8).children(c, proc() =
       button(c, "Save…", proc() = saveState(s), key = "save")
       button(c, "Open…", proc() = loadState(s), key = "open")
@@ -101,7 +108,7 @@ app.whenReady(proc() =
   let w = newWindow(WindowOptions(
     title: "Nimi Form",
     width: 520,
-    height: 460,
+    height: 640,
     content: content
   ))
   w.invalidate()
@@ -111,14 +118,17 @@ app.whenReady(proc() =
     state.name = "Ada"
     state.remember = true
     state.volume = 0.75
+    state.notes = "line one\nline two"
     saveTo(state, path)
     state.name = ""
     state.volume = 0
+    state.notes = ""
     loadFrom(state, path)
-    echo "form: ", state.name, " ", state.remember, " ", state.volume
+    echo "form: ", state.name, " ", state.remember, " ", state.volume,
+         " notes=", state.notes
     app.quit()
   elif mode == "type":
-    discard renderContent(content, 520, 460)
+    discard renderContent(content, 520, 640)
     var hit: Rect
     for h in content.engine.hits:
       if h.key == "name":
@@ -127,8 +137,20 @@ app.whenReady(proc() =
     w.native.testKeyText("Ada")
     echo "form name: ", state.name
     app.quit()
+  elif mode == "textarea":
+    discard renderContent(content, 520, 640)
+    var hit: Rect
+    for h in content.engine.hits:
+      if h.key == "notes":
+        hit = h.rect
+    w.native.testClick(hit.x + 10, hit.y + 20)
+    w.native.testKeyText("hello")
+    w.native.testKey(36) # enter
+    w.native.testKeyText("world")
+    echo "form notes: ", state.notes
+    app.quit()
   elif mode == "dialog":
-    discard renderContent(content, 520, 460)
+    discard renderContent(content, 520, 640)
     var hit: Rect
     for h in content.engine.hits:
       if h.key == "about":
@@ -136,7 +158,7 @@ app.whenReady(proc() =
     w.native.testClick(hit.x + hit.w / 2, hit.y + hit.h / 2)
     echo "dialog returned"
   elif mode == "savedialog":
-    discard renderContent(content, 520, 460)
+    discard renderContent(content, 520, 640)
     var hit: Rect
     for h in content.engine.hits:
       if h.key == "save":

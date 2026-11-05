@@ -14,7 +14,7 @@
 | M3 | 🟡 切片 | Checkbox/Switch/Slider/Progress/Divider;文本换行;焦点/键盘 | Metal 渲染器;其余控件(List/Table/Tabs/Select/TextInput…);动画;可访问性 |
 | M4 | 🟡 切片 | Clipboard、菜单/对话框、屏幕/主题、窗口控制/焦点、托盘、通知、全局快捷键、动态菜单 | 剪贴板图片/文件、通知权限/点击、托盘图标、快捷键冲突提示 |
 | M5 | 🟡 切片 | 自定义 `nimi://` scheme、FileServer、资源复制、URL scheme 深链、持久/临时 Session、FSEvents 文件监视、默认 Cookie 查询/清理、protocol-native/watch-native 示例 | Cookie 写入/删除/并发、内容规则、文档控制器、单实例边界 |
-| M6 | 🟡 切片 | 单行 TextInput(输入/caret/退格/方向/Home/End) | TextArea、选择/撤销、剪贴板、IME、可访问性、完整 Metal |
+| M6 | 🟡 切片 | 单行 TextInput、基础 TextArea(换行/编辑/上下行/caret) | 选择/撤销、剪贴板、滚动、IME、可访问性、完整 Metal |
 | M7 | 🟡 切片 | `.app`、DMG、ad-hoc/Developer ID 签名、entitlements、图标(icns)、notarize 钩子、macOS CI 构建/测试/artifact | 自动更新(Ed25519/delta)、release workflow、DMG 背景/布局、公证实际执行验证、Sparkle 风格更新窗口 |
 
 M2 的 Tester、离屏 PNG、焦点/键盘、文本换行继续作为 M3–M7 的基础。
@@ -83,6 +83,14 @@ M2 的 Tester、离屏 PNG、焦点/键盘、文本换行继续作为 M3–M7 �
 - 鼠标点击定位 caret;Tab 焦点;caret 绘制
 - 状态仍由 app 通过 `onText` 回调持有,不捕获栈指针
 - 合成 AppKit key event 验证:`form name: Ada`
+
+### M6 基础 TextArea
+
+- `ui.textArea(...)`,复用 `layoutText` 换行
+- 多行输入、Enter 换行、上下行移动、点击定位 caret
+- `examples/form-native` 的 Notes 字段参与保存/加载
+- 合成 AppKit 键盘事件验证 `hello\nworld`
+- 详见 [基础 TextArea](19-m6-textarea.md)
 
 ### 示例应用 `examples/form-native`
 
@@ -210,8 +218,8 @@ hdiutil attach -nobrowse -readonly .../counter-0.1.0.dmg
 4. 可访问性(AccessTree/NSAccessibility)
 
 ### M6
-1. 选择/撤销/剪贴板 copy/paste
-2. TextArea(多行)
+1. 选择区/撤销/剪贴板 copy/paste
+2. 滚动条与 caret 自动滚动
 3. IME(NSTextInputClient)
 4. 富文本/代码编辑器
 5. 完整 Metal/可访问性

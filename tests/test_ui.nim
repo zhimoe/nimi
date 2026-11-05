@@ -154,6 +154,25 @@ suite "ui":
     t.clickAt(r.x + r.w * 0.75, r.y + r.h / 2)
     check abs(v - 0.75) < 0.02
 
+  test "text area multiline typing":
+    var value = ""
+    proc view(c: Context) =
+      column(c).fill().padding(10, 10).children(c, proc() =
+        textArea(c, value, proc(s: string) = value = s, key = "body",
+                 height = 100)
+        text(c, value)
+      )
+
+    let t = newTester(view, 280, 180)
+    discard t.render()
+    t.clickAt(20, 20)
+    t.typeText("hi")
+    t.key("enter")
+    t.typeText("there")
+    check value == "hi\nthere"
+    check t.hasText("hi")
+    check t.hasText("there")
+
   test "text input typing and caret":
     var value = ""
     proc view(c: Context) =

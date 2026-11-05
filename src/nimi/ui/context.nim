@@ -45,6 +45,7 @@ type
     onDrag*: proc(rect: Rect, x, y: float32) {.closure.}
     onText*: proc(text: string) {.closure.}
     placeholder*: string
+    multiline*: bool
     checked*: bool
     value*, minValue*, maxValue*: float32
     boxSize*: float32
@@ -58,7 +59,10 @@ type
     input*: bool
     text*: string
     onText*: proc(text: string) {.closure.}
-    padX*, fontSize*: float32
+    multiline*: bool
+    lines*: seq[string]
+    lineHeight*: float32
+    padX*, padY*, fontSize*: float32
 
   Engine* = ref object
     hoveredKey*: string
@@ -191,6 +195,22 @@ proc textInput*(c: Context, value: string, onText: proc(text: string),
     bg: rgb(1, 1, 1),
     padX: 8, padY: 5))
 
+proc textArea*(c: Context, value: string, onText: proc(text: string),
+               key: string = "", placeholder: string = "",
+               size: float32 = 14, height: float32 = 120): Node {.discardable.} =
+  addNode(c, Node(
+    kind: nkInput,
+    key: if key.len > 0: key else: "textarea",
+    text: value,
+    onText: onText,
+    placeholder: placeholder,
+    multiline: true,
+    fixedH: height,
+    fontSize: size,
+    color: defaultText,
+    bg: rgb(1, 1, 1),
+    padX: 8, padY: 6))
+
 # --- fluent options --------------------------------------------------------
 
 proc fill*(n: Node): Node {.discardable.} =
@@ -289,10 +309,20 @@ proc measure(n: Node, availW, availH: float32) =
     n.w = if n.fixedW > 0: n.fixedW elif availW > 0: availW else: 0
     n.h = if n.fixedH > 0: n.fixedH else: 1
   of nkInput:
-    let sample = if n.text.len > 0: n.text else: n.placeholder
-    let m = measureText(sample, n.fontSize, false)
-    n.w = if n.fixedW > 0: n.fixedW else: max(200.0'f32, m.width + 2 * n.padX)
-    n.h = if n.fixedH > 0: n.fixedH else: max(28.0'f32, m.height + 2 * n.padY)
+    if n.multiline:
+      n.w = if n.fixedW > 0: n.fixedW
+            elif availW > 0: availW
+            else: 320.0'f32
+      n.h = if n.fixedH > 0: n.fixedH else: 120.0'f32
+      let layout = layoutText(n.text, n.fontSize, false,
+                              max(1.0'f32, n.w - 2 * n.padX))
+      n.lines = layout.lines
+      n.lineHeight = layout.lineHeight
+    else:
+      let sample = if n.text.len > 0: n.text else: n.placeholder
+      let m = measureText(sample, n.fontSize, false)
+      n.w = if n.fixedW > 0: n.fixedW else: max(200.0'f32, m.width + 2 * n.padX)
+      n.h = if n.fixedH > 0: n.fixedH else: max(28.0'f32, m.height + 2 * n.padY)
   of nkColumn, nkRow:
     var maxW, maxH, sumW, sumH: float32
     for ch in n.children:
@@ -356,6 +386,23 @@ proc lighten(c: Color, amount: float32): Color =
 proc darken(c: Color, amount: float32): Color =
   Color(r: max(c.r - amount, 0), g: max(c.g - amount, 0),
         b: max(c.b - amount, 0), a: c.a)
+
+proc caretLineCol(lines: seq[string], pos: int): tuple[line, col: int] =
+  var offset = 0
+  for i, line in lines:
+    let finish = offset + line.len
+    if pos <= finish:
+      return (i, max(0, pos - offset))
+    offset = finish + 1
+  if lines.len > 0:
+    result = (lines.high, lines[^1].len)
+  else:
+    result = (0, 0)
+
+proc lineOffset(lines: seq[string], index: int): int =
+  let last = min(index, lines.len)
+  for i in 0 ..< last:
+    result += lines[i].len + 1
 
 proc paintFocus(n: Node, c: Context, radius: float32 = 6) =
   if c.engine != nil and c.engine.focusedKey == n.key:
@@ -436,20 +483,50 @@ proc paint(n: Node, c: Context) =
     c.scene.rect(Rect(x: n.x - 1, y: n.y - 1, w: n.w + 2, h: n.h + 2),
                  rgb(0.62, 0.62, 0.68), 6)
     c.scene.rect(Rect(x: n.x, y: n.y, w: n.w, h: n.h), n.bg, 5)
-    let shown = if n.text.len > 0: n.text else: n.placeholder
-    let textColor = if n.text.len > 0: n.color else: rgb(0.55, 0.55, 0.60)
-    let m = measureText(shown, n.fontSize, false)
-    c.scene.text(shown, n.x + n.padX, n.y + (n.h - m.height) / 2,
-                 n.fontSize, textColor, false)
-    if c.engine != nil and c.engine.focusedKey == n.key:
-      let pos =
-        if c.engine.caretKey == n.key: max(0, min(c.engine.caretPos, n.text.len))
-        else: n.text.len
-      let prefix = if pos > 0: n.text[0 ..< pos] else: ""
-      let pw = measureText(prefix, n.fontSize, false).width
-      let cx = n.x + n.padX + min(pw, max(0.0'f32, n.w - 2 * n.padX - 1))
-      c.scene.rect(Rect(x: cx, y: n.y + 6, w: 1.5'f32, h: n.h - 12),
-                   defaultText)
+    if n.multiline:
+      let textColor = if n.text.len > 0: n.color else: rgb(0.55, 0.55, 0.60)
+      if n.text.len == 0:
+        c.scene.text(n.placeholder, n.x + n.padX, n.y + n.padY,
+                     n.fontSize, textColor, false)
+      else:
+        var ly = n.y + n.padY
+        for line in n.lines:
+          if ly + n.lineHeight > n.y + n.h - n.padY + 0.5:
+            break
+          c.scene.text(line, n.x + n.padX, ly, n.fontSize, n.color, false)
+          ly += n.lineHeight
+      if c.engine != nil and c.engine.focusedKey == n.key:
+        let pos =
+          if c.engine.caretKey == n.key:
+            max(0, min(c.engine.caretPos, n.text.len))
+          else:
+            n.text.len
+        let (lineIdx, col) = caretLineCol(n.lines, pos)
+        if lineIdx < n.lines.len:
+          let line = n.lines[lineIdx]
+          let prefix = if col > 0: line[0 ..< min(col, line.len)] else: ""
+          let pw = measureText(prefix, n.fontSize, false).width
+          let cx = n.x + n.padX + min(pw, max(0.0'f32, n.w - 2 * n.padX - 1))
+          let cy = n.y + n.padY + float32(lineIdx) * n.lineHeight
+          if cy < n.y + n.h - n.padY:
+            c.scene.rect(Rect(x: cx, y: cy, w: 1.5'f32,
+                              h: min(n.lineHeight - 2, n.h - cy - n.padY)),
+                         defaultText)
+    else:
+      let shown = if n.text.len > 0: n.text else: n.placeholder
+      let textColor = if n.text.len > 0: n.color else: rgb(0.55, 0.55, 0.60)
+      let m = measureText(shown, n.fontSize, false)
+      c.scene.text(shown, n.x + n.padX, n.y + (n.h - m.height) / 2,
+                   n.fontSize, textColor, false)
+      if c.engine != nil and c.engine.focusedKey == n.key:
+        let pos =
+          if c.engine.caretKey == n.key: max(0, min(c.engine.caretPos, n.text.len))
+          else: n.text.len
+        let prefix = if pos > 0: n.text[0 ..< pos] else: ""
+        let pw = measureText(prefix, n.fontSize, false).width
+        let cx = n.x + n.padX + min(pw, max(0.0'f32, n.w - 2 * n.padX - 1))
+        c.scene.rect(Rect(x: cx, y: n.y + 6, w: 1.5'f32, h: n.h - 12),
+                     defaultText)
   of nkColumn, nkRow:
     for ch in n.children:
       paint(ch, c)
@@ -464,7 +541,11 @@ proc collectHits(n: Node, engine: Engine) =
       input: n.kind == nkInput,
       text: n.text,
       onText: n.onText,
+      multiline: n.multiline,
+      lines: n.lines,
+      lineHeight: n.lineHeight,
       padX: n.padX,
+      padY: n.padY,
       fontSize: n.fontSize)
   for ch in n.children:
     collectHits(ch, engine)
@@ -500,21 +581,35 @@ proc requestFrame(engine: Engine) =
   if engine.requestFrame != nil:
     engine.requestFrame()
 
-proc caretIndex(hit: Hit, x: float32): int =
-  let local = x - (hit.rect.x + hit.padX)
+proc caretIndexLine(text: string, x, left, fontSize: float32): int =
+  let local = x - left
   if local <= 0:
     return 0
   var best = 0
   var bestDist = abs(local)
-  for i in 1 .. hit.text.len:
-    let w = measureText(hit.text[0 ..< i], hit.fontSize, false).width
+  for i in 1 .. text.len:
+    let w = measureText(text[0 ..< i], fontSize, false).width
     let d = abs(w - local)
     if d < bestDist:
       bestDist = d
       best = i
-  if local > measureText(hit.text, hit.fontSize, false).width:
-    best = hit.text.len
+  if local > measureText(text, fontSize, false).width:
+    best = text.len
   result = best
+
+proc caretIndex(hit: Hit, x: float32): int =
+  result = caretIndexLine(hit.text, x, hit.rect.x + hit.padX, hit.fontSize)
+
+proc caretIndexAt(hit: Hit, x, y: float32): int =
+  if not hit.multiline or hit.lines.len == 0:
+    return caretIndex(hit, x)
+  let lineIdx = max(0, min(hit.lines.high,
+    int((y - hit.rect.y - hit.padY) / max(hit.lineHeight, 1))))
+  var offset = 0
+  for i in 0 ..< lineIdx:
+    offset += hit.lines[i].len + 1
+  let line = hit.lines[lineIdx]
+  result = offset + caretIndexLine(line, x, hit.rect.x + hit.padX, hit.fontSize)
 
 proc handleMouseDown*(engine: Engine, x, y: float32) =
   let i = hitIndex(engine, x, y)
@@ -529,7 +624,7 @@ proc handleMouseDown*(engine: Engine, x, y: float32) =
       hit.onDrag(hit.rect, x, y)
     if hit.input:
       engine.caretKey = hit.key
-      engine.caretPos = caretIndex(hit, x)
+      engine.caretPos = caretIndexAt(hit, x, y)
   else:
     engine.pressedKey = ""
   requestFrame(engine)
@@ -572,6 +667,8 @@ proc editInput(engine: Engine, index: int, key: string) =
   var caret =
     if engine.caretKey == hit.key: max(0, min(engine.caretPos, text.len))
     else: text.len
+  let lines = if hit.multiline: hit.lines else: @[text]
+  let (lineIdx, col) = caretLineCol(lines, caret)
   case key
   of "backspace":
     if caret > 0:
@@ -585,15 +682,28 @@ proc editInput(engine: Engine, index: int, key: string) =
   of "right":
     if caret < text.len: inc caret
   of "home":
-    caret = 0
+    if hit.multiline:
+      caret = lineOffset(lines, lineIdx)
+    else:
+      caret = 0
   of "end":
-    caret = text.len
+    if hit.multiline:
+      caret = lineOffset(lines, lineIdx) + lines[lineIdx].len
+    else:
+      caret = text.len
+  of "up", "down":
+    if hit.multiline and lines.len > 0:
+      let target = if key == "up": max(0, lineIdx - 1)
+                   else: min(lines.high, lineIdx + 1)
+      caret = lineOffset(lines, target) + min(col, lines[target].len)
   of "escape":
     engine.focusedKey = ""
     requestFrame(engine)
     return
-  of "enter":
-    discard
+  of "enter", "\n":
+    if hit.multiline:
+      text = text[0 ..< caret] & "\n" & text[caret .. ^1]
+      inc caret
   else:
     let insert =
       if key == "space": " "
