@@ -31,6 +31,8 @@ type
     secret*: string
     token*: string
     content*: bool
+    scheme*: string
+    fileRoot*: string
 
   SurfaceHandler* = object
     windowId*: uint64
@@ -54,6 +56,7 @@ type
     ready*: proc() {.closure.}
     quitRequested*: proc(): bool {.closure.}
     terminated*: proc() {.closure.}
+    openURL*: proc(url: string) {.closure.}
     dispatch*: proc() {.closure.}
 
   PlatformMenuItemKind* = enum

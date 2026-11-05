@@ -3,7 +3,7 @@
 
 import std/[json, strutils, sysrand, tables]
 
-import ./[content, events, ipc]
+import ./[content, events, fileserver, ipc]
 import ../platform/contract
 import ../render/cg
 
@@ -15,6 +15,7 @@ type
     html*: string
     url*: string
     content*: Content
+    files*: FileServer
 
   CloseEvent* = object
     prevented*: bool
@@ -96,6 +97,8 @@ proc newWindow*(opts: WindowOptions): Window =
   if o.width <= 0: o.width = 800
   if o.height <= 0: o.height = 600
   if o.title.len == 0: o.title = "Nimi"
+  if o.files != nil and o.url.len == 0 and o.html.len == 0:
+    o.url = o.files.scheme & "://app/index.html"
 
   let id = nextWindowId
   inc nextWindowId
@@ -166,7 +169,9 @@ proc newWindow*(opts: WindowOptions): Window =
     url: o.url,
     secret: win.secret,
     token: win.token,
-    content: o.content != nil)
+    content: o.content != nil,
+    scheme: if o.files != nil: o.files.scheme else: "",
+    fileRoot: if o.files != nil: o.files.root else: "")
   win.native = currentBackend.newWindow(popts, h)
   if o.content != nil:
     let wid = win.id

@@ -13,7 +13,7 @@
 |---|---|---|---|
 | M3 | 🟡 切片 | Checkbox/Switch/Slider/Progress/Divider;文本换行;焦点/键盘 | Metal 渲染器;其余控件(List/Table/Tabs/Select/TextInput…);动画;可访问性 |
 | M4 | 🟡 切片 | Clipboard、菜单/对话框、屏幕/主题、窗口控制/焦点、托盘、通知、全局快捷键、动态菜单 | 剪贴板图片/文件、通知权限/点击、托盘图标、快捷键冲突提示 |
-| M5 | ⬜ 未开始 | — | 自定义协议/FileServer、Session、Cookie、内容规则、文件监视、文档控制器、深链/单实例 |
+| M5 | 🟡 切片 | 自定义 `nimi://` scheme、FileServer、打包资源复制、URL scheme 深链、protocol-native 示例 | Session、Cookie、内容规则、文件监视、文档控制器、单实例边界 |
 | M6 | 🟡 切片 | 单行 TextInput(输入/caret/退格/方向/Home/End) | TextArea、选择/撤销、剪贴板、IME、可访问性、完整 Metal |
 | M7 | 🟡 切片 | `.app`、DMG、ad-hoc/Developer ID 签名、entitlements、图标(icns)、notarize 钩子 | 自动更新(Ed25519/delta)、CI/release、DMG 背景/布局、公证实际执行验证、Sparkle 风格更新窗口 |
 
@@ -94,6 +94,15 @@ M2 的 Tester、离屏 PNG、焦点/键盘、文本换行继续作为 M3–M7 �
 - File → Open/Save 调用系统文件对话框,读写表单状态
 - About/按钮调用 NSAlert
 - `.app` + DMG 打包
+
+### M5 自定义协议与 FileServer
+
+- `FileServer` + `WindowOptions.files` + WKURLSchemeHandler
+- `nimi://app/index.html` 可加载本地 HTML/CSS/JS
+- `nimi.json` 的 `resources` 复制到 `.app/Contents/Resources`
+- `urlSchemes` → Info.plist → `application:openURLs:` → `app.onOpenURL`
+- 安全路径解析、MIME、404、`NIMI_SMOKE=protocol`
+- 详见 [M5 FileServer](15-m5-file-server.md)
 
 ### M7 打包
 
@@ -198,11 +207,11 @@ hdiutil attach -nobrowse -readonly .../counter-0.1.0.dmg
 5. 完整 Metal/可访问性
 
 ### M5
-1. 自定义协议 + FileServer
+1. FileServer 异步/流式/Range、多 scheme/多 root
 2. Session/Cookie/内容规则
 3. 文件监视(FSEvents)
 4. 文档控制器/最近文档/自动保存
-5. 深链/单实例
+5. 单实例边界/文件关联
 
 ### M7 剩余
 1. 自动更新(Ed25519 manifest/delta)

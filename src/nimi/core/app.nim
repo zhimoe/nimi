@@ -21,6 +21,7 @@ type
     quitting*: bool
     readyQueue*: seq[proc() {.closure.}]
     beforeQuitListeners*: seq[proc(e: var QuitEvent) {.closure.}]
+    openURLListeners*: seq[proc(url: string) {.closure.}]
     menu*: Menu
 
 var app* = App(name: "Nimi", version: "0.1.0")
@@ -48,6 +49,9 @@ proc onReady*(a: App, fn: proc()) =
 
 proc onBeforeQuit*(a: App, fn: proc(e: var QuitEvent)) =
   a.beforeQuitListeners.add fn
+
+proc onOpenURL*(a: App, fn: proc(url: string)) =
+  a.openURLListeners.add fn
 
 var menuCallbacks: Table[uint32, proc()]
 
@@ -160,6 +164,9 @@ proc run*(a: App) =
       a.requestQuit()
     handler.terminated = proc() =
       discard
+    handler.openURL = proc(url: string) =
+      for fn in a.openURLListeners:
+        fn(url)
     handler.dispatch = proc() =
       drainMain()
     backend.init(handler, AppOptions(name: a.name))

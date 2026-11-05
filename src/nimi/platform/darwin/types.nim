@@ -26,6 +26,8 @@ type
     appMenuTarget*: Id
     trays*: Table[uint64, Id]
     trayTargets*: Table[uint64, Id]
+    schemeRoots*: Table[pointer, string]
+    schemeHandlers*: Table[uint64, Id]
     shortcutRefs*: Table[string, pointer]
     shortcutCallbacks*: Table[uint32, proc()]
     nextShortcutId*: uint32

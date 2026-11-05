@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Nimi Protocol</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="card">
+    <div class="mark">nimi://</div>
+    <h1>Local assets,<br>served by Nim.</h1>
+    <p class="lede">
+      这个页面不是 <code>loadHTMLString</code>,而是由
+      <code>WKURLSchemeHandler</code> 从本地目录读取,再通过
+      <code>nimi://app/</code> 加载。
+    </p>
+    <dl class="facts">
+      <div><dt>scheme</dt><dd id="scheme">—</dd></div>
+      <div><dt>path</dt><dd id="path">—</dd></div>
+      <div><dt>IPC</dt><dd id="ipc">waiting for Nim…</dd></div>
+    </dl>
+    <p class="hint">页面上的 CSS/JS 也来自同一个自定义 scheme。</p>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>

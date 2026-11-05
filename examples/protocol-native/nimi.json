@@ -1,0 +1,9 @@
+{
+  "name": "Nimi Protocol",
+  "slug": "nimi-protocol",
+  "identifier": "com.example.nimi-protocol",
+  "version": "0.1.0",
+  "main": "main.nim",
+  "resources": ["frontend"],
+  "urlSchemes": ["nimiprotocol"]
+}

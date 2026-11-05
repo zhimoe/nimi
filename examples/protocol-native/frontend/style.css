@@ -1,0 +1,102 @@
+:root {
+  color-scheme: dark;
+  font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue",
+    "PingFang SC", sans-serif;
+  background: #171411;
+  color: #eee7da;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  display: grid;
+  place-items: center;
+  padding: 32px;
+  background:
+    radial-gradient(700px 420px at 78% 0%, rgba(225, 122, 85, 0.2), transparent 65%),
+    #171411;
+}
+
+.card {
+  width: min(680px, 100%);
+  padding: 34px 36px 30px;
+  border: 1px solid rgba(255, 243, 226, 0.13);
+  border-radius: 20px;
+  background: rgba(30, 26, 22, 0.82);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.35);
+}
+
+.mark {
+  display: inline-block;
+  margin-bottom: 22px;
+  padding: 5px 9px;
+  border: 1px solid rgba(225, 122, 85, 0.35);
+  border-radius: 7px;
+  color: #f0a17e;
+  font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(2.4rem, 6vw, 4.2rem);
+  line-height: 1.03;
+  letter-spacing: -0.055em;
+}
+
+.lede {
+  max-width: 34em;
+  margin: 18px 0 24px;
+  color: #a79d8f;
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+code {
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: rgba(225, 122, 85, 0.14);
+  color: #f0a17e;
+  font: 0.9em ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.facts {
+  display: grid;
+  gap: 1px;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid rgba(255, 243, 226, 0.1);
+  border-radius: 10px;
+  background: rgba(255, 243, 226, 0.1);
+}
+
+.facts > div {
+  display: grid;
+  grid-template-columns: 90px minmax(0, 1fr);
+  gap: 12px;
+  padding: 10px 13px;
+  background: #1b1815;
+}
+
+dt {
+  color: #756d61;
+  font: 10px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: #d9d0c2;
+  font: 11.5px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+#ipc { color: #f0a17e; }
+
+.hint {
+  margin: 20px 0 0;
+  color: #756d61;
+  font-size: 11px;
+}

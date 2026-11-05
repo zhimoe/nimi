@@ -48,6 +48,16 @@ proc appWillTerminate(self: Id, cmd: SEL, notification: Id) {.cdecl.} =
   if gState != nil and gState.handler.terminated != nil:
     gState.handler.terminated()
 
+proc appOpenURLs(self: Id, cmd: SEL, application: Id, urls: Id) {.cdecl.} =
+  if gState == nil or gState.handler.openURL == nil or urls == nil:
+    return
+  let count = int(sendInt(urls, sel("count")))
+  for i in 0 ..< count:
+    let url = sendIdUInt(urls, sel("objectAtIndex:"), NSUInteger(i))
+    let text = goString(send0(url, sel("absoluteString")))
+    if text.len > 0:
+      gState.handler.openURL(text)
+
 proc appShouldTerminateAfterLastWindowClosed(self: Id, cmd: SEL,
                                             sender: Id): bool {.cdecl.} =
   result = false
@@ -88,6 +98,8 @@ proc initApp(state: DarwinState, h: AppHandler, opts: AppOptions) =
       cast[pointer](appShouldTerminate), "Q@:@"),
     ("applicationWillTerminate:",
       cast[pointer](appWillTerminate), "v@:@"),
+    ("application:openURLs:",
+      cast[pointer](appOpenURLs), "v@:@@"),
     ("applicationShouldTerminateAfterLastWindowClosed:",
       cast[pointer](appShouldTerminateAfterLastWindowClosed), "c@:@"),
   ])

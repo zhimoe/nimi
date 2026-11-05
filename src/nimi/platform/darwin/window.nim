@@ -5,7 +5,7 @@ import std/[strutils, tables]
 
 import ../contract
 import ../../core/bridge
-import ./[objc, types]
+import ./[objc, protocol, types]
 
 const
   NimiMessageHandlerName = "nimi"
@@ -44,6 +44,7 @@ proc windowWillClose(self: Id, cmd: SEL, notification: Id) {.cdecl.} =
     gState.surfaceToId.del(surfaceView)
   gState.surfaceViews.del(id)
   gState.surfaceHandlers.del(id)
+  releaseSchemeHandler(id)
 
 proc didReceiveScriptMessage(self: Id, cmd: SEL, controller: Id,
                              message: Id) {.cdecl.} =
@@ -251,6 +252,8 @@ proc createWindow*(state: DarwinState, opts: PlatformWindowOptions,
     surfaceView = view
   else:
     let config = send0(loadClass("WKWebViewConfiguration"), sel("new"))
+    if opts.scheme.len > 0 and opts.fileRoot.len > 0:
+      discard attachSchemeHandler(config, opts.scheme, opts.fileRoot, id)
     let ucc = send0(config, sel("userContentController"))
     sendVoidId2(ucc, sel("addScriptMessageHandler:name:"), delegate,
                 nsString(NimiMessageHandlerName))

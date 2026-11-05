@@ -35,6 +35,8 @@ type
     notarize: bool
     keychainProfile: string
     entitlements: string
+    resources: seq[string]
+    urlSchemes: seq[string]
 
 proc fail(msg: string): ref CatchableError =
   newException(CatchableError, msg)
@@ -92,6 +94,16 @@ proc loadConfig(dir: string): Config =
     macos.hasKey("notarize") and macos["notarize"].getBool(false)
   result.keychainProfile = strField(macos, "keychainProfile", "")
   result.entitlements = strField(macos, "entitlements", "")
+  let resources = node{"resources"}
+  if resources != nil and resources.kind == JArray:
+    for item in resources:
+      if item.kind == JString:
+        result.resources.add item.getStr
+  let schemes = node{"urlSchemes"}
+  if schemes != nil and schemes.kind == JArray:
+    for item in schemes:
+      if item.kind == JString:
+        result.urlSchemes.add item.getStr
 
 proc runGenerate(dir: string) =
   let cfg = loadConfig(dir)
@@ -208,6 +220,15 @@ proc runBuild(dir: string) =
   let resourcesDir = appPath / "Contents" / "Resources"
   createDir(macosDir)
   createDir(resourcesDir)
+  for res in cfg.resources:
+    let src = cfg.projectDir / res
+    let dst = resourcesDir / lastPathPart(src)
+    if dirExists(src):
+      if dirExists(dst):
+        removeDir(dst)
+      copyDir(src, dst)
+    elif fileExists(src):
+      copyFile(src, dst)
 
   echo "Building " & cfg.name & "…"
   let exe = macosDir / cfg.name
@@ -236,6 +257,14 @@ proc runBuild(dir: string) =
   if iconFile.len > 0:
     plist = plist.replace("</dict>\n</plist>",
       "  <key>CFBundleIconFile</key><string>" & iconFile & "</string>\n</dict>\n</plist>")
+  if cfg.urlSchemes.len > 0:
+    var urlTypes = "  <key>CFBundleURLTypes</key>\n  <array>\n    <dict>\n" &
+      "      <key>CFBundleURLName</key><string>" & cfg.identifier &
+      "</string>\n      <key>CFBundleURLSchemes</key>\n      <array>\n"
+    for scheme in cfg.urlSchemes:
+      urlTypes.add "        <string>" & scheme & "</string>\n"
+    urlTypes.add "      </array>\n    </dict>\n  </array>\n"
+    plist = plist.replace("</dict>\n</plist>", urlTypes & "</dict>\n</plist>")
   writeFile(appPath / "Contents" / "Info.plist", plist)
   writeFile(appPath / "Contents" / "PkgInfo", "APPL????")
 

@@ -66,6 +66,10 @@ type
                             data2: NSInteger): Id {.cdecl.}
   MsgSendInitMenuItem* = proc(a: Id, s: SEL, title: Id, action: SEL,
                               key: Id): Id {.cdecl.}
+  MsgSendInitURLResponse* = proc(a: Id, s: SEL, url: Id, mime: Id,
+                                 length: int64, encoding: Id): Id {.cdecl.}
+  MsgSendDataWithBytes* = proc(a: Id, s: SEL, bytes: pointer,
+                               length: NSUInteger): Id {.cdecl.}
 
 let libobjc* = loadLib("/usr/lib/libobjc.A.dylib")
 let appkit* = loadLib("/System/Library/Frameworks/AppKit.framework/AppKit")
@@ -211,6 +215,25 @@ proc nsString*(s: string): Id =
   ## event or our own pool, so the lifetime is the current call.
   cast[proc(a: Id, s: SEL, b: cstring): Id {.cdecl.}](msgSend)(
     loadClass("NSString"), sel("stringWithUTF8String:"), s.cstring)
+
+proc nsData*(data: string): Id =
+  if data.len == 0:
+    return send0(loadClass("NSData"), sel("data"))
+  cast[MsgSendDataWithBytes](msgSend)(
+    loadClass("NSData"), sel("dataWithBytes:length:"),
+    unsafeAddr data[0], NSUInteger(data.len))
+
+proc initURLResponse*(url, mime: Id, length: int64,
+                      encoding: Id): Id =
+  cast[MsgSendInitURLResponse](msgSend)(
+    send0(loadClass("NSURLResponse"), sel("alloc")),
+    sel("initWithURL:MIMEType:expectedContentLength:textEncodingName:"),
+    url, mime, length, encoding)
+
+proc nsError*(domain: string, code: int): Id =
+  cast[proc(a: Id, s: SEL, d: Id, c: NSInteger, info: Id): Id {.cdecl.}](
+    msgSend)(loadClass("NSError"), sel("errorWithDomain:code:userInfo:"),
+    nsString(domain), NSInteger(code), nil)
 
 proc nsURL*(s: string): Id =
   cast[proc(a: Id, s: SEL, b: Id): Id {.cdecl.}](msgSend)(

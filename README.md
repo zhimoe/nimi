@@ -8,7 +8,7 @@ Nimi 的目标是保留 MyGo 的架构与开发体验——系统 WebView + 类�
 
 > 当前状态:**M1 核心已实现**(macOS WebView + typed IPC + TS 生成 + CLI + hello);
 > **M2 核心切片已跑通**(原生 NSView Surface + CoreGraphics/CoreText + 布局/Text/Button + 鼠标/键盘/焦点 + 多行换行 + `Tester`/离屏 PNG + `counter-native`)。
-> **M3 控件、M4 macOS 桌面 API(菜单/对话框/剪贴板/屏幕/主题/窗口/托盘/通知/全局快捷键)、M6 单行 TextInput、M7 `.app`/DMG/签名**已落地;`examples/desktop-native` 是桌面 API 验收,`examples/form-native` 是原生 GUI 验收,`examples/notes` 是 WebView-first 的完整笔记应用。**M5 尚未开始**,其余差距见 [M3–M7 状态](docs/11-m3-m7-status.md)。
+> **M3 控件、M4 macOS 桌面 API(菜单/对话框/剪贴板/屏幕/主题/窗口/托盘/通知/全局快捷键)、M5 自定义 `nimi://` FileServer/深链、M6 单行 TextInput、M7 `.app`/DMG/签名**已落地;`examples/desktop-native` 是桌面 API 验收,`examples/form-native` 是原生 GUI 验收,`examples/notes` 是 WebView-first 的完整笔记应用,`examples/protocol-native` 是自定义协议验收。其余差距见 [M3–M7 状态](docs/11-m3-m7-status.md)。
 > Windows/Linux 在 M8/M9。
 > 参考实现:MyGo 0.7.4(MIT License)。
 
@@ -45,6 +45,7 @@ Nimi 的目标是保留 MyGo 的架构与开发体验——系统 WebView + 类�
 | [M2 实现状态](docs/10-m2-notes.md) | 原生 Surface + 布局/控件/输入/焦点/换行 + Tester/PNG + counter、决策、限制 |
 | [M3–M7 状态](docs/11-m3-m7-status.md) | 控件/菜单/对话框/TextInput/DMG;M5 与剩余项 |
 | [macOS 桌面 API](docs/14-macos-desktop-apis.md) | 屏幕/主题/窗口/托盘/通知/快捷键/对话框;决策与限制 |
+| [M5 FileServer](docs/15-m5-file-server.md) | 自定义 `nimi://` scheme、本地资源服务、打包资源复制 |
 | [Nimi Notes 验收](docs/12-notes-demo.md) | WebView-first 笔记应用:IPC/菜单/导入导出/自动保存/打包 |
 | [官网与 Pages](docs/13-website.md) | 静态站点结构、自定义域名 `nimi.zhi.moe`、DNS 与部署工作流 |
 
@@ -95,6 +96,9 @@ nim c -r --path:src examples/widgets-native/main.nim
 # macOS 桌面 API:屏幕/主题/窗口/托盘/通知/全局快捷键
 nim c -r --path:src examples/desktop-native/main.nim
 
+# 自定义协议:从 nimi:// 加载 HTML/CSS/JS
+nim c -r --path:src examples/protocol-native/main.nim
+
 # 基本 GUI 应用:TextInput + 控件 + 菜单 + 文件/消息对话框
 nim c -r --path:src examples/form-native/main.nim
 
@@ -140,6 +144,7 @@ nimi/
 │   ├── widgets-native/    # M3 控件验收
 │   ├── form-native/       # 原生 GUI 应用验收
 │   ├── desktop-native/    # macOS 桌面 API 验收
+│   ├── protocol-native/   # 自定义 nimi:// 协议验收
 │   └── notes/             # WebView-first 笔记应用验收
 └── spikes/                # 可行性原型(可运行)
     ├── objc_hello/
@@ -227,7 +232,7 @@ macOS 可用版本约 4–6 个月;广泛兼容约 14–21 个月;三平台约 2
 2. M3 剩余:更多控件、Metal、动画、可访问性。
 3. M4 剩余:通知权限/点击、托盘图标、快捷键冲突提示、剪贴板图片/文件。
 4. M6 剩余:选择/撤销/剪贴板、TextArea、IME、富文本、完整 Metal/可访问性。
-5. M5:协议、Session/Cookie、文件监视、文档。
+5. M5 剩余:Session/Cookie、文件监视、文档、单实例边界/文件关联。
 6. M7 剩余:自动更新、CI/release、DMG 背景、实际公证。
 7. 每个里程碑以可运行示例与测试验收。
 8. CloudMusic demo:将 MyGo 云音乐案例移植为 Nimi 示例;源目录

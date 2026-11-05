@@ -154,6 +154,9 @@ const assets* = {
 }
 ```
 
+`resources` 在 `nimi build` 时复制到 `.app/Contents/Resources/<name>`;运行时可用
+`getAppDir()/../Resources/<name>` 定位。`resourcesExclude` 尚未实现。
+
 ### 2.2 默认值
 
 | 字段 | 默认 |
