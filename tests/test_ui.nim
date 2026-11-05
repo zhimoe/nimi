@@ -171,6 +171,17 @@ suite "ui":
     check region.contentH > region.rect.h
     t.scrollAt(region.rect.x + 10, region.rect.y + 10, -10000)
     check t.engine.scrollOffsets.getOrDefault("body", 0) == 0
+    var bar: Hit
+    for h in t.engine.hits:
+      if h.key == "__textscroll:body":
+        bar = h
+    check bar.rect.w > 0
+    let focusBefore = t.engine.focusedKey
+    t.engine.handleMouseDown(bar.rect.x + 2, bar.rect.y + 4)
+    t.engine.handleMouseMove(bar.rect.x + 2, bar.rect.y + bar.rect.h - 4)
+    t.engine.handleMouseUp(bar.rect.x + 2, bar.rect.y + bar.rect.h - 4)
+    check t.engine.focusedKey == focusBefore
+    check t.engine.scrollOffsets.getOrDefault("body", 0) > 0
 
   test "double and triple click selection":
     var value = "hello world"

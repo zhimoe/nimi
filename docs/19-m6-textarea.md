@@ -19,7 +19,7 @@
   - 滚轮/Tester.scrollAt 调整 `scrollOffsets[key]`
   - caret 编辑后自动滚动到可见区域
   - scene clip 裁剪文本/marked text/选择区
-  - 右侧滚动条 thumb 仅作位置指示
+  - 右侧滚动条 thumb 可拖动,与 ScrollView 共用 offset
 - 示例 `examples/form-native` 增加 Notes TextArea,并参与保存/加载
 - 冒烟:合成 AppKit 键盘事件输入 `hello` + Enter + `world`
 
@@ -51,7 +51,6 @@ NIMI_SMOKE=textarea nim c -r --path:src examples/form-native/main.nim
 
 ## 4. 已知限制
 
-- 内部滚动条只有 thumb 指示,尚不可拖动
 - 没有水平滚动/惯性/滚动到行 API
 - 自动换行后的 caret/选择位置是近似映射
 - 没有富文本/代码高亮

@@ -96,7 +96,7 @@ M2 的 Tester、离屏 PNG、焦点/键盘、文本换行继续作为 M3–M7 �
 - 原生 surface 实现 copy/cut/paste/selectAll/undo/redo responder
 - Cmd+Z / Shift+Cmd+Z / Cmd+Y;每控件独立 undo 栈
 - ScrollView:垂直滚动、scene clip、命中裁剪、滚轮/Tester.scrollAt、滚动条拖动
-- TextArea 内部滚动、caret 自动可见、文本/marked/选择区裁剪
+- TextArea 内部滚动/滚动条拖动、caret 自动可见、文本/marked/选择区裁剪
 - 详见 [基础 TextArea](19-m6-textarea.md)、[选择与剪贴板](20-m6-selection.md)
 - 详见 [ScrollView](21-m6-scrollview.md)
 - 双击选词、三击选行/全文

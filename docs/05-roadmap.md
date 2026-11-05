@@ -26,7 +26,7 @@
 | M3 | 控件/布局/滚动 + Metal 起步 + `gallery` 子集 | 10–16 周 | 7–10 月 | 切片(控件/ScrollView/Image;Metal/其余控件未开始) |
 | M4 | 桌面 API:菜单/托盘/通知/快捷键/对话框/剪贴板 | 8–12 周 | 9–13 月 | 切片(macOS 桌面 API 大部分;剪贴板图片/通知点击/托盘图标未完成) |
 | M5 | 文档/会话/Cookie/协议/文件监视/深链/单实例 | 8–12 周 | 11–16 月 | 切片(协议/FileServer/深链/Session/FSEvents/Cookie/文档;其余未开始) |
-| M6 | 文本编辑/IME/可访问性 + Metal 完整 | 12–20 周 | 14–21 月 | 切片(TextInput/TextArea 含内部滚动/选择/剪贴板/Undo/ScrollView/滚动条/IME;其余未开始) |
+| M6 | 文本编辑/IME/可访问性 + Metal 完整 | 12–20 周 | 14–21 月 | 切片(TextInput/TextArea 含内部滚动/滚动条/选择/剪贴板/Undo/ScrollView/滚动条/IME;其余未开始) |
 | M7 | 打包/签名/公证/DMG/更新/CI | 6–10 周 | 16–23 月 | 切片(.app/DMG/签名/图标/CI 构建;更新/release/公证验证未完成) |
 | M8 | Windows:Win32 + WebView2 + D3D11 + 打包 | 4–8 月 | 20–31 月 | |
 | M9 | Linux:GTK3 + WebKitGTK + GL + 打包 | 4–8 月 | 24–39 月 | |

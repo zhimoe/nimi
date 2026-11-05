@@ -740,6 +740,22 @@ proc collectHits(n: Node, engine: Engine, clip: Rect) =
         key: n.key,
         rect: Rect(x: n.x, y: n.y, w: n.w, h: n.h),
         contentH: contentH)
+      if n.w > 12:
+        let track = Rect(x: n.x + n.w - 7, y: n.y + 2,
+                         w: 5, h: max(1.0'f32, n.h - 4))
+        let maxOff = max(0.0'f32, contentH - n.h)
+        let thumbH = max(18.0'f32, track.h * n.h / max(contentH, 1))
+        let travel = max(0.0'f32, track.h - thumbH)
+        engine.hits.add Hit(
+          rect: track,
+          key: "__textscroll:" & n.key,
+          clip: currentClip,
+          onDrag: proc(rect: Rect, x, y: float32) =
+            let t = if travel > 0: max(0.0'f32, min(1.0'f32,
+                          (y - rect.y - thumbH / 2) / travel)) else: 0.0'f32
+            engine.scrollOffsets[n.key] = t * maxOff
+            if engine.requestFrame != nil:
+              engine.requestFrame())
   for ch in n.children:
     collectHits(ch, engine, currentClip)
   if n.kind == nkScroll and n.contentH > n.h and n.w > 12:
@@ -878,7 +894,9 @@ proc handleMouseDown*(engine: Engine, x, y: float32, clicks: int = 1) =
   if i >= 0:
     let hit = engine.hits[i]
     engine.pressedKey = hit.key
-    engine.focusedKey = hit.key
+    if not (hit.key.startsWith("__scroll:") or
+            hit.key.startsWith("__textscroll:")):
+      engine.focusedKey = hit.key
     if hit.onDrag != nil:
       engine.pressedDrag = hit.onDrag
       engine.pressedRect = hit.rect
