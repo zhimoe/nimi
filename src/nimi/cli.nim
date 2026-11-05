@@ -214,7 +214,11 @@ proc runBuild(dir: string) =
   let mainPath = cfg.projectDir / cfg.main
   if not fileExists(mainPath):
     raise fail("main not found: " & mainPath)
-  let outRoot = cfg.projectDir / cfg.outDir / "darwin-arm64"
+  const macArch =
+    when defined(arm64): "arm64"
+    elif defined(amd64): "amd64"
+    else: "unknown"
+  let outRoot = cfg.projectDir / cfg.outDir / ("darwin-" & macArch)
   let appPath = outRoot / (cfg.name & ".app")
   let macosDir = appPath / "Contents" / "MacOS"
   let resourcesDir = appPath / "Contents" / "Resources"

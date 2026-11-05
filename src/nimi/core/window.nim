@@ -8,6 +8,10 @@ import ../platform/contract
 import ../render/cg
 
 type
+  SessionMode* = enum
+    smPersistent
+    smEphemeral
+
   WindowOptions* = object
     title*: string
     width*, height*: int
@@ -16,6 +20,7 @@ type
     url*: string
     content*: Content
     files*: FileServer
+    session*: SessionMode
 
   CloseEvent* = object
     prevented*: bool
@@ -171,7 +176,8 @@ proc newWindow*(opts: WindowOptions): Window =
     token: win.token,
     content: o.content != nil,
     scheme: if o.files != nil: o.files.scheme else: "",
-    fileRoot: if o.files != nil: o.files.root else: "")
+    fileRoot: if o.files != nil: o.files.root else: "",
+    ephemeral: o.session == smEphemeral)
   win.native = currentBackend.newWindow(popts, h)
   if o.content != nil:
     let wid = win.id

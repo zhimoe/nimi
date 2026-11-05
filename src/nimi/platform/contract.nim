@@ -33,6 +33,7 @@ type
     content*: bool
     scheme*: string
     fileRoot*: string
+    ephemeral*: bool
 
   SurfaceHandler* = object
     windowId*: uint64
@@ -80,6 +81,21 @@ type
 
   MenuHandler* = object
     select*: proc(id: uint32) {.closure.}
+
+  PlatformCookie* = object
+    name*, value*, domain*, path*: string
+    secure*, httpOnly*: bool
+
+  PlatformFileEventKind* = enum
+    pfeCreated, pfeModified, pfeRemoved, pfeRenamed
+
+  PlatformFileEvent* = object
+    path*: string
+    kind*: PlatformFileEventKind
+
+  NativeFileWatcher* = ref object
+    id*: uint64
+    close*: proc() {.closure.}
 
   PlatformNotification* = object
     title*, subtitle*, body*: string
@@ -153,6 +169,10 @@ type
     setMenu*: proc(menu: PlatformMenu, h: MenuHandler) {.closure.}
     newTray*: proc(opts: PlatformTrayOptions): NativeTray {.closure.}
     notify*: proc(n: PlatformNotification) {.closure.}
+    watchFiles*: proc(path: string,
+                      h: proc(e: PlatformFileEvent)): NativeFileWatcher {.closure.}
+    getCookies*: proc(cb: proc(cookies: seq[PlatformCookie])) {.closure.}
+    clearCookies*: proc(cb: proc()) {.closure.}
     registerShortcut*: proc(accel: string, fn: proc()): bool {.closure.}
     unregisterShortcut*: proc(accel: string): bool {.closure.}
     unregisterAllShortcuts*: proc() {.closure.}

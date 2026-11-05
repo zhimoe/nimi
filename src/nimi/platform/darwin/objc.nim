@@ -76,6 +76,7 @@ let appkit* = loadLib("/System/Library/Frameworks/AppKit.framework/AppKit")
 let webkit* = loadLib("/System/Library/Frameworks/WebKit.framework/WebKit")
 let foundation* = loadLib("/System/Library/Frameworks/Foundation.framework/Foundation")
 let carbon* = loadLib("/System/Library/Frameworks/Carbon.framework/Carbon")
+let fsevents* = loadLib("/System/Library/Frameworks/CoreServices.framework/Frameworks/FSEvents.framework/FSEvents")
 let libsystem* = loadLib("/usr/lib/libSystem.B.dylib")
 
 let
@@ -298,6 +299,9 @@ proc registerClass*(name: string, super: Id,
 
 proc dispatchAvailable*(): bool =
   dispatchAsyncF != nil and dispatchMainQueue != nil
+
+proc mainDispatchQueue*(): pointer =
+  dispatchMainQueue
 
 proc dispatchAsyncMain*(work: proc(ctx: pointer) {.cdecl.}) =
   if not dispatchAvailable():

@@ -1,7 +1,7 @@
 ## NSApplication lifecycle and the macOS Backend implementation.
 
 import ../contract
-import ./[clipboard, desktop, dialogs, menu, objc, shortcuts, tray, types, window]
+import ./[clipboard, cookie, desktop, dialogs, menu, objc, shortcuts, tray, types, watch, window]
 
 const
   NimiAppDelegateClass = "NimiAppDelegate"
@@ -113,16 +113,20 @@ proc initApp(state: DarwinState, h: AppHandler, opts: AppOptions) =
 proc newDarwinBackend*(): Backend =
   if not dispatchAvailable():
     raise newException(BackendError, "libdispatch main queue is unavailable")
-  let state = DarwinState(nextWindowId: 1, nextTrayId: 1)
+  let state = DarwinState(nextWindowId: 1, nextTrayId: 1, nextWatchId: 1)
   result = Backend(name: "darwin/wkwebview")
   result.clipboard = newDarwinClipboard()
   result.dialogs = newDarwinDialogs()
   installDesktopBackend(result)
   installShortcutBackend(result)
+  installCookieBackend(result)
   result.setMenu = proc(menu: PlatformMenu, h: MenuHandler) =
     installPlatformMenu(menu, h)
   result.newTray = proc(opts: PlatformTrayOptions): NativeTray =
     createTray(opts)
+  result.watchFiles = proc(path: string,
+                           h: proc(e: PlatformFileEvent)): NativeFileWatcher =
+    watchFiles(path, h)
   result.notify = proc(n: PlatformNotification) =
     let noteClass =
       try: loadClass("NSUserNotification")

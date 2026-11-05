@@ -1,0 +1,62 @@
+name: macOS CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "examples/**"
+      - "scripts/**"
+      - "config.nims"
+      - "nimi.nimble"
+      - ".github/workflows/macos.yml"
+  pull_request:
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "examples/**"
+      - "scripts/**"
+      - "config.nims"
+      - "nimi.nimble"
+      - ".github/workflows/macos.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Nim
+        uses: nim-lang/setup-nim-action@v2
+        with:
+          nim-version: "2.4.0"
+
+      - name: Run test suite
+        run: ./scripts/test.sh
+
+      - name: Build CLI
+        run: nim c -d:release --hints:off -o:nimi src/nimi/cli.nim
+
+      - name: Build demo apps
+        run: |
+          ./nimi build examples/desktop-native
+          ./nimi build examples/protocol-native
+          ./nimi build examples/notes
+          for dmg in examples/*/dist/*/*.dmg; do
+            hdiutil verify "$dmg"
+          done
+
+      - name: Upload demo DMGs
+        uses: actions/upload-artifact@v7
+        with:
+          name: nimi-demo-dmgs
+          path: examples/*/dist/*/*.dmg
+          if-no-files-found: error
+          retention-days: 7

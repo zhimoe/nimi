@@ -28,6 +28,9 @@ type
     trayTargets*: Table[uint64, Id]
     schemeRoots*: Table[pointer, string]
     schemeHandlers*: Table[uint64, Id]
+    nextWatchId*: uint64
+    watchStreams*: Table[uint64, pointer]
+    watchHandlers*: Table[uint64, proc(e: PlatformFileEvent) {.closure.}]
     shortcutRefs*: Table[string, pointer]
     shortcutCallbacks*: Table[uint32, proc()]
     nextShortcutId*: uint32

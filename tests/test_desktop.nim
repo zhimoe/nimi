@@ -4,6 +4,8 @@ import nimi/core/screen
 import nimi/core/theme
 import nimi/core/menu
 import nimi/core/shortcut
+import nimi/core/cookie
+import nimi/core/watch
 import nimi/platform/contract
 import nimi/scene/scene
 
@@ -68,6 +70,44 @@ suite "desktop":
     check registered == "ctrl+alt+n"
     check unregisterGlobalShortcut("ctrl+alt+n")
     check unregistered == "ctrl+alt+n"
+
+  test "file watcher delegates events":
+    var platformHandler: proc(e: PlatformFileEvent) {.closure.}
+    let b = fakeBackend()
+    b.watchFiles = proc(path: string,
+                        h: proc(e: PlatformFileEvent)): NativeFileWatcher =
+      platformHandler = h
+      NativeFileWatcher(id: 1)
+    currentBackend = b
+    var gotPath = ""
+    var gotKind = feModified
+    let watcher = watch("/tmp/watch-test", proc(e: FileEvent) =
+      gotPath = e.path
+      gotKind = e.kind)
+    check watcher != nil
+    check platformHandler != nil
+    platformHandler(PlatformFileEvent(path: "/tmp/watch-test/a.txt",
+                                     kind: pfeCreated))
+    check gotPath == "/tmp/watch-test/a.txt"
+    check gotKind == feCreated
+    watcher.close()
+
+  test "cookie delegates":
+    let b = fakeBackend()
+    b.getCookies = proc(cb: proc(cookies: seq[PlatformCookie])) =
+      cb(@[PlatformCookie(name: "sid", value: "abc", domain: "example.com",
+                          path: "/", secure: true, httpOnly: true)])
+    b.clearCookies = proc(cb: proc()) =
+      cb()
+    currentBackend = b
+    var got: seq[Cookie]
+    var cleared = false
+    cookies(proc(list: seq[Cookie]) = got = list)
+    check got.len == 1
+    check got[0].name == "sid"
+    check got[0].secure
+    clearCookies(proc() = cleared = true)
+    check cleared
 
   test "display and theme listeners":
     currentBackend = fakeBackend()

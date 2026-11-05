@@ -1,0 +1,7 @@
+{
+  "name": "Nimi Watch",
+  "slug": "nimi-watch",
+  "identifier": "com.example.nimi-watch",
+  "version": "0.1.0",
+  "main": "main.nim"
+}

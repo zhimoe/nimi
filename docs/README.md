@@ -21,7 +21,10 @@
 | [12 Nimi Notes 验收](12-notes-demo.md) | WebView-first 笔记应用、IPC、菜单、导入导出、自动保存、打包 | 实现者、评审者 |
 | [13 官网与 Pages](13-website.md) | 静态官网、`nimi.zhi.moe` 自定义域名、Cloudflare DNS、GitHub Actions 部署 | 实现者、评审者 |
 | [14 macOS 桌面 API](14-macos-desktop-apis.md) | 屏幕/主题/窗口/托盘/通知/快捷键/对话框;决策、验证与限制 | 实现者、评审者 |
-| [15 M5 FileServer](15-m5-file-server.md) | 自定义 `nimi://` scheme、FileServer、资源打包、安全与限制 | 实现者、评审者 |
+| [15 M5 FileServer](15-m5-file-server.md) | 自定义 `nimi://` scheme、FileServer、深链、Session、资源打包 | 实现者、评审者 |
+| [16 M5 文件监视](16-m5-file-watching.md) | FSEvents、文件事件、关闭与后续去抖/忽略规则 | 实现者、评审者 |
+| [17 M5 Cookies](17-m5-cookies.md) | WKHTTPCookieStore 查询/清理、异步 block、限制 | 实现者、评审者 |
+| [18 macOS CI](18-macos-ci.md) | GitHub Actions 测试/构建/DMG artifact、架构输出 | 实现者、评审者 |
 
 ## 阅读顺序
 

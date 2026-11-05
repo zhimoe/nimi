@@ -30,6 +30,10 @@
   - `nimi.json` 的 `urlSchemes` 写入 `Info.plist` 的 `CFBundleURLTypes`
   - NSApplication delegate `application:openURLs:` → `app.onOpenURL`
   - LaunchServices 把 `nimiprotocol://...` 路由到已运行的实例
+- Session 隔离:
+  - `WindowOptions.session = smPersistent | smEphemeral`
+  - persistent → `WKWebsiteDataStore.defaultDataStore`
+  - ephemeral → `WKWebsiteDataStore.nonPersistentDataStore`
 
 ## 2. 关键决策
 
@@ -42,6 +46,7 @@
 | `resources` 由 CLI 复制到 Contents/Resources | 打包后的 app 不依赖开发目录 |
 | 每个窗口一个 scheme handler | 先覆盖最常见场景;多 scheme/多 root 后续扩展 |
 | 深链走 Info.plist + application:openURLs | 让 LaunchServices 负责单实例路由;无需自建锁文件 |
+| Session 用 WKWebsiteDataStore 默认/非持久化 | 每个窗口独立选择;无自建 cookie 存储 |
 
 ## 3. 验证
 
@@ -81,8 +86,8 @@ open -b com.example.nimi-protocol "nimiprotocol://hello?from=cli"
 
 - 自定义 scheme 的多 root/多 scheme、CORS、分块/范围请求、缓存
 - SPA fallback、dev server URL、内置 VFS
-- Session:`persistent/ephemeral`、ClearData
 - Cookie 列表/设置/删除/清空
+- ClearData/站点数据清理策略 UI
 - 内容规则、认证、证书错误处理
 - 文件监视(FSEvents/去抖/限额)
 - 文档控制器(自动保存/冲突/最近文档/退出询问)
@@ -93,5 +98,5 @@ open -b com.example.nimi-protocol "nimiprotocol://hello?from=cli"
 
 1. 把 FileServer 改成异步、支持流式响应与 `Range`。
 2. 增加 `WindowOptions` 的多 scheme/多 root 配置。
-3. 实现 Cookie/Session 查询与清理。
+3. 实现 Cookie 查询/设置/清理与站点数据清理。
 4. 文件监视与文档控制器优先服务真实笔记/IDE 类应用。

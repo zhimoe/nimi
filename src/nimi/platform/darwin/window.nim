@@ -252,6 +252,13 @@ proc createWindow*(state: DarwinState, opts: PlatformWindowOptions,
     surfaceView = view
   else:
     let config = send0(loadClass("WKWebViewConfiguration"), sel("new"))
+    let dataStore =
+      if opts.ephemeral:
+        send0(loadClass("WKWebsiteDataStore"), sel("nonPersistentDataStore"))
+      else:
+        send0(loadClass("WKWebsiteDataStore"), sel("defaultDataStore"))
+    if dataStore != nil:
+      sendVoidId(config, sel("setWebsiteDataStore:"), dataStore)
     if opts.scheme.len > 0 and opts.fileRoot.len > 0:
       discard attachSchemeHandler(config, opts.scheme, opts.fileRoot, id)
     let ucc = send0(config, sel("userContentController"))
