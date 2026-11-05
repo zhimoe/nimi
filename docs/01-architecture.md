@@ -1,6 +1,6 @@
 # Nimi 架构设计
 
-> 状态:草案 · 日期:2026-11-04 · 关联文档:[可行性分析](00-feasibility.md)、[路线图](05-roadmap.md)
+> 状态:持续更新 · 日期:2026-11-05 · 关联文档:[可行性分析](00-feasibility.md)、[路线图](05-roadmap.md)
 > 目标:用 Nim 复现 MyGo 的分层、线程模型、IPC 与原生 UI 架构;macOS 优先。
 
 ---
@@ -92,6 +92,8 @@ nimi/
 │       │   ├── web/                # wasm(后续)
 │       │   ├── fake/               # 单元测试内存后端
 │       │   └── unsupported.nim     # 其他平台:编译通过,Run 返回错误
+│       ├── effects/                # 可复用视觉效果
+│       │   └── shred.nim           # 碎纸纸带物理
 │       ├── ui/                     # 原生 UI
 │       │   ├── context.nim         # Context、Key、Services、Theme
 │       │   ├── element.nim         # 元素句柄、arena、生命周期
@@ -145,6 +147,13 @@ nimi/
 └── docs/
 ```
 
+> 现状提示:上图是目标布局。当前切片实际实现的是 `core/` 的
+> app/window/content/ipc/loop/events/menu/dialog/clipboard/fileserver/
+> document/watch/cookie/screen/theme/tray/notification/shortcut,
+> `ui/context.nim` + `ui/tester.nim`(尚未拆成 element/layout/paint),
+> `scene/scene.nim`、`render/cg.nim`、`render/metal.nim`、`effects/shred.nim`。
+> 未列出的模块是路线图目标,不应把本文当成“已实现清单”。
+
 > 命名空间用 Nim 的点路径:`import nimi/core/[app, window, ipc]`。门面 `nimi.nim` re-export 常用符号,应用通常 `import nimi` + `import nimi/ui`。
 
 ---
@@ -183,17 +192,23 @@ nimi/
 
 ```text
 nimi.nim ─► core ─► platform.contract
-              │            ▲
-              └─► ui ─► scene ─► render ─► platform? (不,render 只依赖 scene)
-                    └─► text
+              │
+              ├─► content ─► ui ─► scene
+              │      ▲
+              │      └─ SceneRenderer(由 composition root 注入)
+              └─► app(composition root)──► render/cg(CoreGraphics)
 cli ─► tsgen ─► descriptors(由宏生成,位于 core/ui 编译期)
 ```
 
 硬规则:
 
 - `core` 不 import 任何具体后端;通过 `platform.currentBackend()` 或编译期 `when defined(macosx)` 选择。
+- `core/window` 不 import 具体渲染器;它通过 `content.drawContent` 调用注入的
+  `SceneRenderer`。`core/app.nim` 是 macOS composition root,安装
+  `defaultContentRenderer = drawScene`。
 - `ui` 不 import `core` 的 Window/Page;只依赖 `scene`、`text`、`platform.Surface` 的窄接口。
-- `render` 只依赖 `scene` 与裸图形 API;不依赖 `ui`。
+- `render` 只依赖 `scene` 与裸图形 API;不依赖 `ui`。`render/metal.nim` 是
+  macOS 专用路径,依赖 Darwin ObjC/Metal,且不被 `nimi.nim` 导出。
 - `tsgen` 只吃编译期描述符与 JSON,不依赖 UI。
 
 ---

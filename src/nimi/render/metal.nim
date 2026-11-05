@@ -13,7 +13,13 @@
 import std/[math]
 
 import ../effects/shred
-import ../platform/darwin/objc
+
+when defined(macosx):
+  import ../platform/darwin/objc
+else:
+  type
+    Id = pointer
+    NSUInteger = uint
 
 when defined(macosx):
   import std/dynlib
@@ -419,9 +425,6 @@ fragment float4 fs_solid(constant float4 &color [[buffer(0)]]) {
             enc, mtlSel("setRenderPipelineState:"), m.solidPipeline)
           cast[MsgSendSetVertexBuffer](msgSend)(
             enc, mtlSel("setVertexBuffer:offset:atIndex:"), m.solidBuffer, 0, 0)
-          var size = (float32(m.maskW), float32(m.maskH))
-          cast[MsgSendSetVertexBytes](msgSend)(
-            enc, mtlSel("setVertexBytes:length:atIndex:"), addr size, 8, 1)
           # The solid vertex shader receives stage-space pixels; use the
           # drawable size for its NDC conversion, not the mask size.
           var drawableSize = (float32(stageW), float32(stageH))
@@ -546,6 +549,42 @@ fragment float4 fs_solid(constant float4 &color [[buffer(0)]]) {
       let b = result[p]
       result[p] = result[p + 2]
       result[p + 2] = b
+
+proc close*(m: MetalShred) =
+  ## Release Metal textures, pipelines, buffers, queue, and device. Safe to
+  ## call more than once. Do not render afterwards without creating a new
+  ## MetalShred.
+  if m == nil:
+    return
+  when defined(macosx):
+    for tex in [m.maskTex, m.sourceTex, m.targetTex]:
+      if tex != nil:
+        release(tex)
+    for pipe in [m.maskPipeline, m.layerPipeline, m.solidPipeline]:
+      if pipe != nil:
+        release(pipe)
+    for buf in m.maskBuffers:
+      if buf != nil:
+        release(buf)
+    if m.solidBuffer != nil:
+      release(m.solidBuffer)
+    if m.queue != nil:
+      release(m.queue)
+    if m.device != nil:
+      release(m.device)
+  m.maskTex = nil
+  m.sourceTex = nil
+  m.targetTex = nil
+  m.maskPipeline = nil
+  m.layerPipeline = nil
+  m.solidPipeline = nil
+  m.maskBuffers = [nil, nil]
+  m.solidBuffer = nil
+  m.queue = nil
+  m.device = nil
+  m.targetW = 0
+  m.targetH = 0
+  m.ok = false
 
 proc newMetalShred*(pixels: seq[uint8], sourceW, sourceH: int,
                     maskW = 1024, maskH = 512): MetalShred =

@@ -32,3 +32,5 @@ suite "metal layer effect":
       check writeRgbaPng(frame, 900, 720, path)
       check fileExists(path)
       check getFileSize(path) > 100
+      m.close()
+      check not m.ok

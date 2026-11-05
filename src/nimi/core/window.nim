@@ -5,7 +5,6 @@ import std/[json, strutils, sysrand, tables]
 
 import ./[content, events, fileserver, ipc]
 import ../platform/contract
-import ../render/cg
 
 type
   SessionMode* = enum
@@ -118,7 +117,7 @@ proc newWindow*(opts: WindowOptions): Window =
   if o.content != nil:
     let content = o.content
     surface.draw = proc(ctx: pointer, width, height: float32) =
-      drawScene(ctx, renderContent(content, width, height))
+      discard drawContent(content, ctx, width, height)
     surface.mouseDown = proc(x, y: float32, clicks: int) =
       content.handleMouseDown(x, y, clicks)
     surface.mouseUp = proc(x, y: float32) = content.handleMouseUp(x, y)
@@ -241,18 +240,27 @@ proc focusedWindow*(): Window =
 
 proc startAnimation*(w: Window, fps: int = 60,
                      fn: proc(time, dt: float64)) =
-  ## Run a main-thread frame callback and invalidate the native surface after
-  ## each tick. The Darwin backend uses an NSTimer; the callback is not tied to
-  ## the WebView or to a particular renderer.
+  ## Add a main-thread frame callback, start the native frame timer, and
+  ## invalidate the surface immediately. Repeating the call adds another
+  ## listener; changing `fps` restarts the timer at the new rate. The callback
+  ## is not tied to the WebView or to a particular renderer.
   if fn != nil:
     w.frameListeners.add(fn)
-  w.animationFps = if fps > 0: fps else: 60
-  if not w.animationActive:
-    w.animationActive = true
-    if w.native != nil and w.native.startAnimation != nil:
-      w.native.startAnimation(w.animationFps)
+  let rate = if fps > 0: fps else: 60
+  let restart = w.animationActive and rate != w.animationFps
+  w.animationFps = rate
+  if w.native != nil:
+    if restart and w.native.stopAnimation != nil:
+      w.native.stopAnimation()
+    if (restart or not w.animationActive) and
+        w.native.startAnimation != nil:
+      w.native.startAnimation(rate)
+  w.animationActive = true
+  w.invalidate()
 
 proc stopAnimation*(w: Window) =
+  ## Stop the native frame timer and remove all frame listeners. Safe to call
+  ## when no animation is running.
   w.frameListeners.setLen(0)
   w.animationActive = false
   if w.native != nil and w.native.stopAnimation != nil:

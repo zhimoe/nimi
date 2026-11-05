@@ -11,10 +11,12 @@
 - 在 `macos-14` runner 上安装 Nim 2.4.0
 - 运行 `./scripts/test.sh`
 - 编译 CLI
-- 构建并校验三个示例的 `.app` + DMG:
+- 构建并校验五个示例的 `.app` + DMG:
   - `desktop-native`
   - `protocol-native`
   - `notes`
+  - `shred-native`
+  - `shred-metal`
 - 上传 DMG artifact(保留 7 天)
 - 支持 `workflow_dispatch`、`push`、`pull_request`
 
@@ -35,6 +37,8 @@ nim c -d:release --hints:off -o:nimi src/nimi/cli.nim
 ./nimi build examples/desktop-native
 ./nimi build examples/protocol-native
 ./nimi build examples/notes
+./nimi build examples/shred-native
+./nimi build examples/shred-metal
 for dmg in examples/*/dist/*/*.dmg; do hdiutil verify "$dmg"; done
 ```
 

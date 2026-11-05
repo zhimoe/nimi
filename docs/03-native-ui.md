@@ -342,6 +342,9 @@ type
     drawn: seq[Rect]
 ```
 
+- **当前切片**:`scene/scene.nim` 已实现 `opRect`、`opText`、`opClip`/
+  `opRestore`、`opImage`、`opImageQuad`、`opPolygon`;上表是目标 IR,尚未
+  实现 glyph atlas、gradient、shadow、effect、damage。
 - `Op` 用 variant object 或固定字段 + `case kind`;为了 damage diff,字段尽量是值类型。
 - `Image` 用 ID + version,渲染器按 version 上传。
 - `Atlas`:mask(1B/px)/color(4B/px);shelf 分配;transient 区;generation/version;`MaxAtlasSize=4096`。
@@ -378,6 +381,9 @@ type
 ```
 
 - `cg`(macOS CPU)、`raster`(可移植 CPU)、`metal`、`gl`、`d3d11`。
+- **当前切片**:`core/content.nim` 提供 `SceneRenderer` 注入点,
+  `core/app.nim` 安装 `drawScene`;`render/metal.nim` 目前是碎纸专用
+  mask/LayerEffect 渲染器,不是上述通用 `Renderer` 接口的完整实现。
 - UI 层不直接 import 具体渲染器;由窗口 host 按平台/可用性选择。
 - GPU 失败 → CPU 回退;连续失败指数退避;软件 GPU 可降级。
 

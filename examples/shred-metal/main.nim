@@ -7,7 +7,7 @@
 ##   NIMI_SMOKE=metal nim c -r --path:src examples/shred-metal/main.nim
 ##   NIMI_SMOKE=metal-live nim c -r --path:src examples/shred-metal/main.nim
 
-import std/[dynlib, math, os, times]
+import std/[dynlib, os, times]
 
 import nimi
 import nimi/ui

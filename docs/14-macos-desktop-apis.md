@@ -72,7 +72,10 @@ global shortcut: true
 - 屏幕变更事件只在主线程回调;没有做多屏坐标的窗口迁移
 - 菜单位置/启用状态重建会丢失 AppKit 的临时高亮;菜单规模大时应改成按 item 更新
 - 没有屏幕录制、剪贴板图片/文件、窗口状态恢复
-- 尚未实现 Metal、TextArea/IME、M5 协议/Session、M7 更新/公证
+- 本切片时尚未实现 Metal、TextArea/IME、M5 协议/Session、M7 更新/公证;
+  这些已在后续切片补齐(见 [原生碎纸](26-native-shred.md)、
+  [IME](24-m6-ime.md)、[FileServer](15-m5-file-server.md));仍缺
+  自动更新与公证实际执行
 - 通知/快捷键的真实用户交互仍需人工验证
 
 ## 5. 下一步
@@ -82,4 +85,5 @@ global shortcut: true
 3. 全局快捷键冲突检测/提示;支持更多键位。
 4. 剪贴板图片/文件类型与拖放。
 5. 窗口状态保存/恢复、多窗口焦点记忆。
-6. 继续 M5/M6/M7:协议/文件监视、TextArea/IME、更新/公证。
+6. 继续 M5/M6/M7:协议/文件监视、TextArea/IME、更新/公证(其中
+   协议/文件监视/TextArea/IME 已在后续切片落地)。

@@ -215,8 +215,8 @@ app.run()</code></pre>
           <ul>
             <li><strong>M1:</strong> WebView + 类型化 IPC + TS 生成 + CLI + .app。</li>
             <li><strong>M2:</strong> 原生 Surface、布局、CoreText、焦点、Tester。</li>
-            <li><strong>M3–M7:</strong> 控件、菜单/对话框/剪贴板、单行 TextInput、DMG/签名切片。</li>
-            <li><strong>剩余:</strong> 通知/托盘/快捷键、IME/TextArea/选择、完整 Metal、自动更新/公证、Windows/Linux。</li>
+            <li><strong>M3–M7:</strong> 控件/Image/ScrollView、菜单/对话框/剪贴板、Document、TextArea/选择/IME、DMG/签名、Metal 效果原型。</li>
+            <li><strong>剩余:</strong> 更多控件、通用 Metal scene 合成、可访问性、自动更新/公证、Windows/Linux。</li>
           </ul>
         </section>
 
@@ -239,6 +239,7 @@ hdiutil verify examples/notes/dist/darwin-arm64/nimi-notes-0.1.0.dmg</code></pre
             <li><code>examples/counter-native</code> — 原生布局、鼠标、方向键、Tab+Enter。</li>
             <li><code>examples/widgets-native</code> — Checkbox/Switch/Slider/Progress/Divider。</li>
             <li><code>examples/form-native</code> — 原生表单、菜单、文件/消息对话框。</li>
+            <li><code>examples/shred-native</code> / <code>shred-metal</code> — Verlet 纸带、纹理四边形、Metal mask/LayerEffect。</li>
           </ul>
         </section>
 
@@ -253,6 +254,9 @@ hdiutil verify examples/notes/dist/darwin-arm64/nimi-notes-0.1.0.dmg</code></pre
             <a href="https://github.com/zhimoe/nimi/blob/main/docs/04-tooling-and-ipc.md" target="_blank" rel="noreferrer">04 · 工具链与 IPC ↗</a>
             <a href="https://github.com/zhimoe/nimi/blob/main/docs/05-roadmap.md" target="_blank" rel="noreferrer">05 · 实施路线图 ↗</a>
             <a href="https://github.com/zhimoe/nimi/blob/main/docs/12-notes-demo.md" target="_blank" rel="noreferrer">12 · Nimi Notes 验收 ↗</a>
+            <a href="https://github.com/zhimoe/nimi/blob/main/docs/25-shredder.md" target="_blank" rel="noreferrer">25 · 碎纸效果 ↗</a>
+            <a href="https://github.com/zhimoe/nimi/blob/main/docs/26-native-shred.md" target="_blank" rel="noreferrer">26 · 原生碎纸与 Metal ↗</a>
+            <a href="https://github.com/zhimoe/nimi/blob/main/docs/27-project-review.md" target="_blank" rel="noreferrer">27 · 项目回检 ↗</a>
             <a href="https://github.com/zhimoe/nimi" target="_blank" rel="noreferrer">GitHub 仓库 ↗</a>
           </div>
         </section>

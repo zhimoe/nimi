@@ -1,6 +1,9 @@
 import std/[tables, unittest]
 
 import nimi/ui
+import nimi/core/[content, window]
+import nimi/platform/contract
+import nimi/scene/scene
 
 suite "ui":
   test "layout and click by key":
@@ -332,3 +335,35 @@ suite "ui":
     t.key("left")
     t.typeText("X")
     check value == "heXll"
+
+suite "window animation":
+  test "start, restart on fps change, and stop":
+    var started, stopped, frames = 0
+    let w = Window()
+    w.native = NativeWindow(
+      requestFrame: (proc() = inc frames),
+      startAnimation: (proc(fps: int) = inc started),
+      stopAnimation: (proc() = inc stopped))
+    w.startAnimation(30, (proc(time, dt: float64) = discard))
+    check started == 1
+    check frames == 1
+    check w.isAnimating
+    w.startAnimation(60, (proc(time, dt: float64) = discard))
+    check stopped == 1
+    check started == 2
+    w.stopAnimation()
+    check stopped == 2
+    check not w.isAnimating
+
+suite "content renderer":
+  test "per-content renderer draws the scene":
+    var seenWidth = 0.0'f32
+    let c = uiView(proc(c: Context) = discard)
+    c.renderer = (proc(ctx: pointer, scene: Scene) =
+      seenWidth = scene.width)
+    check drawContent(c, nil, 120, 80)
+    check seenWidth == 120
+
+  test "draw without a renderer reports failure":
+    let c = uiView(proc(c: Context) = discard)
+    check not drawContent(c, nil, 10, 10)

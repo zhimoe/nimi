@@ -1,7 +1,7 @@
 ## NSWindow + WKWebView + the runtime-defined delegate that receives page
 ## messages and window close events.
 
-import std/[strutils, tables, times]
+import std/[monotimes, strutils, tables]
 
 import ../contract
 import ../../core/bridge
@@ -84,7 +84,7 @@ proc windowAnimationTick(self: Id, cmd: SEL, timer: Id) {.cdecl.} =
   let h = gState.windowHandlers.getOrDefault(id)
   if h.frame == nil:
     return
-  let now = epochTime()
+  let now = getMonoTime().ticks.float64 / 1_000_000_000.0
   let last = gState.animationLast.getOrDefault(id, now)
   gState.animationLast[id] = now
   let dt = if last <= 0: 0.0 else: now - last
@@ -625,7 +625,7 @@ proc createWindow*(state: DarwinState, opts: PlatformWindowOptions,
         let old = state.windowTimers[id]
         if old != nil:
           sendVoid(old, sel("invalidate"))
-      state.animationLast[id] = epochTime()
+      state.animationLast[id] = getMonoTime().ticks.float64 / 1_000_000_000.0
       let rate = if fps > 0: fps else: 60
       let timer = scheduledTimer(1.0 / float64(rate), delegate,
                                  "animationTick:", true)

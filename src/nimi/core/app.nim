@@ -2,11 +2,13 @@
 
 import std/[os, tables]
 
-import ./[ipc, loop, menu, window]
+import ./[content, ipc, loop, menu, window]
 import ../platform/contract
 
 when defined(macosx):
   import ../platform/darwin/app as darwinApp
+  import ../render/cg
+  import ../scene/scene
 else:
   discard
 
@@ -146,6 +148,8 @@ proc run*(a: App) =
     return
 
   when defined(macosx):
+    defaultContentRenderer = proc(ctx: pointer, scene: Scene) =
+      drawScene(ctx, scene)
     let backend = darwinApp.newDarwinBackend()
     currentBackend = backend
     setLoopHooks(backend.signal, backend.isMainThread)

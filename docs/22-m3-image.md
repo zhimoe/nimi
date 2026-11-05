@@ -47,7 +47,7 @@ NIMI_SMOKE=image nim c -r --path:src examples/image-native/main.nim
 - 路径变化不会自动清缓存
 - 没有 SVG/PDF/视频帧
 - 没有 Retina 多倍图选择
-- Metal 渲染器尚未消费 opImage
+- 通用 Metal scene 渲染器尚未消费 opImage;`render/metal.nim` 目前是碎纸专用 mask/LayerEffect
 
 ## 5. 下一步
 

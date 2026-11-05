@@ -23,10 +23,10 @@
 | M0 | 可行性原型 | 1–2 天 | 1–2 天 | ✅ 已完成 |
 | M1 | 仓库骨架 + core + macOS WebView + IPC + `hello` | 6–10 周 | 2–3 月 | 进行中(核心切片已跑通) |
 | M2 | 原生 UI 基础 + CoreText + `counter-native` | 8–12 周 | 4–6 月 | |
-| M3 | 控件/布局/滚动 + Metal 起步 + `gallery` 子集 | 10–16 周 | 7–10 月 | 切片(控件/ScrollView/Image;Metal/其余控件未开始) |
+| M3 | 控件/布局/滚动 + Metal 起步 + `gallery` 子集 | 10–16 周 | 7–10 月 | 切片(控件/ScrollView/Image/纹理四边形/NSTimer;Metal 专用效果/其余控件未完成) |
 | M4 | 桌面 API:菜单/托盘/通知/快捷键/对话框/剪贴板 | 8–12 周 | 9–13 月 | 切片(macOS 桌面 API 大部分;剪贴板图片/通知点击/托盘图标未完成) |
 | M5 | 文档/会话/Cookie/协议/文件监视/深链/单实例 | 8–12 周 | 11–16 月 | 切片(协议/FileServer/深链/Session/FSEvents/Cookie/文档;其余未开始) |
-| M6 | 文本编辑/IME/可访问性 + Metal 完整 | 12–20 周 | 14–21 月 | 切片(TextInput/TextArea 含内部滚动/滚动条/选择/剪贴板/Undo/ScrollView/滚动条/IME;其余未开始) |
+| M6 | 文本编辑/IME/可访问性 + Metal 完整 | 12–20 周 | 14–21 月 | 切片(TextInput/TextArea 含内部滚动/滚动条/选择/剪贴板/Undo/ScrollView/滚动条/IME;通用 Metal/可访问性/虚拟列表未开始) |
 | M7 | 打包/签名/公证/DMG/更新/CI | 6–10 周 | 16–23 月 | 切片(.app/DMG/签名/图标/CI 构建;更新/release/公证验证未完成) |
 | M8 | Windows:Win32 + WebView2 + D3D11 + 打包 | 4–8 月 | 20–31 月 | |
 | M9 | Linux:GTK3 + WebKitGTK + GL + 打包 | 4–8 月 | 24–39 月 | |
@@ -257,7 +257,10 @@
 
 **目标**:`gallery` 子集;常用表单/列表/弹层;60fps;Metal 渲染基础。
 
-**当前状态(2026-11-04)**:已新增 Checkbox/Switch/Slider/Progress/Divider,含回调式状态、拖动、焦点、测试与 `widgets-native` 示例。Metal、List/Table/Tabs/Select 等尚未开始。详见 [M3–M7 状态](11-m3-m7-status.md)。
+**当前状态(2026-11-05)**:已新增 Checkbox/Switch/Slider/Progress/Divider、Image、ScrollView、纹理四边形、
+`Window.startAnimation` 帧驱动,以及碎纸专用 Metal mask/LayerEffect 原型;List/Table/Tabs/Select、
+通用 Metal scene 合成器仍未开始。详见 [M3–M7 状态](11-m3-m7-status.md) 与
+[原生碎纸](26-native-shred.md)。
 
 ### 工作包
 
@@ -324,7 +327,7 @@
 
 ## 8. M6:文本编辑、IME、可访问性、Metal 完整(12–20 周)
 
-**当前状态(2026-11-05)**:单行 TextInput、基础 TextArea、modifier keys、选择、Cmd+A/C/X/V 剪贴板、Undo/Redo、ScrollView/裁剪/滚动条、opt-in IME(NSTextInputClient)已实现;`form-native` 的 Notes 参与保存加载。真实 IME 验证/可访问性/完整 Metal/虚拟列表未开始,见 [基础 TextArea](19-m6-textarea.md)、[选择与剪贴板](20-m6-selection.md)、[ScrollView](21-m6-scrollview.md) 与 [IME](24-m6-ime.md)。
+**当前状态(2026-11-05)**:单行 TextInput、基础 TextArea、modifier keys、选择、Cmd+A/C/X/V 剪贴板、Undo/Redo、ScrollView/裁剪/滚动条、opt-in IME(NSTextInputClient)、双击/三击选择、TextArea 内部滚动已实现;`form-native` 的 Notes 参与保存加载。真实 IME 验证/可访问性/通用 Metal scene 合成/虚拟列表未开始,见 [基础 TextArea](19-m6-textarea.md)、[选择与剪贴板](20-m6-selection.md)、[ScrollView](21-m6-scrollview.md) 与 [IME](24-m6-ime.md)。
 
 - TextInput/TextArea 完整:selection/undo/redo/密码/剪贴板/多行滚动。
 - IME:NSTextInputClient 完整;中文/日文/韩文/死键/emoji;候选窗定位。

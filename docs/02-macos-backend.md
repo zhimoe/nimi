@@ -574,6 +574,10 @@ WKWebViewConfiguration
 - 请求帧合并:正在跑则标 `due`;暂停超过两帧则 `drawSoon`;否则启动 link。
 - `drawSoon`:把绘制投递到后端队列,避免在 AppKit display/CA commit observer 内执行可能打开模态的用户代码。
 - 空闲:停止 link;窗口被遮挡时停帧;2 秒后释放内存帧。
+- **当前切片**:`Window.startAnimation(fps, fn)` 已用 `NSTimer` 实现
+  (`platform/darwin/window.nim`),使用单调时钟计算 dt,窗口关闭时
+  invalidate;CADisplayLink/CVDisplayLink 仍是后续目标。详见
+  [原生碎纸](26-native-shred.md)。
 
 ### 7.3 呈现
 
@@ -672,6 +676,11 @@ WKWebViewConfiguration
 - 优点:最快跑通、文本质量原生;缺点:大窗口 CPU 高,但 MVP 足够。
 
 ### 8.2 阶段 2:Metal
+
+> **当前切片**:`render/metal.nim` 已实现碎纸专用的 mask 纹理 +
+> LayerEffect 两 pass 渲染(离屏和 CAMetalLayer),但还不是通用的
+> scene→instanced quad 渲染器;MSL 目前运行时编译,未预编译 `.metallib`。
+> 详见 [原生碎纸](26-native-shred.md)。
 
 参考 MyGo 的架构,但可先简化:
 

@@ -4,16 +4,38 @@ import ../scene/scene
 import ../ui/context
 import ../platform/contract
 
+export scene
+
 type
+  SceneRenderer* = proc(ctx: pointer, scene: Scene) {.closure.}
+
   Content* = ref object
     view*: proc(c: Context) {.closure.}
     engine*: Engine
+    renderer*: SceneRenderer
+
+var defaultContentRenderer*: SceneRenderer
+  ## Composition-root hook. The platform bootstrap installs the default
+  ## renderer (CoreGraphics on macOS); apps may override it per Content or
+  ## globally to use a different backend.
 
 proc uiView*(view: proc(c: Context)): Content =
   Content(view: view, engine: Engine())
 
 proc renderContent*(content: Content, width, height: float32): Scene =
   result = content.engine.render(content.view, width, height)
+
+proc drawContent*(content: Content, ctx: pointer, width,
+                  height: float32): bool =
+  ## Render the content scene through the per-content renderer or the
+  ## composition-root default. Returns false when no renderer is installed.
+  let renderer =
+    if content.renderer != nil: content.renderer
+    else: defaultContentRenderer
+  if renderer == nil:
+    return false
+  renderer(ctx, content.engine.render(content.view, width, height))
+  result = true
 
 proc handleMouseDown*(content: Content, x, y: float32, clicks: int = 1) =
   content.engine.handleMouseDown(x, y, clicks)

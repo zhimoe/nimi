@@ -1,6 +1,6 @@
 # Nimi 设计文档
 
-> 状态:草案 · 日期:2026-11-04
+> 状态:持续更新 · 日期:2026-11-05
 
 ## 索引
 
@@ -33,6 +33,7 @@
 | [24 M6 IME](24-m6-ime.md) | NSTextInputClient、marked text、候选窗、fallback | 实现者、评审者 |
 | [25 碎纸效果](25-shredder.md) | MyGo shader 来源、Nim Verlet 物理、WebGL 纸带渲染、限制 | 实现者、评审者 |
 | [26 原生碎纸](26-native-shred.md) | NSTimer 帧驱动、scene 纹理四边形、Metal mask/LayerEffect | 实现者、评审者 |
+| [27 项目回检](27-project-review.md) | 2026-11-05 架构/文档/测试回检、已修复项与剩余债务 | 实现者、评审者 |
 
 ## 阅读顺序
 
@@ -60,3 +61,4 @@
 | 2026-11-04 | M3 控件切片(Checkbox/Switch/Slider/Progress/Divider)、M4 剪贴板、M7 .app/DMG/签名;新增 11 状态 |
 | 2026-11-05 | 碎纸效果:MyGo Verlet 物理移植到 `effects/shred`,WebGL 纸带 demo;新增 25 |
 | 2026-11-05 | 原生碎纸:帧驱动、纹理四边形、Metal mask/LayerEffect;新增 26 |
+| 2026-11-05 | 项目回检:renderer 注入、Metal 可移植性、动画语义、可移植测试;新增 27 |
