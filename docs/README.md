@@ -20,6 +20,7 @@
 | [11 M3–M7 状态](11-m3-m7-status.md) | 控件/菜单/对话框/TextInput/DMG;M5 与剩余项 | 实现者、评审者 |
 | [12 Nimi Notes 验收](12-notes-demo.md) | WebView-first 笔记应用、IPC、菜单、导入导出、自动保存、打包 | 实现者、评审者 |
 | [13 官网与 Pages](13-website.md) | 静态官网、`nimi.zhi.moe` 自定义域名、Cloudflare DNS、GitHub Actions 部署 | 实现者、评审者 |
+| [14 macOS 桌面 API](14-macos-desktop-apis.md) | 屏幕/主题/窗口/托盘/通知/快捷键/对话框;决策、验证与限制 | 实现者、评审者 |
 
 ## 阅读顺序
 

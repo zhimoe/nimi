@@ -1,6 +1,6 @@
 ## NSMenu construction from the platform menu description.
 
-import std/strutils
+import std/[strutils, tables]
 
 import ../contract
 import ./[objc, types]
@@ -13,23 +13,26 @@ const
   ModCommand = NSUInteger(1 shl 20)
 
 proc menuClicked(self: Id, cmd: SEL, sender: Id) {.cdecl.} =
-  if gState == nil or gState.menuHandler.select == nil:
+  if gState == nil:
+    return
+  let handler = gState.menuTargets.getOrDefault(self)
+  if handler.select == nil:
     return
   let tag = int(sendInt(sender, sel("tag")))
-  gState.menuHandler.select(uint32(tag))
+  handler.select(uint32(tag))
 
 proc validateMenuItem(self: Id, cmd: SEL, item: Id): bool {.cdecl.} =
-  result = true
+  result = sendBool(item, sel("isEnabled"))
 
-proc menuTarget(): Id =
-  if gState.menuTarget != nil:
-    return gState.menuTarget
+proc newMenuTarget*(handler: MenuHandler): Id =
   let cls = registerClass(NimiMenuTargetClass, loadClass("NSObject"), [
     ("nimiMenuClicked:", cast[pointer](menuClicked), "v@:@"),
     ("validateMenuItem:", cast[pointer](validateMenuItem), "c@:@"),
   ])
-  gState.menuTarget = send0(cls, sel("new"))
-  result = gState.menuTarget
+  let target = send0(cls, sel("new"))
+  gState.menuTargets[target] = handler
+  retain(target)
+  result = target
 
 proc roleSelector(role: string): SEL =
   case role
@@ -72,7 +75,7 @@ proc parseAccel(acc: string): tuple[key: string, mods: NSUInteger] =
 const appRoles = ["quit", "about", "hide", "hideOthers", "showAll",
                   "bringAllToFront"]
 
-proc buildMenu(items: seq[PlatformMenuItem], target: Id): Id =
+proc buildMenu*(items: seq[PlatformMenuItem], target: Id): Id =
   let menu = send0(loadClass("NSMenu"), sel("new"))
   sendVoidBool(menu, sel("setAutoenablesItems:"), false)
   for item in items:
@@ -115,6 +118,10 @@ proc buildMenu(items: seq[PlatformMenuItem], target: Id): Id =
 proc installPlatformMenu*(menu: PlatformMenu, h: MenuHandler) =
   if gState == nil:
     return
-  gState.menuHandler = h
-  let main = buildMenu(menu.items, menuTarget())
+  let target = newMenuTarget(h)
+  let main = buildMenu(menu.items, target)
   sendVoidId(gState.nsApp, sel("setMainMenu:"), main)
+  if gState.appMenuTarget != nil:
+    gState.menuTargets.del(gState.appMenuTarget)
+    release(gState.appMenuTarget)
+  gState.appMenuTarget = target

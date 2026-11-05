@@ -94,6 +94,24 @@ proc setMenu*(a: App, m: Menu) =
   if a.ready and currentBackend != nil:
     onMain(proc() = installMenu(a))
 
+proc refreshMenu*(a: App) =
+  if a.ready and currentBackend != nil:
+    onMain(proc() = installMenu(a))
+
+proc setMenuItemEnabled*(a: App, label: string, enabled: bool): bool =
+  if a.menu == nil:
+    return false
+  result = setEnabled(a.menu, label, enabled)
+  if result:
+    a.refreshMenu()
+
+proc setMenuItemChecked*(a: App, label: string, checked: bool): bool =
+  if a.menu == nil:
+    return false
+  result = setChecked(a.menu, label, checked)
+  if result:
+    a.refreshMenu()
+
 proc requestQuit*(a: App): bool =
   if a.quitting:
     return true

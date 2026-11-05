@@ -61,10 +61,39 @@ proc didFinishNavigation(self: Id, cmd: SEL, webView: Id,
   discard
 
 proc windowDidBecomeKey(self: Id, cmd: SEL, notification: Id) {.cdecl.} =
-  discard
+  let id = windowLookupId(self)
+  if id == 0:
+    return
+  let h = gState.windowHandlers.getOrDefault(id)
+  if h.focused != nil:
+    h.focused(id)
 
 proc windowDidResignKey(self: Id, cmd: SEL, notification: Id) {.cdecl.} =
-  discard
+  let id = windowLookupId(self)
+  if id == 0:
+    return
+  let h = gState.windowHandlers.getOrDefault(id)
+  if h.blurred != nil:
+    h.blurred(id)
+
+proc windowDidBecomeMain(self: Id, cmd: SEL, notification: Id) {.cdecl.} =
+  windowDidBecomeKey(self, cmd, notification)
+
+proc windowDidResignMain(self: Id, cmd: SEL, notification: Id) {.cdecl.} =
+  windowDidResignKey(self, cmd, notification)
+
+proc appKitOrigin(win: Id, x, y: int): NSPoint =
+  ## Nimi window coordinates are top-left relative to the primary display;
+  ## AppKit window origins are bottom-left in screen coordinates.
+  let frame = sendRect(win, sel("frame"))
+  let list = send0(loadClass("NSScreen"), sel("screens"))
+  if list != nil and int(sendInt(list, sel("count"))) > 0:
+    let first = sendIdUInt(list, sel("objectAtIndex:"), NSUInteger(0))
+    let primary = sendRect(first, sel("frame"))
+    return NSPoint(
+      x: primary.x + CGFloat(x),
+      y: primary.y + primary.h - CGFloat(y) - frame.h)
+  result = NSPoint(x: CGFloat(x), y: CGFloat(y))
 
 # --- native UI surface -----------------------------------------------------
 
@@ -172,6 +201,8 @@ proc delegateClass(): Id =
     ("webView:didFinishNavigation:", cast[pointer](didFinishNavigation), "v@:@@"),
     ("windowDidBecomeKey:", cast[pointer](windowDidBecomeKey), "v@:@"),
     ("windowDidResignKey:", cast[pointer](windowDidResignKey), "v@:@"),
+    ("windowDidBecomeMain:", cast[pointer](windowDidBecomeMain), "v@:@"),
+    ("windowDidResignMain:", cast[pointer](windowDidResignMain), "v@:@"),
   ])
 
 # --- window creation -------------------------------------------------------
@@ -264,6 +295,42 @@ proc createWindow*(state: DarwinState, opts: PlatformWindowOptions,
     sendVoidBool(state.nsApp, sel("activateIgnoringOtherApps:"), true)
   result.close = proc() =
     sendVoid(win, sel("close"))
+  result.hide = proc() =
+    sendVoidId(win, sel("orderOut:"), nil)
+  result.focus = proc() =
+    sendVoidId(win, sel("makeKeyAndOrderFront:"), nil)
+    sendVoidBool(state.nsApp, sel("activateIgnoringOtherApps:"), true)
+  result.center = proc() =
+    sendVoid(win, sel("center"))
+  result.minimize = proc() =
+    sendVoidId(win, sel("miniaturize:"), nil)
+  result.deminimize = proc() =
+    sendVoid(win, sel("deminiaturize:"))
+  result.zoom = proc() =
+    sendVoidId(win, sel("performZoom:"), nil)
+  result.toggleFullScreen = proc() =
+    sendVoidId(win, sel("toggleFullScreen:"), nil)
+  result.isFullScreen = proc(): bool =
+    result = (sendUInt(win, sel("styleMask")) and
+              NSWindowStyleMaskFullScreen) != 0
+  result.isFocused = proc(): bool =
+    result = sendBool(win, sel("isKeyWindow"))
+  result.setSize = proc(width, height: int) =
+    sendVoidSize(win, sel("setContentSize:"),
+                 NSSize(w: CGFloat(width), h: CGFloat(height)))
+  result.setPosition = proc(x, y: int) =
+    sendVoidPoint(win, sel("setFrameOrigin:"), appKitOrigin(win, x, y))
+  result.setResizable = proc(resizable: bool) =
+    var mask = sendUInt(win, sel("styleMask"))
+    if resizable:
+      mask = mask or NSWindowStyleMaskResizable
+    else:
+      mask = mask and not NSWindowStyleMaskResizable
+    sendVoidUInt(win, sel("setStyleMask:"), mask)
+  result.setAlwaysOnTop = proc(always: bool) =
+    sendVoidInt(win, sel("setLevel:"),
+                if always: int(NSFloatingWindowLevel)
+                else: int(NSNormalWindowLevel))
 
   if opts.content:
     result.loadHTML = proc(html: string, baseURL: string) = discard
@@ -317,20 +384,4 @@ proc createWindow*(state: DarwinState, opts: PlatformWindowOptions,
       sendVoid(webView, sel("stopLoading"))
       sendVoidId(win, sel("setContentView:"), nil)
       sendVoid(win, sel("close"))
-  result.loadHTML = proc(html: string, baseURL: string) =
-    let base = if baseURL.len > 0: nsURL(baseURL) else: nil
-    sendVoidId2(webView, sel("loadHTMLString:baseURL:"), nsString(html), base)
-  result.loadURL = proc(url: string) =
-    sendVoidId(webView, sel("loadRequest:"), nsRequest(nsURL(url)))
-  result.eval = proc(js: string) =
-    sendVoidId2(webView, sel("evaluateJavaScript:completionHandler:"),
-               nsString(js), nil)
-  result.destroy = proc() =
-    let u = state.userContentControllers.getOrDefault(id)
-    if u != nil:
-      sendVoidId(u, sel("removeScriptMessageHandlerForName:"),
-                nsString(NimiMessageHandlerName))
-    sendVoidId(webView, sel("setNavigationDelegate:"), nil)
-    sendVoid(webView, sel("stopLoading"))
-    sendVoidId(win, sel("setContentView:"), nil)
-    sendVoid(win, sel("close"))
+

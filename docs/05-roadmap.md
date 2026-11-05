@@ -24,7 +24,7 @@
 | M1 | 仓库骨架 + core + macOS WebView + IPC + `hello` | 6–10 周 | 2–3 月 | 进行中(核心切片已跑通) |
 | M2 | 原生 UI 基础 + CoreText + `counter-native` | 8–12 周 | 4–6 月 | |
 | M3 | 控件/布局/滚动 + Metal 起步 + `gallery` 子集 | 10–16 周 | 7–10 月 | 切片(5 个新控件;Metal/其余控件未开始) |
-| M4 | 桌面 API:菜单/托盘/通知/快捷键/对话框/剪贴板 | 8–12 周 | 9–13 月 | 切片(Clipboard/菜单/对话框;其余未开始) |
+| M4 | 桌面 API:菜单/托盘/通知/快捷键/对话框/剪贴板 | 8–12 周 | 9–13 月 | 切片(macOS 桌面 API 大部分;剪贴板图片/通知点击/托盘图标未完成) |
 | M5 | 文档/会话/Cookie/协议/文件监视/深链/单实例 | 8–12 周 | 11–16 月 | 未开始 |
 | M6 | 文本编辑/IME/可访问性 + Metal 完整 | 12–20 周 | 14–21 月 | 切片(单行 TextInput;其余未开始) |
 | M7 | 打包/签名/公证/DMG/更新/CI | 6–10 周 | 16–23 月 | 切片(.app/DMG/签名/图标;更新/CI/公证验证未完成) |
@@ -278,7 +278,7 @@
 
 ## 6. M4:桌面 API(8–12 周)
 
-**当前状态(2026-11-04)**:Clipboard、菜单模型/NSMenu/role/快捷键、Open/Save/Message 对话框已实现并截图/冒烟验证。补充:`examples/notes` 已用菜单 + 打开/保存面板完成一个实际笔记应用,见 [Nimi Notes 验收](12-notes-demo.md)。通知/托盘/全局快捷键/屏幕/主题尚未开始。
+**当前状态(2026-11-05)**:Clipboard、菜单/NSMenu/role、动态菜单、Open/Save/Message/Confirm 对话框、屏幕/光标、明暗主题/强调色、窗口控制/焦点、NSStatusItem 托盘、NSUserNotification 通知、Carbon 全局快捷键已实现。`examples/desktop-native` 是验收示例;`examples/notes` 是实际笔记应用。剩余:通知权限/点击、托盘图标、快捷键冲突提示、剪贴板图片/文件,见 [macOS 桌面 API](14-macos-desktop-apis.md)。
 
 - 菜单完整:role/动态更新/上下文菜单/Dock 菜单。
 - 托盘:图标/菜单/点击/深浅色。

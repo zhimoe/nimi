@@ -28,6 +28,8 @@ type
     closeListeners*: seq[proc(e: var CloseEvent)]
     closedListeners*: seq[proc()]
     titleListeners*: seq[proc(title: string)]
+    focusListeners*: seq[proc(focused: bool)]
+    focused*: bool
 
   Page* = ref object
     window*: Window
@@ -35,6 +37,7 @@ type
 var
   windows*: Table[uint64, Window]
   nextWindowId*: uint64 = 1
+  focusedWindowId*: uint64
   allClosedHook*: proc() {.closure.}
 
 proc randomHex(n: int): string =
@@ -120,6 +123,9 @@ proc newWindow*(opts: WindowOptions): Window =
     closed: proc(wid: uint64) =
       let w = windows.getOrDefault(wid)
       if w != nil:
+        if focusedWindowId == wid:
+          focusedWindowId = 0
+        w.focused = false
         w.fireClosed()
         windows.del(wid)
         if windows.len == 0 and allClosedHook != nil:
@@ -133,6 +139,21 @@ proc newWindow*(opts: WindowOptions): Window =
       if w != nil:
         for fn in w.titleListeners:
           fn(title),
+    focused: proc(wid: uint64) =
+      let w = windows.getOrDefault(wid)
+      if w != nil and not w.focused:
+        focusedWindowId = wid
+        w.focused = true
+        for fn in w.focusListeners:
+          fn(true),
+    blurred: proc(wid: uint64) =
+      let w = windows.getOrDefault(wid)
+      if w != nil and w.focused:
+        if focusedWindowId == wid:
+          focusedWindowId = 0
+        w.focused = false
+        for fn in w.focusListeners:
+          fn(false),
     surface: surface
   )
 
@@ -154,13 +175,21 @@ proc newWindow*(opts: WindowOptions): Window =
       if w != nil:
         w.invalidate()
   windows[id] = win
+  # AppKit may not deliver the first key-window notification when the app is
+  # launched from a terminal; treat the newly created window as focused and
+  # let blur/focus delegate events correct it later.
+  focusedWindowId = id
+  win.focused = true
   result = win
 
 proc windowById*(id: uint64): Window =
   windows.getOrDefault(id, nil)
 
 proc focusedWindow*(): Window =
-  ## M1 does not track focus; return any live window.
+  if focusedWindowId != 0:
+    let w = windows.getOrDefault(focusedWindowId, nil)
+    if w != nil:
+      return w
   for w in windows.values:
     return w
   result = nil
@@ -178,6 +207,58 @@ proc title*(w: Window): string =
 proc show*(w: Window) =
   if w.native != nil:
     w.native.show()
+
+proc hide*(w: Window) =
+  if w.native != nil and w.native.hide != nil:
+    w.native.hide()
+
+proc focus*(w: Window) =
+  if w.native != nil and w.native.focus != nil:
+    w.native.focus()
+
+proc center*(w: Window) =
+  if w.native != nil and w.native.center != nil:
+    w.native.center()
+
+proc minimize*(w: Window) =
+  if w.native != nil and w.native.minimize != nil:
+    w.native.minimize()
+
+proc deminimize*(w: Window) =
+  if w.native != nil and w.native.deminimize != nil:
+    w.native.deminimize()
+
+proc zoom*(w: Window) =
+  if w.native != nil and w.native.zoom != nil:
+    w.native.zoom()
+
+proc toggleFullScreen*(w: Window) =
+  if w.native != nil and w.native.toggleFullScreen != nil:
+    w.native.toggleFullScreen()
+
+proc isFullScreen*(w: Window): bool =
+  if w.native != nil and w.native.isFullScreen != nil:
+    result = w.native.isFullScreen()
+
+proc isFocused*(w: Window): bool =
+  if w.native != nil and w.native.isFocused != nil:
+    result = w.native.isFocused()
+
+proc setSize*(w: Window, width, height: int) =
+  if w.native != nil and w.native.setSize != nil:
+    w.native.setSize(width, height)
+
+proc setPosition*(w: Window, x, y: int) =
+  if w.native != nil and w.native.setPosition != nil:
+    w.native.setPosition(x, y)
+
+proc setResizable*(w: Window, resizable: bool) =
+  if w.native != nil and w.native.setResizable != nil:
+    w.native.setResizable(resizable)
+
+proc setAlwaysOnTop*(w: Window, always: bool) =
+  if w.native != nil and w.native.setAlwaysOnTop != nil:
+    w.native.setAlwaysOnTop(always)
 
 proc close*(w: Window) =
   if w.native != nil:
@@ -211,6 +292,9 @@ proc onClosed*(w: Window, fn: proc()) =
 
 proc onTitleChanged*(w: Window, fn: proc(title: string)) =
   w.titleListeners.add fn
+
+proc onFocusChanged*(w: Window, fn: proc(focused: bool)) =
+  w.focusListeners.add fn
 
 proc emitPage*(w: Window, name: string, payload: JsonNode) =
   ## Send a typed event to the page. `window.nimi.on(name, fn)` receives it.

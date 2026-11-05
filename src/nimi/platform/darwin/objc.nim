@@ -23,15 +23,23 @@ type
   MsgSendVoid* = proc(a: Id, s: SEL) {.cdecl.}
   MsgSendId1* = proc(a: Id, s: SEL, b: Id): Id {.cdecl.}
   MsgSendIdUInt* = proc(a: Id, s: SEL, i: NSUInteger): Id {.cdecl.}
+  MsgSendIdDouble* = proc(a: Id, s: SEL, v: float64): Id {.cdecl.}
   MsgSendVoidId* = proc(a: Id, s: SEL, b: Id) {.cdecl.}
   MsgSendVoidId2* = proc(a: Id, s: SEL, b, c: Id) {.cdecl.}
   MsgSendVoidId3* = proc(a: Id, s: SEL, b, c, d: Id) {.cdecl.}
+  MsgSendVoidObserver* = proc(a: Id, s: SEL, observer: Id, selector: SEL,
+                              name: Id, obj: Id) {.cdecl.}
   MsgSendVoidIdBool* = proc(a: Id, s: SEL, b: Id, c: bool) {.cdecl.}
   MsgSendVoidBool* = proc(a: Id, s: SEL, b: bool) {.cdecl.}
   MsgSendVoidInt* = proc(a: Id, s: SEL, b: int) {.cdecl.}
   MsgSendVoidUInt* = proc(a: Id, s: SEL, b: NSUInteger) {.cdecl.}
   MsgSendVoidDouble* = proc(a: Id, s: SEL, b: float64) {.cdecl.}
+  MsgSendVoidPoint* = proc(a: Id, s: SEL, p: NSPoint) {.cdecl.}
+  MsgSendVoidSize* = proc(a: Id, s: SEL, sz: NSSize) {.cdecl.}
+  MsgSendColorComponents* = proc(a: Id, s: SEL, r, g, b, alpha: ptr CGFloat): bool {.cdecl.}
   MsgSendBool* = proc(a: Id, s: SEL): bool {.cdecl.}
+  MsgSendUInt* = proc(a: Id, s: SEL): NSUInteger {.cdecl.}
+  MsgSendDouble* = proc(a: Id, s: SEL): float64 {.cdecl.}
   MsgSendCString* = proc(a: Id, s: SEL): cstring {.cdecl.}
   MsgSendRect* = proc(a: Id, s: SEL): NSRect {.cdecl.}
   MsgSendPoint* = proc(a: Id, s: SEL): NSPoint {.cdecl.}
@@ -63,6 +71,7 @@ let libobjc* = loadLib("/usr/lib/libobjc.A.dylib")
 let appkit* = loadLib("/System/Library/Frameworks/AppKit.framework/AppKit")
 let webkit* = loadLib("/System/Library/Frameworks/WebKit.framework/WebKit")
 let foundation* = loadLib("/System/Library/Frameworks/Foundation.framework/Foundation")
+let carbon* = loadLib("/System/Library/Frameworks/Carbon.framework/Carbon")
 let libsystem* = loadLib("/usr/lib/libSystem.B.dylib")
 
 let
@@ -130,6 +139,9 @@ proc sendId1*(o: Id, s: SEL, b: Id): Id =
 proc sendIdUInt*(o: Id, s: SEL, i: NSUInteger): Id =
   cast[MsgSendIdUInt](msgSend)(o, s, i)
 
+proc sendIdDouble*(o: Id, s: SEL, v: float64): Id =
+  cast[MsgSendIdDouble](msgSend)(o, s, v)
+
 proc sendVoidId*(o: Id, s: SEL, b: Id) =
   cast[MsgSendVoidId](msgSend)(o, s, b)
 
@@ -138,6 +150,11 @@ proc sendVoidId2*(o: Id, s: SEL, b, c: Id) =
 
 proc sendVoidId3*(o: Id, s: SEL, b, c, d: Id) =
   cast[MsgSendVoidId3](msgSend)(o, s, b, c, d)
+
+proc sendAddObserver*(o: Id, observer: Id, selector: SEL, name: Id,
+                      obj: Id) =
+  cast[MsgSendVoidObserver](msgSend)(
+    o, sel("addObserver:selector:name:object:"), observer, selector, name, obj)
 
 proc sendVoidIdBool*(o: Id, s: SEL, b: Id, c: bool) =
   cast[MsgSendVoidIdBool](msgSend)(o, s, b, c)
@@ -153,6 +170,21 @@ proc sendVoidUInt*(o: Id, s: SEL, b: NSUInteger) =
 
 proc sendVoidDouble*(o: Id, s: SEL, b: float64) =
   cast[MsgSendVoidDouble](msgSend)(o, s, b)
+
+proc sendVoidPoint*(o: Id, s: SEL, p: NSPoint) =
+  cast[MsgSendVoidPoint](msgSend)(o, s, p)
+
+proc sendVoidSize*(o: Id, s: SEL, sz: NSSize) =
+  cast[MsgSendVoidSize](msgSend)(o, s, sz)
+
+proc sendColorComponents*(o: Id, s: SEL, r, g, b, alpha: ptr CGFloat): bool =
+  cast[MsgSendColorComponents](msgSend)(o, s, r, g, b, alpha)
+
+proc sendUInt*(o: Id, s: SEL): NSUInteger =
+  cast[MsgSendUInt](msgSend)(o, s)
+
+proc sendDouble*(o: Id, s: SEL): float64 =
+  cast[MsgSendDouble](msgSend)(o, s)
 
 proc sendBool*(o: Id, s: SEL): bool =
   cast[MsgSendBool](msgSend)(o, s)
@@ -249,6 +281,18 @@ proc dispatchAsyncMain*(work: proc(ctx: pointer) {.cdecl.}) =
     raise newException(OSError, "libdispatch main queue is unavailable")
   dispatchAsyncF(dispatchMainQueue, nil, work)
 
+proc nsConstant*(lib: LibHandle, name: string): Id =
+  let p = symAddr(lib, name)
+  if p == nil: nil else: cast[ptr Id](p)[]
+
+proc nsNumberInt*(value: int): Id =
+  cast[proc(a: Id, s: SEL, v: NSInteger): Id {.cdecl.}](msgSend)(
+    loadClass("NSNumber"), sel("numberWithInteger:"), NSInteger(value))
+
+proc nsNumberBool*(value: bool): Id =
+  cast[proc(a: Id, s: SEL, v: bool): Id {.cdecl.}](msgSend)(
+    loadClass("NSNumber"), sel("numberWithBool:"), value)
+
 proc newEventId*(typ: NSUInteger, loc: NSPoint, flags: NSUInteger,
                  win: NSInteger, subtype: int16): Id =
   cast[MsgSendOtherEvent](msgSend)(
@@ -266,8 +310,13 @@ const
   NSWindowStyleMaskClosable* = NSUInteger(1 shl 1)
   NSWindowStyleMaskMiniaturizable* = NSUInteger(1 shl 2)
   NSWindowStyleMaskResizable* = NSUInteger(1 shl 3)
+  NSWindowStyleMaskFullScreen* = NSUInteger(1 shl 14)
 
   NSBackingStoreBuffered* = NSUInteger(2)
+  NSFloatingWindowLevel* = NSInteger(3)
+  NSNormalWindowLevel* = NSInteger(0)
+  NSAlertFirstButtonReturn* = NSInteger(1000)
+  NSVariableStatusItemLength* = -1.0
   NSViewWidthSizable* = NSUInteger(1 shl 1)
   NSViewHeightSizable* = NSUInteger(1 shl 4)
 

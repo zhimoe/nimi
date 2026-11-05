@@ -13,6 +13,7 @@ type
     handler*: AppHandler
     quitting*: bool
     nextWindowId*: uint64
+    nextTrayId*: uint64
     windowHandlers*: Table[uint64, WindowHandler]
     surfaceHandlers*: Table[uint64, SurfaceHandler]
     surfaceViews*: Table[uint64, Id]
@@ -21,7 +22,17 @@ type
     webViews*: Table[uint64, Id]
     userContentControllers*: Table[uint64, Id]
     windowDelegates*: Table[uint64, Id]
-    menuHandler*: MenuHandler
-    menuTarget*: Id
+    menuTargets*: Table[pointer, MenuHandler]
+    appMenuTarget*: Id
+    trays*: Table[uint64, Id]
+    trayTargets*: Table[uint64, Id]
+    shortcutRefs*: Table[string, pointer]
+    shortcutCallbacks*: Table[uint32, proc()]
+    nextShortcutId*: uint32
+    shortcutHandler*: pointer
+    shortcutsInstalled*: bool
+    displayHandler*: proc() {.closure.}
+    themeHandler*: proc() {.closure.}
+    notificationObserver*: Id
 
 var gState*: DarwinState

@@ -69,3 +69,32 @@ proc defaultMenu*(appName: string): Menu =
       menuItem("Bring All to Front", role = "bringAllToFront"),
     ]),
   ])
+
+proc findItem*(items: seq[MenuItem], label: string): MenuItem =
+  for item in items:
+    if item.label == label:
+      return item
+    if item.kind == miSubmenu:
+      let nested = findItem(item.submenu, label)
+      if nested != nil:
+        return nested
+  result = nil
+
+proc findItem*(m: Menu, label: string): MenuItem =
+  if m == nil:
+    return nil
+  findItem(m.items, label)
+
+proc setEnabled*(m: Menu, label: string, enabled: bool): bool =
+  let item = findItem(m, label)
+  if item == nil:
+    return false
+  item.enabled = enabled
+  result = true
+
+proc setChecked*(m: Menu, label: string, checked: bool): bool =
+  let item = findItem(m, label)
+  if item == nil:
+    return false
+  item.checked = checked
+  result = true

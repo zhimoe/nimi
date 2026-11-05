@@ -1,6 +1,6 @@
 # M3–M7 当前状态(切片)
 
-> 日期:2026-11-04 · 对应路线图 M3–M7
+> 日期:2026-11-05 · 对应路线图 M3–M7
 >
 > **重要**:M3–M7 完整范围约 42–66 工程师周。本文件记录当前已落地的切片,
 > 以及尚未完成的部分。没有把“部分完成”写成“完成”。
@@ -12,7 +12,7 @@
 | 里程碑 | 状态 | 已实现 | 未实现 |
 |---|---|---|---|
 | M3 | 🟡 切片 | Checkbox/Switch/Slider/Progress/Divider;文本换行;焦点/键盘 | Metal 渲染器;其余控件(List/Table/Tabs/Select/TextInput…);动画;可访问性 |
-| M4 | 🟡 切片 | Clipboard、菜单模型/NSMenu/role/快捷键、Open/Save/Message 对话框 | 通知、托盘、全局快捷键、屏幕/主题、动态菜单状态 |
+| M4 | 🟡 切片 | Clipboard、菜单/对话框、屏幕/主题、窗口控制/焦点、托盘、通知、全局快捷键、动态菜单 | 剪贴板图片/文件、通知权限/点击、托盘图标、快捷键冲突提示 |
 | M5 | ⬜ 未开始 | — | 自定义协议/FileServer、Session、Cookie、内容规则、文件监视、文档控制器、深链/单实例 |
 | M6 | 🟡 切片 | 单行 TextInput(输入/caret/退格/方向/Home/End) | TextArea、选择/撤销、剪贴板、IME、可访问性、完整 Metal |
 | M7 | 🟡 切片 | `.app`、DMG、ad-hoc/Developer ID 签名、entitlements、图标(icns)、notarize 钩子 | 自动更新(Ed25519/delta)、CI/release、DMG 背景/布局、公证实际执行验证、Sparkle 风格更新窗口 |
@@ -54,6 +54,20 @@ M2 的 Tester、离屏 PNG、焦点/键盘、文本换行继续作为 M3–M7 �
   - `dialog.save` → NSSavePanel
   - `dialog.message` → NSAlert
   - 实际截图确认 About 消息框与 Save 文件面板均可打开
+
+### M4 macOS 桌面 API
+
+- `screens()` / `primaryDisplay()` / `cursorPosition()` / `onScreensChanged()`
+- `themeInfo()` / `isDark()` / `accentColor()` / `onThemeChanged()`
+- `focusedWindow()`、`Window.focused`、`onFocusChanged()`
+- 窗口控制:`center/minimize/zoom/fullscreen/setSize/setPosition/setResizable/setAlwaysOnTop/hide/focus`
+- 动态菜单:`app.setMenuItemEnabled/Checked`、`Menu.findItem`
+- 托盘:`newTray` → NSStatusItem + NSMenu
+- 通知:`notify(title, body)` → NSUserNotification
+- 全局快捷键:Carbon `RegisterEventHotKey`
+- 对话框:扩展名过滤、默认扩展名、多按钮、`dialog.confirm`
+
+详细设计与限制见 [macOS 桌面 API](14-macos-desktop-apis.md)。
 
 ### M4 Clipboard
 
@@ -165,9 +179,9 @@ hdiutil attach -nobrowse -readonly .../counter-0.1.0.dmg
 ## 5. 剩余工作(按建议顺序)
 
 ### M4
-1. 通知(UNUserNotificationCenter,需要 bundle/entitlement)
-2. 托盘/全局快捷键/屏幕/主题
-3. 动态菜单启用/勾选状态更新
+1. 用 UNUserNotificationCenter 替换 NSUserNotification,补权限/点击回调
+2. 托盘图标、快捷键冲突提示、多屏窗口迁移
+3. 剪贴板图片/文件与拖放
 4. Edit role 与 TextInput 的 copy/paste 打通
 
 ### M3 剩余

@@ -1,7 +1,7 @@
 ## NSApplication lifecycle and the macOS Backend implementation.
 
 import ../contract
-import ./[clipboard, dialogs, menu, objc, types, window]
+import ./[clipboard, desktop, dialogs, menu, objc, shortcuts, tray, types, window]
 
 const
   NimiAppDelegateClass = "NimiAppDelegate"
@@ -93,6 +93,7 @@ proc initApp(state: DarwinState, h: AppHandler, opts: AppOptions) =
   ])
   state.appDelegate = send0(delegateClass, sel("new"))
   sendVoidId(state.nsApp, sel("setDelegate:"), state.appDelegate)
+  installDesktopObservers()
 
   installMenu(state, if opts.name.len > 0: opts.name else: "Nimi")
   sendVoidBool(state.nsApp, sel("activateIgnoringOtherApps:"), true)
@@ -100,17 +101,42 @@ proc initApp(state: DarwinState, h: AppHandler, opts: AppOptions) =
 proc newDarwinBackend*(): Backend =
   if not dispatchAvailable():
     raise newException(BackendError, "libdispatch main queue is unavailable")
-  let state = DarwinState(nextWindowId: 1)
+  let state = DarwinState(nextWindowId: 1, nextTrayId: 1)
   result = Backend(name: "darwin/wkwebview")
   result.clipboard = newDarwinClipboard()
   result.dialogs = newDarwinDialogs()
+  installDesktopBackend(result)
+  installShortcutBackend(result)
   result.setMenu = proc(menu: PlatformMenu, h: MenuHandler) =
     installPlatformMenu(menu, h)
+  result.newTray = proc(opts: PlatformTrayOptions): NativeTray =
+    createTray(opts)
+  result.notify = proc(n: PlatformNotification) =
+    let noteClass =
+      try: loadClass("NSUserNotification")
+      except ValueError: nil
+    if noteClass == nil:
+      return
+    let note = send0(noteClass, sel("new"))
+    if note == nil:
+      return
+    if n.title.len > 0:
+      sendVoidId(note, sel("setTitle:"), nsString(n.title))
+    if n.subtitle.len > 0:
+      sendVoidId(note, sel("setSubtitle:"), nsString(n.subtitle))
+    if n.body.len > 0:
+      sendVoidId(note, sel("setInformativeText:"), nsString(n.body))
+    let center = send0(loadClass("NSUserNotificationCenter"),
+                       sel("defaultUserNotificationCenter"))
+    if center != nil:
+      sendVoidId(center, sel("deliverNotification:"), note)
+    release(note)
   result.init = proc(h: AppHandler, opts: AppOptions) =
     initApp(state, h, opts)
   result.run = proc() =
     sendVoid(state.nsApp, sel("run"))
   result.quit = proc() =
+    unregisterAllShortcuts()
     stopApp(state)
   result.signal = proc() =
     dispatchAsyncMain(dispatchTrampoline)
