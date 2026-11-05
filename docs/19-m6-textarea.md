@@ -17,6 +17,7 @@
   - 固定高度,超出区域不绘制
 - 内部滚动:
   - 滚轮/Tester.scrollAt 调整 `scrollOffsets[key]`
+  - PageUp/PageDown 以 viewport 为目标滚动
   - caret 编辑后自动滚动到可见区域
   - scene clip 裁剪文本/marked text/选择区
   - 右侧滚动条 thumb 可拖动,与 ScrollView 共用 offset

@@ -23,6 +23,7 @@
   - track + thumb 绘制
   - thumb 尺寸按 viewport/content 比例
   - 拖动/点击 track 更新 offset
+- 键盘:PageUp/PageDown 滚动最近鼠标所在/焦点所在区域
 - 示例 `examples/scroll-native`:40 行按钮列表,滚轮/滚动条/测试滚动
 
 ## 2. 关键决策
@@ -57,7 +58,7 @@ NIMI_SMOKE=scroll nim c -r --path:src examples/scroll-native/main.nim
 
 - 只有垂直滚动;没有水平滚动
 - 没有水平滚动条、惯性/回弹、滚动条 hover 状态
-- 没有 `scrollTo`/键盘 PageUp/PageDown
+- 没有 `scrollTo`/Home/End 到内容边界
 - 没有嵌套滚动的优先级策略(当前取最深区域)
 - 没有 scroll anchoring/虚拟列表;40 行全量布局
 - TextArea 自身还没有内部滚动;需放在 ScrollView 或后续做编辑器滚动
@@ -66,6 +67,6 @@ NIMI_SMOKE=scroll nim c -r --path:src examples/scroll-native/main.nim
 ## 5. 下一步
 
 1. 滚动位置/焦点自动跟随,滚动条 hover/更细粒度交互。
-2. 水平滚动、`scrollTo`、键盘 PageUp/PageDown。
+2. 水平滚动、`scrollTo`、Home/End 到内容边界。
 3. 虚拟列表/布局缓存,支持大列表。
 4. TextArea 内部滚动与 caret 自动可见。

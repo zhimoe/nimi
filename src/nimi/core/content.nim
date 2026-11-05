@@ -87,6 +87,8 @@ proc handleCommand*(content: Content, selector: string): bool =
   of "deleteBackward:", "deleteWordBackward:": content.engine.handleKeyDown("backspace"); true
   of "deleteForward:", "deleteWordForward:": content.engine.handleKeyDown("delete"); true
   of "insertNewline:", "insertParagraphSeparator:": content.engine.handleKeyDown("enter"); true
+  of "pageUp:", "scrollPageUp:": content.engine.handleKeyDown("pageup"); true
+  of "pageDown:", "scrollPageDown:": content.engine.handleKeyDown("pagedown"); true
   of "insertTab:", "insertBacktab:": content.engine.handleKeyDown("tab"); true
   of "cancelOperation:", "complete:": content.engine.handleKeyDown("escape"); true
   of "selectAll:": content.engine.selectAll(); true

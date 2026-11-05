@@ -182,6 +182,11 @@ suite "ui":
     t.engine.handleMouseUp(bar.rect.x + 2, bar.rect.y + bar.rect.h - 4)
     check t.engine.focusedKey == focusBefore
     check t.engine.scrollOffsets.getOrDefault("body", 0) > 0
+    t.engine.lastMouseX = region.rect.x + 10
+    t.engine.lastMouseY = region.rect.y + 10
+    let beforePageUp = t.engine.scrollOffsets.getOrDefault("body", 0)
+    t.key("pageup")
+    check t.engine.scrollOffsets.getOrDefault("body", 0) < beforePageUp
 
   test "double and triple click selection":
     var value = "hello world"
@@ -233,6 +238,11 @@ suite "ui":
     t.engine.handleMouseUp(thumb.rect.x + 3,
                            thumb.rect.y + thumb.rect.h - 6)
     check t.engine.scrollOffsets["list"] > 0
+    t.engine.lastMouseX = region.rect.x + 10
+    t.engine.lastMouseY = region.rect.y + 10
+    let beforePage = t.engine.scrollOffsets.getOrDefault("list", 0)
+    t.key("pageup")
+    check t.engine.scrollOffsets.getOrDefault("list", 0) < beforePage
 
   test "undo and redo":
     var value = ""

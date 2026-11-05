@@ -86,6 +86,7 @@ type
   Engine* = ref object
     scrollOffsets*: Table[string, float32]
     scrollRegions*: seq[ScrollRegion]
+    lastMouseX*, lastMouseY*: float32
     hoveredKey*: string
     pressedKey*: string
     pressedDrag*: proc(rect: Rect, x, y: float32) {.closure.}
@@ -889,6 +890,8 @@ proc selectWordOrLine(engine: Engine, hit: Hit, clicks: int) =
   engine.selectionAnchor = start
 
 proc handleMouseDown*(engine: Engine, x, y: float32, clicks: int = 1) =
+  engine.lastMouseX = x
+  engine.lastMouseY = y
   let i = hitIndex(engine, x, y)
   engine.pressedDrag = nil
   if i >= 0:
@@ -924,6 +927,8 @@ proc handleMouseUp*(engine: Engine, x, y: float32) =
   requestFrame(engine)
 
 proc handleMouseMove*(engine: Engine, x, y: float32) =
+  engine.lastMouseX = x
+  engine.lastMouseY = y
   if engine.pressedDrag != nil:
     engine.pressedDrag(engine.pressedRect, x, y)
     requestFrame(engine)
@@ -1258,8 +1263,13 @@ proc editInput(engine: Engine, index: int, key: string, modifiers: uint32) =
     engine.snapshot(hit.key, beforeText, engine.caretPos, engine.selectionAnchor)
   engine.applyInput(index, text, caret, anchor)
 
+proc pageScroll*(engine: Engine, pages: float32)
+
 proc handleKeyDown*(engine: Engine, key: string, modifiers: uint32 = 0) =
   if key.len == 0:
+    return
+  if key == "pageup" or key == "pagedown":
+    engine.pageScroll(if key == "pageup": -1.0'f32 else: 1.0'f32)
     return
   if key == "tab":
     if engine.hits.len > 0:
@@ -1295,6 +1305,36 @@ proc handleKeyDown*(engine: Engine, key: string, modifiers: uint32 = 0) =
     return
   engine.pendingKeys.add key
   requestFrame(engine)
+
+proc pageScroll*(engine: Engine, pages: float32) =
+  var region: ScrollRegion
+  var found = false
+  for i in countdown(engine.scrollRegions.len - 1, 0):
+    let r = engine.scrollRegions[i]
+    if engine.lastMouseX >= r.rect.x and
+        engine.lastMouseX < r.rect.x + r.rect.w and
+        engine.lastMouseY >= r.rect.y and
+        engine.lastMouseY < r.rect.y + r.rect.h:
+      region = r
+      found = true
+      break
+  if not found:
+    for r in engine.scrollRegions:
+      if r.key == engine.focusedKey:
+        region = r
+        found = true
+        break
+  if not found and engine.scrollRegions.len > 0:
+    region = engine.scrollRegions[0]
+    found = true
+  if not found:
+    return
+  let maxOff = max(0.0'f32, region.contentH - region.rect.h)
+  let old = engine.scrollOffsets.getOrDefault(region.key, 0)
+  let next = max(0.0'f32, min(old + pages * region.rect.h * 0.8, maxOff))
+  if next != old:
+    engine.scrollOffsets[region.key] = next
+    requestFrame(engine)
 
 proc handleScroll*(engine: Engine, x, y, dy: float32) =
   for i in countdown(engine.scrollRegions.len - 1, 0):
