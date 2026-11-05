@@ -34,9 +34,10 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Setup Nim
-        uses: nim-lang/setup-nim-action@v2
+        uses: jiro4989/setup-nim-action@v2.3.1
         with:
           nim-version: "2.4.0"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run test suite
         run: ./scripts/test.sh
