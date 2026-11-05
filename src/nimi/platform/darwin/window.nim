@@ -149,6 +149,20 @@ proc surfaceMouseDragged(self: Id, cmd: SEL, event: Id) {.cdecl.} =
 proc surfaceMouseMoved(self: Id, cmd: SEL, event: Id) {.cdecl.} =
   surfaceMouseEvent(self, event, 2)
 
+proc surfaceScrollWheel(self: Id, cmd: SEL, event: Id) {.cdecl.} =
+  if gState == nil:
+    return
+  let id = gState.surfaceToId.getOrDefault(self, 0'u64)
+  if id == 0:
+    return
+  let h = gState.surfaceHandlers.getOrDefault(id)
+  if h.scroll == nil:
+    return
+  let p = sendPoint(event, sel("locationInWindow"))
+  let bounds = sendRect(self, sel("bounds"))
+  h.scroll(float32(p.x), float32(bounds.h - p.y),
+           float32(sendDouble(event, sel("scrollingDeltaY"))))
+
 proc keyName*(keyCode: int, chars: string): string =
   case keyCode
   of 126: "up"
@@ -235,6 +249,7 @@ proc surfaceClass(): Id =
     ("mouseUp:", cast[pointer](surfaceMouseUp), "v@:@"),
     ("mouseDragged:", cast[pointer](surfaceMouseDragged), "v@:@"),
     ("mouseMoved:", cast[pointer](surfaceMouseMoved), "v@:@"),
+    ("scrollWheel:", cast[pointer](surfaceScrollWheel), "v@:@"),
     ("keyDown:", cast[pointer](surfaceKeyDown), "v@:@"),
     ("copy:", cast[pointer](surfaceCopy), "v@:@"),
     ("cut:", cast[pointer](surfaceCut), "v@:@"),

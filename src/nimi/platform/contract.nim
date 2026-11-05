@@ -44,6 +44,7 @@ type
     mouseDown*: proc(x, y: float32) {.closure.}
     mouseUp*: proc(x, y: float32) {.closure.}
     mouseMoved*: proc(x, y: float32) {.closure.}
+    scroll*: proc(x, y, dy: float32) {.closure.}
     keyDown*: proc(key: string, modifiers: uint32) {.closure.}
     copy*: proc() {.closure.}
     cut*: proc() {.closure.}

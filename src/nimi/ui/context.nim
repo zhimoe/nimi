@@ -26,6 +26,7 @@ type
     nkProgress
     nkDivider
     nkInput
+    nkScroll
 
   Node* = ref object
     kind*: NodeKind
@@ -43,6 +44,8 @@ type
     lines*: seq[string]
     lineHeight*: float32
     fixedW*, fixedH*: float32
+    contentH*: float32
+    scrollY*: float32
     children*: seq[Node]
     onClick*: proc() {.closure.}
     onDrag*: proc(rect: Rect, x, y: float32) {.closure.}
@@ -66,13 +69,21 @@ type
     lines*: seq[string]
     lineHeight*: float32
     padX*, padY*, fontSize*: float32
+    clip*: Rect
 
   EditSnapshot = object
     text: string
     caret: int
     anchor: int
 
+  ScrollRegion* = object
+    key*: string
+    rect*: Rect
+    contentH*: float32
+
   Engine* = ref object
+    scrollOffsets*: Table[string, float32]
+    scrollRegions*: seq[ScrollRegion]
     hoveredKey*: string
     pressedKey*: string
     pressedDrag*: proc(rect: Rect, x, y: float32) {.closure.}
@@ -209,6 +220,9 @@ proc textInput*(c: Context, value: string, onText: proc(text: string),
     bg: rgb(1, 1, 1),
     padX: 8, padY: 5))
 
+proc scrollView*(c: Context, key: string, height: float32 = 240): Node {.discardable.} =
+  addNode(c, Node(kind: nkScroll, key: key, fixedH: height))
+
 proc textArea*(c: Context, value: string, onText: proc(text: string),
                key: string = "", placeholder: string = "",
                size: float32 = 14, height: float32 = 120): Node {.discardable.} =
@@ -337,6 +351,24 @@ proc measure(n: Node, availW, availH: float32) =
       let m = measureText(sample, n.fontSize, false)
       n.w = if n.fixedW > 0: n.fixedW else: max(200.0'f32, m.width + 2 * n.padX)
       n.h = if n.fixedH > 0: n.fixedH else: max(28.0'f32, m.height + 2 * n.padY)
+  of nkScroll:
+    n.w = if n.fixedW > 0: n.fixedW
+          elif availW > 0: availW
+          else: 320.0'f32
+    n.h = if n.fixedH > 0: n.fixedH
+          elif availH > 0: availH
+          else: 240.0'f32
+    let contentW = max(1.0'f32, n.w - 2 * n.padX)
+    var sumH, maxW: float32
+    for ch in n.children:
+      measure(ch, contentW, 1_000_000'f32)
+      sumH += ch.h
+      maxW = max(maxW, ch.w)
+    if n.children.len > 1:
+      sumH += n.gap * float32(n.children.len - 1)
+    n.contentH = max(sumH + 2 * n.padY, n.h)
+    if n.fixedW <= 0 and maxW > 0:
+      n.w = max(n.w, maxW + 2 * n.padX)
   of nkColumn, nkRow:
     var maxW, maxH, sumW, sumH: float32
     for ch in n.children:
@@ -363,6 +395,12 @@ proc measure(n: Node, availW, availH: float32) =
 proc arrange(n: Node, x, y: float32) =
   n.x = x
   n.y = y
+  if n.kind == nkScroll:
+    var cy = n.y + n.padY - n.scrollY
+    for ch in n.children:
+      arrange(ch, n.x + n.padX, cy)
+      cy += ch.h + n.gap
+    return
   if n.kind notin {nkColumn, nkRow}:
     return
   let contentX = n.x + n.padX
@@ -587,11 +625,33 @@ proc paint(n: Node, c: Context) =
         let cx = n.x + n.padX + min(pw, max(0.0'f32, n.w - 2 * n.padX - 1))
         c.scene.rect(Rect(x: cx, y: n.y + 6, w: 1.5'f32, h: n.h - 12),
                      defaultText)
+  of nkScroll:
+    c.scene.clip(Rect(x: n.x, y: n.y, w: n.w, h: n.h))
+    for ch in n.children:
+      paint(ch, c)
+    c.scene.restoreClip()
   of nkColumn, nkRow:
     for ch in n.children:
       paint(ch, c)
 
-proc collectHits(n: Node, engine: Engine) =
+proc intersect(a, b: Rect): Rect =
+  let x = max(a.x, b.x)
+  let y = max(a.y, b.y)
+  let r = min(a.x + a.w, b.x + b.w)
+  let btm = min(a.y + a.h, b.y + b.h)
+  if r <= x or btm <= y:
+    result = Rect(x: x, y: y, w: 0, h: 0)
+  else:
+    result = Rect(x: x, y: y, w: r - x, h: btm - y)
+
+proc collectHits(n: Node, engine: Engine, clip: Rect) =
+  var currentClip = clip
+  if n.kind == nkScroll:
+    currentClip = intersect(clip, Rect(x: n.x, y: n.y, w: n.w, h: n.h))
+    engine.scrollRegions.add ScrollRegion(
+      key: n.key,
+      rect: Rect(x: n.x, y: n.y, w: n.w, h: n.h),
+      contentH: n.contentH)
   if n.onClick != nil or n.onDrag != nil or n.kind == nkInput:
     engine.hits.add Hit(
       rect: Rect(x: n.x, y: n.y, w: n.w, h: n.h),
@@ -606,9 +666,10 @@ proc collectHits(n: Node, engine: Engine) =
       lineHeight: n.lineHeight,
       padX: n.padX,
       padY: n.padY,
-      fontSize: n.fontSize)
+      fontSize: n.fontSize,
+      clip: currentClip)
   for ch in n.children:
-    collectHits(ch, engine)
+    collectHits(ch, engine, currentClip)
 
 # --- frame and input -------------------------------------------------------
 
@@ -622,10 +683,20 @@ proc render*(engine: Engine, view: proc(c: Context),
     if c.root.fill:
       c.root.w = width
       c.root.h = height
+    proc applyScroll(n: Node) =
+      if n.kind == nkScroll:
+        let maxOff = max(0.0'f32, n.contentH - n.h)
+        let off = max(0.0'f32, min(engine.scrollOffsets.getOrDefault(n.key, 0), maxOff))
+        engine.scrollOffsets[n.key] = off
+        n.scrollY = off
+      for ch in n.children:
+        applyScroll(ch)
+    applyScroll(c.root)
     arrange(c.root, 0, 0)
     engine.hits.setLen(0)
+    engine.scrollRegions.setLen(0)
     paint(c.root, c)
-    collectHits(c.root, engine)
+    collectHits(c.root, engine, Rect(x: 0, y: 0, w: width, h: height))
   else:
     engine.hits.setLen(0)
   result = c.scene
@@ -633,6 +704,10 @@ proc render*(engine: Engine, view: proc(c: Context),
 proc hitIndex(engine: Engine, x, y: float32): int =
   for i in countdown(engine.hits.len - 1, 0):
     let r = engine.hits[i].rect
+    let c = engine.hits[i].clip
+    if c.w > 0 and c.h > 0 and
+        (x < c.x or x >= c.x + c.w or y < c.y or y >= c.y + c.h):
+      continue
     if x >= r.x and x < r.x + r.w and y >= r.y and y < r.y + r.h:
       return i
   result = -1
@@ -994,6 +1069,19 @@ proc handleKeyDown*(engine: Engine, key: string, modifiers: uint32 = 0) =
     return
   engine.pendingKeys.add key
   requestFrame(engine)
+
+proc handleScroll*(engine: Engine, x, y, dy: float32) =
+  for i in countdown(engine.scrollRegions.len - 1, 0):
+    let r = engine.scrollRegions[i]
+    if x >= r.rect.x and x < r.rect.x + r.rect.w and
+        y >= r.rect.y and y < r.rect.y + r.rect.h:
+      let maxOff = max(0.0'f32, r.contentH - r.rect.h)
+      let old = engine.scrollOffsets.getOrDefault(r.key, 0)
+      let next = max(0.0'f32, min(old + dy, maxOff))
+      if next != old:
+        engine.scrollOffsets[r.key] = next
+        requestFrame(engine)
+      return
 
 proc clickKey*(engine: Engine, key: string): bool =
   ## Test/dev hook: click a control by its key in the last built frame.

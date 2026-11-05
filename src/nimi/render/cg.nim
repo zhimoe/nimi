@@ -47,6 +47,12 @@ let
     proc(r, g, b, a: CGFloat): CFRef {.cdecl.})
   CGContextSetRGBFillColor = fn(cg, "CGContextSetRGBFillColor",
     proc(c: CFRef, r, g, b, a: CGFloat) {.cdecl.})
+  CGContextSaveGState = fn(cg, "CGContextSaveGState",
+    proc(c: CFRef) {.cdecl.})
+  CGContextRestoreGState = fn(cg, "CGContextRestoreGState",
+    proc(c: CFRef) {.cdecl.})
+  CGContextClipToRect = fn(cg, "CGContextClipToRect",
+    proc(c: CFRef, r: CGRect) {.cdecl.})
   CGContextFillRect = fn(cg, "CGContextFillRect",
     proc(c: CFRef, r: CGRect) {.cdecl.})
   CGContextSetTextMatrix = fn(cg, "CGContextSetTextMatrix",
@@ -149,6 +155,15 @@ proc drawScene*(ctx: pointer, scene: Scene) =
         CGContextFillRect(c, r)
     of opText:
       drawText(c, op, scene.height)
+    of opClip:
+      let r = op.clipRect
+      CGContextSaveGState(c)
+      CGContextClipToRect(c, CGRect(
+        x: CGFloat(r.x),
+        y: CGFloat(scene.height) - CGFloat(r.y) - CGFloat(r.h),
+        w: CGFloat(r.w), h: CGFloat(r.h)))
+    of opRestore:
+      CGContextRestoreGState(c)
 
 
 proc renderSceneToPng*(scene: Scene, path: string): bool =

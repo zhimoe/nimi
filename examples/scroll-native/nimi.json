@@ -1,0 +1,7 @@
+{
+  "name": "Nimi Scroll",
+  "slug": "nimi-scroll",
+  "identifier": "com.example.nimi-scroll",
+  "version": "0.1.0",
+  "main": "main.nim"
+}

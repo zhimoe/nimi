@@ -118,6 +118,7 @@ proc newWindow*(opts: WindowOptions): Window =
     surface.mouseDown = proc(x, y: float32) = content.handleMouseDown(x, y)
     surface.mouseUp = proc(x, y: float32) = content.handleMouseUp(x, y)
     surface.mouseMoved = proc(x, y: float32) = content.handleMouseMove(x, y)
+    surface.scroll = proc(x, y, dy: float32) = content.handleScroll(x, y, dy)
     surface.keyDown = proc(key: string, modifiers: uint32) =
       content.handleKeyDown(key, modifiers)
     surface.copy = proc() = content.copySelection()

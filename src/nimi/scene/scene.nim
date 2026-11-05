@@ -11,6 +11,8 @@ type
   OpKind* = enum
     opRect
     opText
+    opClip
+    opRestore
 
   Op* = object
     color*: Color
@@ -23,6 +25,10 @@ type
       x*, y*: float32
       size*: float32
       bold*: bool
+    of opClip:
+      clipRect*: Rect
+    of opRestore:
+      discard
 
   Scene* = object
     width*, height*: float32
@@ -40,3 +46,9 @@ proc text*(s: var Scene, text: string, x, y: float32, size: float32,
   ## x is the left edge; y is the top of the line (not the baseline).
   s.ops.add Op(kind: opText, text: text, x: x, y: y, size: size,
                bold: bold, color: color)
+
+proc clip*(s: var Scene, r: Rect) =
+  s.ops.add Op(kind: opClip, clipRect: r)
+
+proc restoreClip*(s: var Scene) =
+  s.ops.add Op(kind: opRestore)

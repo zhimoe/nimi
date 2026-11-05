@@ -23,6 +23,9 @@ proc handleMouseUp*(content: Content, x, y: float32) =
 proc handleMouseMove*(content: Content, x, y: float32) =
   content.engine.handleMouseMove(x, y)
 
+proc handleScroll*(content: Content, x, y, dy: float32) =
+  content.engine.handleScroll(x, y, dy)
+
 proc clickKey*(content: Content, key: string): bool =
   content.engine.clickKey(key)
 

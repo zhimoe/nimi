@@ -41,6 +41,10 @@ proc typeText*(t: Tester, text: string) =
     t.engine.handleKeyDown($ch)
   discard t.render()
 
+proc scrollAt*(t: Tester, x, y, dy: float32) =
+  t.engine.handleScroll(x, y, dy)
+  discard t.render()
+
 proc resize*(t: Tester, width, height: float32) =
   t.width = width
   t.height = height

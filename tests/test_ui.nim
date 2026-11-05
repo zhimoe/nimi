@@ -1,4 +1,4 @@
-import std/unittest
+import std/[tables, unittest]
 
 import nimi/ui
 
@@ -153,6 +153,28 @@ suite "ui":
     let r = t.engine.hits[0].rect
     t.clickAt(r.x + r.w * 0.75, r.y + r.h / 2)
     check abs(v - 0.75) < 0.02
+
+  test "scroll view offsets and clips hits":
+    var clicks = 0
+    proc view(c: Context) =
+      column(c).fill().padding(10, 10).children(c, proc() =
+        scrollView(c, "list", height = 100).width(200).children(c, proc() =
+          for i in 0 ..< 20:
+            button(c, "item " & $i, (proc() = inc clicks), key = "item" & $i)
+        )
+      )
+
+    let t = newTester(view, 260, 200)
+    discard t.render()
+    check t.engine.scrollRegions.len == 1
+    let region = t.engine.scrollRegions[0]
+    check region.contentH > region.rect.h
+    t.scrollAt(region.rect.x + 10, region.rect.y + 10, 80)
+    check t.engine.scrollOffsets["list"] == 80
+    t.scrollAt(region.rect.x + 10, region.rect.y + 10, 10000)
+    check t.engine.scrollOffsets["list"] == region.contentH - region.rect.h
+    t.scrollAt(region.rect.x + 10, region.rect.y + 10, -10000)
+    check t.engine.scrollOffsets["list"] == 0
 
   test "undo and redo":
     var value = ""
