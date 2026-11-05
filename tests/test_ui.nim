@@ -154,6 +154,24 @@ suite "ui":
     t.clickAt(r.x + r.w * 0.75, r.y + r.h / 2)
     check abs(v - 0.75) < 0.02
 
+  test "text area internal scrolling":
+    var value = ""
+    proc view(c: Context) =
+      column(c).fill().padding(10, 10).children(c, proc() =
+        textArea(c, value, proc(s: string) = value = s, key = "body",
+                 height = 100)
+      )
+    let t = newTester(view, 280, 160)
+    discard t.render()
+    t.clickAt(20, 20)
+    for i in 0 ..< 20:
+      t.key("enter")
+    check t.engine.scrollOffsets.getOrDefault("body", 0) > 0
+    let region = t.engine.scrollRegions[0]
+    check region.contentH > region.rect.h
+    t.scrollAt(region.rect.x + 10, region.rect.y + 10, -10000)
+    check t.engine.scrollOffsets.getOrDefault("body", 0) == 0
+
   test "double and triple click selection":
     var value = "hello world"
     proc view(c: Context) =

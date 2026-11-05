@@ -488,7 +488,9 @@ proc paintSelection(n: Node, c: Context,
   if result.start >= result.finish:
     return
   if n.multiline:
-    var ly = n.y + n.padY
+    let off = if c.engine != nil: c.engine.scrollOffsets.getOrDefault(n.key, 0)
+              else: 0.0'f32
+    var ly = n.y + n.padY - off
     for i, line in n.lines:
       let lineStart = lineOffset(n.lines, i)
       let lineFinish = lineStart + line.len
@@ -591,25 +593,34 @@ proc paint(n: Node, c: Context) =
     c.scene.rect(Rect(x: n.x - 1, y: n.y - 1, w: n.w + 2, h: n.h + 2),
                  rgb(0.62, 0.62, 0.68), 6)
     c.scene.rect(Rect(x: n.x, y: n.y, w: n.w, h: n.h), n.bg, 5)
-    if c.engine != nil and c.engine.focusedKey == n.key:
-      discard paintSelection(n, c, c.engine)
     if n.multiline:
+      let off = if c.engine != nil:
+        c.engine.scrollOffsets.getOrDefault(n.key, 0)
+      else:
+        0.0'f32
+      c.scene.clip(Rect(x: n.x + 1, y: n.y + 1,
+                        w: max(1.0'f32, n.w - 2), h: max(1.0'f32, n.h - 2)))
+      if c.engine != nil and c.engine.focusedKey == n.key:
+        discard paintSelection(n, c, c.engine)
       let textColor = if n.text.len > 0: n.color else: rgb(0.55, 0.55, 0.60)
       if n.text.len == 0:
         c.scene.text(n.placeholder, n.x + n.padX, n.y + n.padY,
                      n.fontSize, textColor, false)
       else:
-        var ly = n.y + n.padY
+        var i = 0
         for line in n.lines:
-          if ly + n.lineHeight > n.y + n.h - n.padY + 0.5:
+          let ly = n.y + n.padY + float32(i) * n.lineHeight - off
+          i += 1
+          if ly + n.lineHeight < n.y + n.padY:
+            continue
+          if ly > n.y + n.h - n.padY:
             break
           c.scene.text(line, n.x + n.padX, ly, n.fontSize, n.color, false)
-          ly += n.lineHeight
       if c.engine != nil and c.engine.markedText.len > 0 and
           c.engine.markedKey == n.key:
         let (ml, mc) = caretLineCol(n.lines,
           if c.engine.caretKey == n.key: c.engine.caretPos else: n.text.len)
-        let my = n.y + n.padY + float32(ml) * n.lineHeight
+        let my = n.y + n.padY + float32(ml) * n.lineHeight - off
         let mx = n.x + n.padX +
           measureText(n.lines[ml][0 ..< min(mc, n.lines[ml].len)],
                       n.fontSize, false).width
@@ -631,13 +642,28 @@ proc paint(n: Node, c: Context) =
           let prefix = if col > 0: line[0 ..< min(col, line.len)] else: ""
           let pw = measureText(prefix, n.fontSize, false).width
           let cx = n.x + n.padX + min(pw, max(0.0'f32, n.w - 2 * n.padX - 1))
-          let cy = n.y + n.padY + float32(lineIdx) * n.lineHeight
-          if cy < n.y + n.h - n.padY:
+          let cy = n.y + n.padY + float32(lineIdx) * n.lineHeight - off
+          if cy >= n.y + n.padY and cy < n.y + n.h - n.padY:
             c.scene.rect(Rect(x: cx, y: cy, w: 1.5'f32,
                               h: min(n.lineHeight - 2, n.h - cy - n.padY)),
                          defaultText)
+      c.scene.restoreClip()
+      let contentH = n.padY * 2 + n.lineHeight * float32(n.lines.len)
+      if contentH > n.h and n.w > 12:
+        let track = Rect(x: n.x + n.w - 7, y: n.y + 2,
+                         w: 5, h: max(1.0'f32, n.h - 4))
+        c.scene.rect(track, rgb(0.35, 0.35, 0.40, 0.10), 2)
+        let maxOff = max(0.0'f32, contentH - n.h)
+        let thumbH = max(18.0'f32, track.h * n.h / max(contentH, 1))
+        let travel = max(0.0'f32, track.h - thumbH)
+        let t = if maxOff > 0: off / maxOff else: 0
+        c.scene.rect(Rect(x: track.x, y: track.y + t * travel,
+                          w: track.w, h: thumbH),
+                     rgb(0.45, 0.45, 0.52, 0.5), 2)
     else:
       let shown = if n.text.len > 0: n.text else: n.placeholder
+      if c.engine != nil and c.engine.focusedKey == n.key:
+        discard paintSelection(n, c, c.engine)
       let textColor = if n.text.len > 0: n.color else: rgb(0.55, 0.55, 0.60)
       let m = measureText(shown, n.fontSize, false)
       c.scene.text(shown, n.x + n.padX, n.y + (n.h - m.height) / 2,
@@ -707,6 +733,13 @@ proc collectHits(n: Node, engine: Engine, clip: Rect) =
       padY: n.padY,
       fontSize: n.fontSize,
       clip: currentClip)
+  if n.kind == nkInput and n.multiline:
+    let contentH = n.padY * 2 + n.lineHeight * float32(n.lines.len)
+    if contentH > n.h:
+      engine.scrollRegions.add ScrollRegion(
+        key: n.key,
+        rect: Rect(x: n.x, y: n.y, w: n.w, h: n.h),
+        contentH: contentH)
   for ch in n.children:
     collectHits(ch, engine, currentClip)
   if n.kind == nkScroll and n.contentH > n.h and n.w > 12:
@@ -744,6 +777,11 @@ proc render*(engine: Engine, view: proc(c: Context),
         let off = max(0.0'f32, min(engine.scrollOffsets.getOrDefault(n.key, 0), maxOff))
         engine.scrollOffsets[n.key] = off
         n.scrollY = off
+      elif n.kind == nkInput and n.multiline:
+        let contentH = n.padY * 2 + n.lineHeight * float32(n.lines.len)
+        let maxOff = max(0.0'f32, contentH - n.h)
+        let off = max(0.0'f32, min(engine.scrollOffsets.getOrDefault(n.key, 0), maxOff))
+        engine.scrollOffsets[n.key] = off
       for ch in n.children:
         applyScroll(ch)
     applyScroll(c.root)
@@ -790,11 +828,12 @@ proc caretIndexLine(text: string, x, left, fontSize: float32): int =
 proc caretIndex(hit: Hit, x: float32): int =
   result = caretIndexLine(hit.text, x, hit.rect.x + hit.padX, hit.fontSize)
 
-proc caretIndexAt(hit: Hit, x, y: float32): int =
+proc caretIndexAt(hit: Hit, x, y: float32, scrollY: float32 = 0): int =
   if not hit.multiline or hit.lines.len == 0:
     return caretIndex(hit, x)
   let lineIdx = max(0, min(hit.lines.high,
-    int((y - hit.rect.y - hit.padY) / max(hit.lineHeight, 1))))
+    int((y - hit.rect.y - hit.padY + scrollY) /
+        max(hit.lineHeight, 1))))
   var offset = 0
   for i in 0 ..< lineIdx:
     offset += hit.lines[i].len + 1
@@ -846,7 +885,8 @@ proc handleMouseDown*(engine: Engine, x, y: float32, clicks: int = 1) =
       hit.onDrag(hit.rect, x, y)
     if hit.input:
       engine.caretKey = hit.key
-      engine.caretPos = caretIndexAt(hit, x, y)
+      engine.caretPos = caretIndexAt(
+        hit, x, y, engine.scrollOffsets.getOrDefault(hit.key, 0))
       engine.selectionAnchor = engine.caretPos
       engine.selectingInput = hit.key
       if clicks >= 2:
@@ -873,7 +913,8 @@ proc handleMouseMove*(engine: Engine, x, y: float32) =
   if engine.selectingInput.len > 0:
     for hit in engine.hits:
       if hit.key == engine.selectingInput and hit.input:
-        engine.caretPos = caretIndexAt(hit, x, y)
+        engine.caretPos = caretIndexAt(
+        hit, x, y, engine.scrollOffsets.getOrDefault(hit.key, 0))
         requestFrame(engine)
         return
   let i = hitIndex(engine, x, y)
@@ -912,6 +953,26 @@ proc snapshot(engine: Engine, key, text: string, caret, anchor: int) =
   engine.undoStacks[key] = stack
   engine.redoStacks[key] = @[]
 
+proc ensureCaretVisible(engine: Engine, index: int) =
+  let hit = engine.hits[index]
+  if not hit.multiline or hit.rect.w <= 0:
+    return
+  let caret =
+    if engine.caretKey == hit.key: max(0, min(engine.caretPos, hit.text.len))
+    else: hit.text.len
+  let width = max(1.0'f32, hit.rect.w - 2 * hit.padX)
+  let layout = layoutText(hit.text, hit.fontSize, false, width)
+  let (lineIdx, _) = caretLineCol(layout.lines, caret)
+  let viewportH = max(1.0'f32, hit.rect.h - 2 * hit.padY)
+  let top = float32(lineIdx) * layout.lineHeight
+  var off = engine.scrollOffsets.getOrDefault(hit.key, 0)
+  if top < off:
+    off = top
+  elif top + layout.lineHeight > off + viewportH:
+    off = top + layout.lineHeight - viewportH
+  let maxOff = max(0.0'f32, layout.height - viewportH)
+  engine.scrollOffsets[hit.key] = max(0.0'f32, min(off, maxOff))
+
 proc applySnapshot(engine: Engine, index: int, s: EditSnapshot) =
   let hit = engine.hits[index]
   engine.hits[index].text = s.text
@@ -920,6 +981,7 @@ proc applySnapshot(engine: Engine, index: int, s: EditSnapshot) =
   engine.selectionAnchor = s.anchor
   if hit.onText != nil:
     hit.onText(s.text)
+  engine.ensureCaretVisible(index)
   requestFrame(engine)
 
 proc undo*(engine: Engine) =
@@ -963,6 +1025,7 @@ proc applyInput(engine: Engine, index: int, text: string,
   engine.selectionAnchor = anchor
   if hit.onText != nil:
     hit.onText(text)
+  engine.ensureCaretVisible(index)
   requestFrame(engine)
 
 proc copySelection*(engine: Engine) =
@@ -1060,7 +1123,8 @@ proc caretRect*(engine: Engine): Rect =
     let prefix = if col > 0: line[0 ..< min(col, line.len)] else: ""
     let x = hit.rect.x + hit.padX +
       measureText(prefix, hit.fontSize, false).width
-    let y = hit.rect.y + hit.padY + float32(lineIdx) * hit.lineHeight
+    let off = engine.scrollOffsets.getOrDefault(hit.key, 0)
+    let y = hit.rect.y + hit.padY + float32(lineIdx) * hit.lineHeight - off
     return Rect(x: x, y: y, w: 2, h: max(12, hit.lineHeight))
   let prefix = if pos > 0: text[0 ..< pos] else: ""
   let x = hit.rect.x + hit.padX +
