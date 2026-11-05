@@ -40,3 +40,9 @@ proc paste*(content: Content) =
 
 proc selectAll*(content: Content) =
   content.engine.selectAll()
+
+proc undo*(content: Content) =
+  content.engine.undo()
+
+proc redo*(content: Content) =
+  content.engine.redo()

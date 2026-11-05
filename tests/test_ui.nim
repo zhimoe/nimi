@@ -154,6 +154,23 @@ suite "ui":
     t.clickAt(r.x + r.w * 0.75, r.y + r.h / 2)
     check abs(v - 0.75) < 0.02
 
+  test "undo and redo":
+    var value = ""
+    proc view(c: Context) =
+      column(c).fill().padding(10, 10).children(c, proc() =
+        textInput(c, value, proc(s: string) = value = s, key = "name")
+      )
+
+    let t = newTester(view, 260, 100)
+    discard t.render()
+    t.clickAt(20, 20)
+    t.typeText("hello")
+    check value == "hello"
+    t.key("z", KeyCommand)
+    check value == "hell"
+    t.key("z", KeyCommand or KeyShift)
+    check value == "hello"
+
   test "selection and clipboard":
     var value = "hello world"
     var clip = ""

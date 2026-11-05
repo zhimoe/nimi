@@ -137,6 +137,19 @@ app.whenReady(proc() =
     w.native.testKeyText("Ada")
     echo "form name: ", state.name
     app.quit()
+  elif mode == "undo":
+    discard renderContent(content, 520, 640)
+    var hit: Rect
+    for h in content.engine.hits:
+      if h.key == "name":
+        hit = h.rect
+    w.native.testClick(hit.x + 10, hit.y + hit.h / 2)
+    w.native.testKeyText("hello")
+    content.handleKeyDown("z", KeyCommand)
+    echo "after undo: ", state.name
+    content.handleKeyDown("z", KeyCommand or KeyShift)
+    echo "after redo: ", state.name
+    app.quit()
   elif mode == "select":
     discard renderContent(content, 520, 640)
     var hit: Rect

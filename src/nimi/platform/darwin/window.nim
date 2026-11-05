@@ -194,6 +194,18 @@ proc surfaceSelectAll(self: Id, cmd: SEL, sender: Id) {.cdecl.} =
   let h = gState.surfaceHandlers.getOrDefault(id)
   if h.selectAll != nil: h.selectAll()
 
+proc surfaceUndo(self: Id, cmd: SEL, sender: Id) {.cdecl.} =
+  if gState == nil: return
+  let id = gState.surfaceToId.getOrDefault(self, 0'u64)
+  let h = gState.surfaceHandlers.getOrDefault(id)
+  if h.undo != nil: h.undo()
+
+proc surfaceRedo(self: Id, cmd: SEL, sender: Id) {.cdecl.} =
+  if gState == nil: return
+  let id = gState.surfaceToId.getOrDefault(self, 0'u64)
+  let h = gState.surfaceHandlers.getOrDefault(id)
+  if h.redo != nil: h.redo()
+
 proc surfaceKeyDown(self: Id, cmd: SEL, event: Id) {.cdecl.} =
   if gState == nil:
     return
@@ -228,6 +240,8 @@ proc surfaceClass(): Id =
     ("cut:", cast[pointer](surfaceCut), "v@:@"),
     ("paste:", cast[pointer](surfacePaste), "v@:@"),
     ("selectAll:", cast[pointer](surfaceSelectAll), "v@:@"),
+    ("undo:", cast[pointer](surfaceUndo), "v@:@"),
+    ("redo:", cast[pointer](surfaceRedo), "v@:@"),
   ])
 
 proc delegateClass(): Id =

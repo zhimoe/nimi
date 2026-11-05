@@ -6,7 +6,7 @@
 ## docs/03-native-ui.md. It keeps the same view-function model and scene
 ## output, without the generation handles and layout cache yet.
 
-import std/strutils
+import std/[strutils, tables]
 
 import ../keys
 import ../scene/scene
@@ -67,6 +67,11 @@ type
     lineHeight*: float32
     padX*, padY*, fontSize*: float32
 
+  EditSnapshot = object
+    text: string
+    caret: int
+    anchor: int
+
   Engine* = ref object
     hoveredKey*: string
     pressedKey*: string
@@ -79,6 +84,8 @@ type
     selectingInput*: string
     clipboardRead*: proc(): string {.closure.}
     clipboardWrite*: proc(text: string) {.closure.}
+    undoStacks*: Table[string, seq[EditSnapshot]]
+    redoStacks*: Table[string, seq[EditSnapshot]]
     pendingKeys*: seq[string]
     hits*: seq[Hit]
     requestFrame*: proc() {.closure.}
@@ -733,6 +740,56 @@ proc focusedInputIndex(engine: Engine): int =
       return i
   result = -1
 
+proc snapshot(engine: Engine, key, text: string, caret, anchor: int) =
+  var stack = engine.undoStacks.getOrDefault(key)
+  stack.add EditSnapshot(text: text, caret: caret, anchor: anchor)
+  if stack.len > 100:
+    stack.delete(0)
+  engine.undoStacks[key] = stack
+  engine.redoStacks[key] = @[]
+
+proc applySnapshot(engine: Engine, index: int, s: EditSnapshot) =
+  let hit = engine.hits[index]
+  engine.hits[index].text = s.text
+  engine.caretKey = hit.key
+  engine.caretPos = s.caret
+  engine.selectionAnchor = s.anchor
+  if hit.onText != nil:
+    hit.onText(s.text)
+  requestFrame(engine)
+
+proc undo*(engine: Engine) =
+  let index = focusedInputIndex(engine)
+  if index < 0:
+    return
+  let hit = engine.hits[index]
+  var stack = engine.undoStacks.getOrDefault(hit.key)
+  if stack.len == 0:
+    return
+  let s = stack.pop()
+  engine.undoStacks[hit.key] = stack
+  var redo = engine.redoStacks.getOrDefault(hit.key)
+  redo.add EditSnapshot(text: hit.text, caret: engine.caretPos,
+                        anchor: engine.selectionAnchor)
+  engine.redoStacks[hit.key] = redo
+  engine.applySnapshot(index, s)
+
+proc redo*(engine: Engine) =
+  let index = focusedInputIndex(engine)
+  if index < 0:
+    return
+  let hit = engine.hits[index]
+  var stack = engine.redoStacks.getOrDefault(hit.key)
+  if stack.len == 0:
+    return
+  let s = stack.pop()
+  engine.redoStacks[hit.key] = stack
+  var undoStack = engine.undoStacks.getOrDefault(hit.key)
+  undoStack.add EditSnapshot(text: hit.text, caret: engine.caretPos,
+                             anchor: engine.selectionAnchor)
+  engine.undoStacks[hit.key] = undoStack
+  engine.applySnapshot(index, s)
+
 proc applyInput(engine: Engine, index: int, text: string,
                 caret, anchor: int) =
   let hit = engine.hits[index]
@@ -762,6 +819,7 @@ proc cutSelection*(engine: Engine) =
   if sel.start < sel.finish:
     if engine.clipboardWrite != nil:
       engine.clipboardWrite(hit.text[sel.start ..< sel.finish])
+    engine.snapshot(hit.key, hit.text, engine.caretPos, engine.selectionAnchor)
     let text = hit.text[0 ..< sel.start] & hit.text[sel.finish .. ^1]
     engine.applyInput(index, text, sel.start, sel.start)
 
@@ -776,6 +834,7 @@ proc paste*(engine: Engine) =
   if not hit.multiline:
     text = text.replace("\r", " ").replace("\n", " ")
   let sel = selectionRange(engine, hit.key, hit.text.len)
+  engine.snapshot(hit.key, hit.text, engine.caretPos, engine.selectionAnchor)
   let next = hit.text[0 ..< sel.start] & text & hit.text[sel.finish .. ^1]
   engine.applyInput(index, next, sel.start + text.len, sel.start + text.len)
 
@@ -795,6 +854,13 @@ proc editInput(engine: Engine, index: int, key: string, modifiers: uint32) =
   let shift = (modifiers and KeyShift) != 0
   if cmd:
     case key.toLowerAscii
+    of "z":
+      if (modifiers and KeyShift) != 0: engine.redo()
+      else: engine.undo()
+      return
+    of "y":
+      engine.redo()
+      return
     of "a":
       engine.selectAll()
       return
@@ -811,6 +877,7 @@ proc editInput(engine: Engine, index: int, key: string, modifiers: uint32) =
       discard
 
   var text = hit.text
+  let beforeText = text
   var caret =
     if engine.caretKey == hit.key: max(0, min(engine.caretPos, text.len))
     else: text.len
@@ -886,6 +953,8 @@ proc editInput(engine: Engine, index: int, key: string, modifiers: uint32) =
     return
   let navigation = key in ["left", "right", "home", "end", "up", "down"]
   let anchor = if shift and navigation: anchorBefore else: caret
+  if text != beforeText:
+    engine.snapshot(hit.key, beforeText, engine.caretPos, engine.selectionAnchor)
   engine.applyInput(index, text, caret, anchor)
 
 proc handleKeyDown*(engine: Engine, key: string, modifiers: uint32 = 0) =

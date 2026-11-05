@@ -49,6 +49,8 @@ type
     cut*: proc() {.closure.}
     paste*: proc() {.closure.}
     selectAll*: proc() {.closure.}
+    undo*: proc() {.closure.}
+    redo*: proc() {.closure.}
 
   WindowHandler* = object
     windowId*: uint64

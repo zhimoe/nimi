@@ -22,9 +22,13 @@
 - 原生菜单:
   - NimiSurfaceView 实现 `copy:/cut:/paste:/selectAll:`
   - Edit 菜单 role 在激活窗口的首响应者上生效
+- Undo/Redo:
+  - 每个输入控件独立 undo/redo 栈(最多 100 步)
+  - `Cmd+Z` / `Shift+Cmd+Z` / `Cmd+Y`
+  - 菜单 `undo:/redo:` responder 已接入
 - 测试:
-  - headless `Tester` 选择/copy/paste
-  - form-native `NIMI_SMOKE=select`
+  - headless `Tester` 选择/copy/paste、undo/redo
+  - form-native `NIMI_SMOKE=select`、`NIMI_SMOKE=undo`
 
 ## 2. 关键决策
 
@@ -36,6 +40,8 @@
 | Cmd+V 单行替换换行 | 单行 TextInput 不产生多行文本 |
 | 菜单使用 responder 方法 | 原生用户按键走 AppKit 菜单/首响应者链,和系统行为一致 |
 | 保留直接 keyDown 路径 | 无菜单或合成事件时引擎仍能处理快捷键 |
+| undo 栈按输入 key 隔离 | 多个输入框互不污染;切换焦点后仍可撤销 |
+| 只在文本实际变化时记录 snapshot | 纯 caret 移动不产生 undo 噪声 |
 
 ## 3. 验证
 
@@ -46,6 +52,10 @@
 NIMI_SMOKE=select nim c -r --path:src examples/form-native/main.nim
 # clipboard: hello world
 # form name after paste: hello worldhello world
+
+NIMI_SMOKE=undo nim c -r --path:src examples/form-native/main.nim
+# after undo:
+# after redo: hello
 ```
 
 说明:菜单态 copy/paste 依赖窗口为 key window;headless 测试覆盖引擎和剪贴板 hook,
@@ -53,7 +63,6 @@ NIMI_SMOKE=select nim c -r --path:src examples/form-native/main.nim
 
 ## 4. 已知限制
 
-- 没有 undo/redo
 - 没有双击选词/三击选段
 - 没有拖拽文本
 - 没有富文本/格式
@@ -63,7 +72,7 @@ NIMI_SMOKE=select nim c -r --path:src examples/form-native/main.nim
 
 ## 5. 下一步
 
-1. Undo/Redo 栈与命令式编辑。
-2. 双击选词、三击选段、拖拽移动文本。
-3. ScrollView + caret 自动滚动。
-4. IME/候选窗与选择区协同。
+1. 双击选词、三击选段、拖拽移动文本。
+2. ScrollView + caret 自动滚动。
+3. IME/候选窗与选择区协同。
+4. 富文本/格式化与命令式编辑。

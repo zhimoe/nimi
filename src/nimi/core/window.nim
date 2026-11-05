@@ -124,6 +124,8 @@ proc newWindow*(opts: WindowOptions): Window =
     surface.cut = proc() = content.cutSelection()
     surface.paste = proc() = content.paste()
     surface.selectAll = proc() = content.selectAll()
+    surface.undo = proc() = content.undo()
+    surface.redo = proc() = content.redo()
 
   let h = WindowHandler(
     windowId: id,
