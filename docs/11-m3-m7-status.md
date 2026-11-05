@@ -40,7 +40,8 @@ M2 的 Tester、离屏 PNG、焦点/键盘、文本换行继续作为 M3–M7 �
 - 新增 `tests/test_ui.nim` 的 checkbox/switch/slider 测试。
 - 新增 `examples/widgets-native`,已截图确认。
 - 新增 `ui.image` + scene `opImage` + ImageIO/CG 渲染;示例 `examples/image-native`。
-- 详见 [原生 Image](22-m3-image.md)。
+- 新增 `effects/shred` Verlet 纸带物理 + `examples/shredder` WebGL 视觉验收;原生 scene shader/LayerEffect 仍未做。
+- 详见 [原生 Image](22-m3-image.md)、[碎纸效果](25-shredder.md)。
 
 ### M4 菜单与对话框
 
@@ -199,6 +200,7 @@ hdiutil attach -nobrowse -readonly .../counter-0.1.0.dmg
 - 文本换行
 - checkbox/switch/slider
 - 离屏 PNG / 换行 PNG
+- `test_shred` 纸带物理
 
 其他:
 

@@ -1,0 +1,8 @@
+{
+  "name": "Nimi Shredder",
+  "slug": "nimi-shredder",
+  "identifier": "com.example.nimi-shredder",
+  "version": "0.1.0",
+  "main": "main.nim",
+  "resources": ["frontend"]
+}

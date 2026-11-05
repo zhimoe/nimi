@@ -31,6 +31,7 @@
 | [22 原生 Image](22-m3-image.md) | ImageIO、scene opImage、缓存与限制 | 实现者、评审者 |
 | [23 M5 文档](23-m5-document.md) | Document 生命周期、dirty/conflict、FSEvents 外部变更 | 实现者、评审者 |
 | [24 M6 IME](24-m6-ime.md) | NSTextInputClient、marked text、候选窗、fallback | 实现者、评审者 |
+| [25 碎纸效果](25-shredder.md) | MyGo shader 来源、Nim Verlet 物理、WebGL 纸带渲染、限制 | 实现者、评审者 |
 
 ## 阅读顺序
 
@@ -56,3 +57,4 @@
 | 2026-11-04 | M1 核心切片实现:macOS WebView + IPC + TS 生成 + CLI;新增 08 M1 笔记 |
 | 2026-11-04 | M2 第一步:原生 NSView Surface + CoreGraphics/CoreText 静态场景;新增 10 M2 笔记 |
 | 2026-11-04 | M3 控件切片(Checkbox/Switch/Slider/Progress/Divider)、M4 剪贴板、M7 .app/DMG/签名;新增 11 状态 |
+| 2026-11-05 | 碎纸效果:MyGo Verlet 物理移植到 `effects/shred`,WebGL 纸带 demo;新增 25 |

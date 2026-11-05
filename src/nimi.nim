@@ -13,8 +13,10 @@
 
 import nimi/core/app as appModule
 import nimi/core/[clipboard, content, cookie, dialog, document, events, fileserver, ipc, loop, menu, notification, screen, shortcut, theme, tray, watch, window]
+import nimi/effects as effectsModule
 import nimi/keys
 import nimi/platform/contract
 
 export appModule, clipboard, content, cookie, dialog, document, events, fileserver, ipc, loop, menu, notification, screen, shortcut, theme, tray, watch, window
+export effectsModule
 export contract, keys

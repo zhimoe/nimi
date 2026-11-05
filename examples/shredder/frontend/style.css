@@ -1,0 +1,50 @@
+:root {
+  color-scheme: dark;
+  font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue",
+    "PingFang SC", sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: #202020;
+  color: #eee7da;
+}
+
+#stage {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: default;
+}
+
+.hud {
+  position: fixed;
+  top: 26px;
+  left: 30px;
+  pointer-events: none;
+  user-select: none;
+}
+
+.tag {
+  color: #e17a55;
+  font: 600 10px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.14em;
+}
+
+h1 {
+  margin: 8px 0 4px;
+  font-size: 34px;
+  line-height: 1;
+  letter-spacing: -0.05em;
+}
+
+p {
+  margin: 0;
+  color: #9b9388;
+  font-size: 12px;
+}
