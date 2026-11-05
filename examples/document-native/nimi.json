@@ -1,0 +1,7 @@
+{
+  "name": "Nimi Document",
+  "slug": "nimi-document",
+  "identifier": "com.example.nimi-document",
+  "version": "0.1.0",
+  "main": "main.nim"
+}

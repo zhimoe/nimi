@@ -13,7 +13,7 @@
 |---|---|---|---|
 | M3 | 🟡 切片 | Checkbox/Switch/Slider/Progress/Divider、Image(ImageIO)、文本换行、焦点/键盘 | Metal 渲染器;其余控件(List/Table/Tabs/Select…);动画;可访问性 |
 | M4 | 🟡 切片 | Clipboard、菜单/对话框、屏幕/主题、窗口控制/焦点、托盘、通知、全局快捷键、动态菜单 | 剪贴板图片/文件、通知权限/点击、托盘图标、快捷键冲突提示 |
-| M5 | 🟡 切片 | 自定义 `nimi://` scheme、FileServer、资源复制、URL scheme 深链、持久/临时 Session、FSEvents 文件监视、默认 Cookie 查询/清理、protocol-native/watch-native 示例 | Cookie 写入/删除/并发、内容规则、文档控制器、单实例边界 |
+| M5 | 🟡 切片 | `nimi://`/FileServer、资源复制、深链、Session、FSEvents、Cookie 查询、Document 控制器、protocol/watch/document 示例 | Cookie 写入/删除/并发、内容规则、单实例边界 |
 | M6 | 🟡 切片 | 单行 TextInput、基础 TextArea、选择/Cmd+A/C/X/V/剪贴板、Undo/Redo、ScrollView/裁剪 | IME、可访问性、完整 Metal、滚动条/虚拟列表 |
 | M7 | 🟡 切片 | `.app`、DMG、ad-hoc/Developer ID 签名、entitlements、图标(icns)、notarize 钩子、macOS CI 构建/测试/artifact | 自动更新(Ed25519/delta)、release workflow、DMG 背景/布局、公证实际执行验证、Sparkle 风格更新窗口 |
 
@@ -120,7 +120,8 @@ M2 的 Tester、离屏 PNG、焦点/键盘、文本换行继续作为 M3–M7 �
 - FSEvents 文件监视 → `watch(path, fn)`,支持 created/modified/removed/renamed
 - Session 隔离:`WindowOptions.session` → `WKWebsiteDataStore` 默认/非持久化
 - Cookie 查询/清理:`cookies(cb)`、`clearCookies(cb)` → `WKHTTPCookieStore`
-- 详见 [M5 FileServer](15-m5-file-server.md) 与 [M5 文件监视](16-m5-file-watching.md)
+- Document:`openDocument/newDocument/setText/save/reload/close`、dirty/conflict、FSEvents 外部变更
+- 详见 [M5 FileServer](15-m5-file-server.md)、[M5 文件监视](16-m5-file-watching.md)、[M5 Cookies](17-m5-cookies.md)、[M5 文档](23-m5-document.md)
 
 ### M7 macOS CI
 
@@ -234,7 +235,7 @@ hdiutil attach -nobrowse -readonly .../counter-0.1.0.dmg
 ### M5
 1. FileServer 异步/流式/Range、多 scheme/多 root
 2. Cookie 写入/删除/并发、内容规则
-3. 文档控制器/最近文档/自动保存
+3. 自动保存/最近文档/冲突 diff
 4. 单实例边界/文件关联
 
 ### M7 剩余
