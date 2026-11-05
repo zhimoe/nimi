@@ -801,7 +801,39 @@ proc caretIndexAt(hit: Hit, x, y: float32): int =
   let line = hit.lines[lineIdx]
   result = offset + caretIndexLine(line, x, hit.rect.x + hit.padX, hit.fontSize)
 
-proc handleMouseDown*(engine: Engine, x, y: float32) =
+proc isWordChar(ch: char): bool =
+  ch.isAlphaNumeric or ch == '_' or ord(ch) >= 128
+
+proc selectWordOrLine(engine: Engine, hit: Hit, clicks: int) =
+  if not hit.input or hit.text.len == 0:
+    return
+  let pos = max(0, min(engine.caretPos, hit.text.len))
+  var start, finish: int
+  if clicks >= 3:
+    if hit.multiline and hit.lines.len > 0:
+      let (lineIdx, _) = caretLineCol(hit.lines, pos)
+      start = lineOffset(hit.lines, lineIdx)
+      finish = start + hit.lines[lineIdx].len
+    else:
+      start = 0
+      finish = hit.text.len
+  else:
+    var p = pos
+    if p >= hit.text.len and p > 0:
+      dec p
+    start = p
+    finish = p
+    while start > 0 and isWordChar(hit.text[start - 1]):
+      dec start
+    while finish < hit.text.len and isWordChar(hit.text[finish]):
+      inc finish
+    if start == finish and finish < hit.text.len:
+      inc finish
+  engine.caretKey = hit.key
+  engine.caretPos = finish
+  engine.selectionAnchor = start
+
+proc handleMouseDown*(engine: Engine, x, y: float32, clicks: int = 1) =
   let i = hitIndex(engine, x, y)
   engine.pressedDrag = nil
   if i >= 0:
@@ -817,6 +849,8 @@ proc handleMouseDown*(engine: Engine, x, y: float32) =
       engine.caretPos = caretIndexAt(hit, x, y)
       engine.selectionAnchor = engine.caretPos
       engine.selectingInput = hit.key
+      if clicks >= 2:
+        engine.selectWordOrLine(hit, clicks)
   else:
     engine.pressedKey = ""
   requestFrame(engine)

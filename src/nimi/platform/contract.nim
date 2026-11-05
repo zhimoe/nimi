@@ -45,7 +45,7 @@ type
   SurfaceHandler* = object
     windowId*: uint64
     draw*: proc(ctx: pointer, width, height: float32) {.closure.}
-    mouseDown*: proc(x, y: float32) {.closure.}
+    mouseDown*: proc(x, y: float32, clicks: int) {.closure.}
     mouseUp*: proc(x, y: float32) {.closure.}
     mouseMoved*: proc(x, y: float32) {.closure.}
     scroll*: proc(x, y, dy: float32) {.closure.}

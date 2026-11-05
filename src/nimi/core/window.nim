@@ -116,7 +116,8 @@ proc newWindow*(opts: WindowOptions): Window =
     let content = o.content
     surface.draw = proc(ctx: pointer, width, height: float32) =
       drawScene(ctx, renderContent(content, width, height))
-    surface.mouseDown = proc(x, y: float32) = content.handleMouseDown(x, y)
+    surface.mouseDown = proc(x, y: float32, clicks: int) =
+      content.handleMouseDown(x, y, clicks)
     surface.mouseUp = proc(x, y: float32) = content.handleMouseUp(x, y)
     surface.mouseMoved = proc(x, y: float32) = content.handleMouseMove(x, y)
     surface.scroll = proc(x, y, dy: float32) = content.handleScroll(x, y, dy)

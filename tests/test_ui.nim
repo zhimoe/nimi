@@ -154,6 +154,24 @@ suite "ui":
     t.clickAt(r.x + r.w * 0.75, r.y + r.h / 2)
     check abs(v - 0.75) < 0.02
 
+  test "double and triple click selection":
+    var value = "hello world"
+    proc view(c: Context) =
+      column(c).fill().padding(10, 10).children(c, proc() =
+        textInput(c, value, proc(s: string) = value = s, key = "name")
+      )
+    let t = newTester(view, 260, 100)
+    var clip = ""
+    t.engine.clipboardRead = proc(): string = clip
+    t.engine.clipboardWrite = proc(s: string) = clip = s
+    discard t.render()
+    t.clickAt(20, 20, 2)
+    t.engine.copySelection()
+    check clip == "hello"
+    t.clickAt(20, 20, 3)
+    t.engine.copySelection()
+    check clip == "hello world"
+
   test "scroll view offsets and clips hits":
     var clicks = 0
     proc view(c: Context) =

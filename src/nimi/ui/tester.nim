@@ -25,10 +25,10 @@ proc click*(t: Tester, key: string): bool =
   result = t.engine.clickKey(key)
   discard t.render()
 
-proc clickAt*(t: Tester, x, y: float32) =
+proc clickAt*(t: Tester, x, y: float32, clicks: int = 1) =
   if t.engine.hits.len == 0:
     discard t.render()
-  t.engine.handleMouseDown(x, y)
+  t.engine.handleMouseDown(x, y, clicks)
   t.engine.handleMouseUp(x, y)
   discard t.render()
 

@@ -15,8 +15,8 @@ proc uiView*(view: proc(c: Context)): Content =
 proc renderContent*(content: Content, width, height: float32): Scene =
   result = content.engine.render(content.view, width, height)
 
-proc handleMouseDown*(content: Content, x, y: float32) =
-  content.engine.handleMouseDown(x, y)
+proc handleMouseDown*(content: Content, x, y: float32, clicks: int = 1) =
+  content.engine.handleMouseDown(x, y, clicks)
 
 proc handleMouseUp*(content: Content, x, y: float32) =
   content.engine.handleMouseUp(x, y)

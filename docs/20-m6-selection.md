@@ -12,6 +12,7 @@
 - TextInput/TextArea 选择:
   - Shift + 左右/上下/Home/End 扩展选择
   - 鼠标按下/拖动设置 anchor 与 caret
+  - 双击选词、三击选整行/全文(UTF-8 字节级词边界)
   - `Cmd+A` 全选
   - 选择区绘制
 - 剪贴板:
@@ -42,6 +43,7 @@
 | 保留直接 keyDown 路径 | 无菜单或合成事件时引擎仍能处理快捷键 |
 | undo 栈按输入 key 隔离 | 多个输入框互不污染;切换焦点后仍可撤销 |
 | 只在文本实际变化时记录 snapshot | 纯 caret 移动不产生 undo 噪声 |
+| 双击/三击使用 clickCount | 与 AppKit 原生点击语义一致;TextArea/TextInput 共用 |
 
 ## 3. 验证
 
@@ -63,8 +65,8 @@ NIMI_SMOKE=undo nim c -r --path:src examples/form-native/main.nim
 
 ## 4. 已知限制
 
-- 没有双击选词/三击选段
-- 没有拖拽文本
+- 双击选词是字节级边界,复杂 Unicode/标点分词不精确
+- 没有拖拽移动文本
 - 没有富文本/格式
 - 自动换行处的选择区间为近似映射
 - 菜单快捷键在窗口非激活/无 key window 时不会触发 responder

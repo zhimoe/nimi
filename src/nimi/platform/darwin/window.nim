@@ -136,7 +136,7 @@ proc surfaceMouseEvent(self: Id, event: Id, kind: int) =
   let y = float32(bounds.h - p.y)
   case kind
   of 0:
-    if h.mouseDown != nil: h.mouseDown(x, y)
+    if h.mouseDown != nil: h.mouseDown(x, y, 1)
   of 1:
     if h.mouseUp != nil: h.mouseUp(x, y)
   else:
@@ -146,7 +146,18 @@ proc surfaceAcceptsFirstMouse(self: Id, cmd: SEL, event: Id): bool {.cdecl.} =
   result = true
 
 proc surfaceMouseDown(self: Id, cmd: SEL, event: Id) {.cdecl.} =
-  surfaceMouseEvent(self, event, 0)
+  if gState == nil:
+    return
+  let id = gState.surfaceToId.getOrDefault(self, 0'u64)
+  if id == 0:
+    return
+  let h = gState.surfaceHandlers.getOrDefault(id)
+  if h.mouseDown == nil:
+    return
+  let p = sendPoint(event, sel("locationInWindow"))
+  let bounds = sendRect(self, sel("bounds"))
+  h.mouseDown(float32(p.x), float32(bounds.h - p.y),
+              int(sendInt(event, sel("clickCount"))))
 
 proc surfaceMouseUp(self: Id, cmd: SEL, event: Id) {.cdecl.} =
   surfaceMouseEvent(self, event, 1)
