@@ -6,6 +6,9 @@
 ## docs/03-native-ui.md. It keeps the same view-function model and scene
 ## output, without the generation handles and layout cache yet.
 
+import std/strutils
+
+import ../keys
 import ../scene/scene
 import ../text/measure
 
@@ -72,6 +75,10 @@ type
     focusedKey*: string
     caretKey*: string
     caretPos*: int
+    selectionAnchor*: int
+    selectingInput*: string
+    clipboardRead*: proc(): string {.closure.}
+    clipboardWrite*: proc(text: string) {.closure.}
     pendingKeys*: seq[string]
     hits*: seq[Hit]
     requestFrame*: proc() {.closure.}
@@ -404,6 +411,50 @@ proc lineOffset(lines: seq[string], index: int): int =
   for i in 0 ..< last:
     result += lines[i].len + 1
 
+proc clampInt(value, lo, hi: int): int =
+  max(lo, min(value, hi))
+
+proc selectionRange(engine: Engine, key: string,
+                    textLen: int): tuple[start, finish: int] =
+  if engine.caretKey == key:
+    let a = clampInt(engine.selectionAnchor, 0, textLen)
+    let b = clampInt(engine.caretPos, 0, textLen)
+    result = (min(a, b), max(a, b))
+  else:
+    result = (textLen, textLen)
+
+const selectionColor = Color(r: 0.22, g: 0.47, b: 0.95, a: 0.18)
+
+proc paintSelection(n: Node, c: Context,
+                    engine: Engine): tuple[start, finish: int] =
+  result = selectionRange(engine, n.key, n.text.len)
+  if result.start >= result.finish:
+    return
+  if n.multiline:
+    var ly = n.y + n.padY
+    for i, line in n.lines:
+      let lineStart = lineOffset(n.lines, i)
+      let lineFinish = lineStart + line.len
+      let a = max(result.start, lineStart)
+      let b = min(result.finish, lineFinish)
+      if a < b:
+        let left = a - lineStart
+        let right = b - lineStart
+        let x1 = n.x + n.padX +
+          measureText(line[0 ..< min(left, line.len)], n.fontSize, false).width
+        let x2 = n.x + n.padX +
+          measureText(line[0 ..< min(right, line.len)], n.fontSize, false).width
+        c.scene.rect(Rect(x: x1, y: ly, w: max(1.0'f32, x2 - x1),
+                          h: n.lineHeight), selectionColor)
+      ly += n.lineHeight
+  else:
+    let x1 = n.x + n.padX +
+      measureText(n.text[0 ..< result.start], n.fontSize, false).width
+    let x2 = n.x + n.padX +
+      measureText(n.text[0 ..< result.finish], n.fontSize, false).width
+    c.scene.rect(Rect(x: x1, y: n.y + 4, w: max(1.0'f32, x2 - x1),
+                      h: n.h - 8), selectionColor)
+
 proc paintFocus(n: Node, c: Context, radius: float32 = 6) =
   if c.engine != nil and c.engine.focusedKey == n.key:
     c.scene.rect(Rect(x: n.x - 3, y: n.y - 3, w: n.w + 6, h: n.h + 6),
@@ -483,6 +534,8 @@ proc paint(n: Node, c: Context) =
     c.scene.rect(Rect(x: n.x - 1, y: n.y - 1, w: n.w + 2, h: n.h + 2),
                  rgb(0.62, 0.62, 0.68), 6)
     c.scene.rect(Rect(x: n.x, y: n.y, w: n.w, h: n.h), n.bg, 5)
+    if c.engine != nil and c.engine.focusedKey == n.key:
+      discard paintSelection(n, c, c.engine)
     if n.multiline:
       let textColor = if n.text.len > 0: n.color else: rgb(0.55, 0.55, 0.60)
       if n.text.len == 0:
@@ -625,6 +678,8 @@ proc handleMouseDown*(engine: Engine, x, y: float32) =
     if hit.input:
       engine.caretKey = hit.key
       engine.caretPos = caretIndexAt(hit, x, y)
+      engine.selectionAnchor = engine.caretPos
+      engine.selectingInput = hit.key
   else:
     engine.pressedKey = ""
   requestFrame(engine)
@@ -636,6 +691,7 @@ proc handleMouseUp*(engine: Engine, x, y: float32) =
       engine.hits[i].onClick()
   engine.pressedKey = ""
   engine.pressedDrag = nil
+  engine.selectingInput = ""
   requestFrame(engine)
 
 proc handleMouseMove*(engine: Engine, x, y: float32) =
@@ -643,6 +699,12 @@ proc handleMouseMove*(engine: Engine, x, y: float32) =
     engine.pressedDrag(engine.pressedRect, x, y)
     requestFrame(engine)
     return
+  if engine.selectingInput.len > 0:
+    for hit in engine.hits:
+      if hit.key == engine.selectingInput and hit.input:
+        engine.caretPos = caretIndexAt(hit, x, y)
+        requestFrame(engine)
+        return
   let i = hitIndex(engine, x, y)
   let key = if i >= 0: engine.hits[i].key else: ""
   if key != engine.hoveredKey:
@@ -661,26 +723,127 @@ proc keyPressed*(c: Context, key: string): bool =
   result = false
 
 
-proc editInput(engine: Engine, index: int, key: string) =
-  var hit = engine.hits[index]
+proc selectionRangeFor(engine: Engine, key: string,
+                       textLen: int): tuple[start, finish: int] =
+  selectionRange(engine, key, textLen)
+
+proc focusedInputIndex(engine: Engine): int =
+  for i in 0 ..< engine.hits.len:
+    if engine.hits[i].key == engine.focusedKey and engine.hits[i].input:
+      return i
+  result = -1
+
+proc applyInput(engine: Engine, index: int, text: string,
+                caret, anchor: int) =
+  let hit = engine.hits[index]
+  engine.hits[index].text = text
+  engine.caretKey = hit.key
+  engine.caretPos = caret
+  engine.selectionAnchor = anchor
+  if hit.onText != nil:
+    hit.onText(text)
+  requestFrame(engine)
+
+proc copySelection*(engine: Engine) =
+  let index = focusedInputIndex(engine)
+  if index < 0:
+    return
+  let hit = engine.hits[index]
+  let sel = selectionRange(engine, hit.key, hit.text.len)
+  if sel.start < sel.finish and engine.clipboardWrite != nil:
+    engine.clipboardWrite(hit.text[sel.start ..< sel.finish])
+
+proc cutSelection*(engine: Engine) =
+  let index = focusedInputIndex(engine)
+  if index < 0:
+    return
+  let hit = engine.hits[index]
+  let sel = selectionRange(engine, hit.key, hit.text.len)
+  if sel.start < sel.finish:
+    if engine.clipboardWrite != nil:
+      engine.clipboardWrite(hit.text[sel.start ..< sel.finish])
+    let text = hit.text[0 ..< sel.start] & hit.text[sel.finish .. ^1]
+    engine.applyInput(index, text, sel.start, sel.start)
+
+proc paste*(engine: Engine) =
+  let index = focusedInputIndex(engine)
+  if index < 0 or engine.clipboardRead == nil:
+    return
+  let hit = engine.hits[index]
+  var text = engine.clipboardRead()
+  if text.len == 0:
+    return
+  if not hit.multiline:
+    text = text.replace("\r", " ").replace("\n", " ")
+  let sel = selectionRange(engine, hit.key, hit.text.len)
+  let next = hit.text[0 ..< sel.start] & text & hit.text[sel.finish .. ^1]
+  engine.applyInput(index, next, sel.start + text.len, sel.start + text.len)
+
+proc selectAll*(engine: Engine) =
+  let index = focusedInputIndex(engine)
+  if index < 0:
+    return
+  let hit = engine.hits[index]
+  engine.caretKey = hit.key
+  engine.caretPos = hit.text.len
+  engine.selectionAnchor = 0
+  requestFrame(engine)
+
+proc editInput(engine: Engine, index: int, key: string, modifiers: uint32) =
+  let hit = engine.hits[index]
+  let cmd = (modifiers and KeyCommand) != 0
+  let shift = (modifiers and KeyShift) != 0
+  if cmd:
+    case key.toLowerAscii
+    of "a":
+      engine.selectAll()
+      return
+    of "c":
+      engine.copySelection()
+      return
+    of "x":
+      engine.cutSelection()
+      return
+    of "v":
+      engine.paste()
+      return
+    else:
+      discard
+
   var text = hit.text
   var caret =
     if engine.caretKey == hit.key: max(0, min(engine.caretPos, text.len))
     else: text.len
+  let sel = engine.selectionRangeFor(hit.key, text.len)
+  let hasSel = sel.finish > sel.start
+  let anchorBefore = if hasSel: engine.selectionAnchor else: caret
   let lines = if hit.multiline: hit.lines else: @[text]
   let (lineIdx, col) = caretLineCol(lines, caret)
+  var handled = true
   case key
   of "backspace":
-    if caret > 0:
+    if hasSel:
+      text = text[0 ..< sel.start] & text[sel.finish .. ^1]
+      caret = sel.start
+    elif caret > 0:
       text = text[0 ..< caret - 1] & text[caret .. ^1]
       dec caret
   of "delete":
-    if caret < text.len:
+    if hasSel:
+      text = text[0 ..< sel.start] & text[sel.finish .. ^1]
+      caret = sel.start
+    elif caret < text.len:
       text = text[0 ..< caret] & text[caret + 1 .. ^1]
   of "left":
-    if caret > 0: dec caret
+    if hasSel and not shift:
+      caret = sel.start
+    elif caret > 0:
+      dec caret
   of "right":
-    if caret < text.len: inc caret
+    if hasSel and not shift:
+      caret = sel.finish
+    elif caret < text.len:
+      inc caret
   of "home":
     if hit.multiline:
       caret = lineOffset(lines, lineIdx)
@@ -698,28 +861,34 @@ proc editInput(engine: Engine, index: int, key: string) =
       caret = lineOffset(lines, target) + min(col, lines[target].len)
   of "escape":
     engine.focusedKey = ""
+    engine.caretKey = ""
+    engine.caretPos = 0
+    engine.selectionAnchor = 0
     requestFrame(engine)
     return
   of "enter", "\n":
     if hit.multiline:
-      text = text[0 ..< caret] & "\n" & text[caret .. ^1]
-      inc caret
+      text = text[0 ..< sel.start] & "\n" & text[sel.finish .. ^1]
+      caret = sel.start + 1
+    else:
+      handled = false
   else:
     let insert =
       if key == "space": " "
       elif key in ["up", "down", "tab"]: ""
       else: key
     if insert.len > 0:
-      text = text[0 ..< caret] & insert & text[caret .. ^1]
-      caret += insert.len
-  engine.hits[index].text = text
-  engine.caretKey = hit.key
-  engine.caretPos = caret
-  if hit.onText != nil:
-    hit.onText(text)
-  requestFrame(engine)
+      text = text[0 ..< sel.start] & insert & text[sel.finish .. ^1]
+      caret = sel.start + insert.len
+    else:
+      handled = false
+  if not handled:
+    return
+  let navigation = key in ["left", "right", "home", "end", "up", "down"]
+  let anchor = if shift and navigation: anchorBefore else: caret
+  engine.applyInput(index, text, caret, anchor)
 
-proc handleKeyDown*(engine: Engine, key: string) =
+proc handleKeyDown*(engine: Engine, key: string, modifiers: uint32 = 0) =
   if key.len == 0:
     return
   if key == "tab":
@@ -728,8 +897,13 @@ proc handleKeyDown*(engine: Engine, key: string) =
       for i in 0 ..< engine.hits.len:
         if engine.hits[i].key == engine.focusedKey:
           current = i
-      let next = if current < 0: 0 else: (current + 1) mod engine.hits.len
+      let step = if (modifiers and KeyShift) != 0: -1 else: 1
+      let next =
+        if current < 0: 0
+        else: (current + step + engine.hits.len) mod engine.hits.len
       engine.focusedKey = engine.hits[next].key
+      engine.caretKey = ""
+      engine.selectionAnchor = 0
       requestFrame(engine)
     return
   var focused = -1
@@ -737,7 +911,9 @@ proc handleKeyDown*(engine: Engine, key: string) =
     if engine.hits[i].key == engine.focusedKey:
       focused = i
   if focused >= 0 and engine.hits[focused].input:
-    editInput(engine, focused, key)
+    editInput(engine, focused, key, modifiers)
+    return
+  if (modifiers and KeyCommand) != 0:
     return
   if key in ["enter", "space"]:
     for hit in engine.hits:

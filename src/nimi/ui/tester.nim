@@ -32,8 +32,8 @@ proc clickAt*(t: Tester, x, y: float32) =
   t.engine.handleMouseUp(x, y)
   discard t.render()
 
-proc key*(t: Tester, key: string) =
-  t.engine.handleKeyDown(key)
+proc key*(t: Tester, key: string, modifiers: uint32 = 0) =
+  t.engine.handleKeyDown(key, modifiers)
   discard t.render()
 
 proc typeText*(t: Tester, text: string) =

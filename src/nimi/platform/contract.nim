@@ -1,6 +1,9 @@
 ## The platform contract. Every backend implements this; core policy lives
 ## above it. Calls and callbacks are main-thread only.
 
+import ../keys
+export keys
+
 type
   AppOptions* = object
     name*: string
@@ -41,7 +44,11 @@ type
     mouseDown*: proc(x, y: float32) {.closure.}
     mouseUp*: proc(x, y: float32) {.closure.}
     mouseMoved*: proc(x, y: float32) {.closure.}
-    keyDown*: proc(key: string) {.closure.}
+    keyDown*: proc(key: string, modifiers: uint32) {.closure.}
+    copy*: proc() {.closure.}
+    cut*: proc() {.closure.}
+    paste*: proc() {.closure.}
+    selectAll*: proc() {.closure.}
 
   WindowHandler* = object
     windowId*: uint64
@@ -153,6 +160,8 @@ type
     testClick*: proc(x, y: float32) {.closure.}
     testKey*: proc(keyCode: int) {.closure.}
     testKeyText*: proc(text: string) {.closure.}
+    testKeyMods*: proc(keyCode: int, modifiers: uint32) {.closure.}
+    testMenuKey*: proc(keyCode: int, modifiers: uint32) {.closure.}
     destroy*: proc() {.closure.}
 
   Backend* = ref object

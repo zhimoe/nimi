@@ -154,6 +154,39 @@ suite "ui":
     t.clickAt(r.x + r.w * 0.75, r.y + r.h / 2)
     check abs(v - 0.75) < 0.02
 
+  test "selection and clipboard":
+    var value = "hello world"
+    var clip = ""
+    proc view(c: Context) =
+      column(c).fill().padding(10, 10).children(c, proc() =
+        textInput(c, value, proc(s: string) = value = s, key = "name")
+      )
+
+    let t = newTester(view, 320, 100)
+    t.engine.clipboardRead = proc(): string = clip
+    t.engine.clipboardWrite = proc(s: string) = clip = s
+    discard t.render()
+    t.clickAt(20, 20)
+    t.key("end")
+    t.key("left", KeyShift)
+    t.key("left", KeyShift)
+    t.key("c", KeyCommand)
+    check clip == "ld"
+    t.key("end")
+    t.key("v", KeyCommand)
+    check value == "hello worldld"
+    t.key("home")
+    t.key("right", KeyShift)
+    t.key("right", KeyShift)
+    t.key("right", KeyShift)
+    t.key("right", KeyShift)
+    t.key("right", KeyShift)
+    t.key("x", KeyCommand)
+    check clip == "hello"
+    check value == " worldld"
+    t.key("v", KeyCommand)
+    check value == "hello worldld"
+
   test "text area multiline typing":
     var value = ""
     proc view(c: Context) =

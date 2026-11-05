@@ -26,5 +26,17 @@ proc handleMouseMove*(content: Content, x, y: float32) =
 proc clickKey*(content: Content, key: string): bool =
   content.engine.clickKey(key)
 
-proc handleKeyDown*(content: Content, key: string) =
-  content.engine.handleKeyDown(key)
+proc handleKeyDown*(content: Content, key: string, modifiers: uint32 = 0) =
+  content.engine.handleKeyDown(key, modifiers)
+
+proc copySelection*(content: Content) =
+  content.engine.copySelection()
+
+proc cutSelection*(content: Content) =
+  content.engine.cutSelection()
+
+proc paste*(content: Content) =
+  content.engine.paste()
+
+proc selectAll*(content: Content) =
+  content.engine.selectAll()

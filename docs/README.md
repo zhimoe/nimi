@@ -26,6 +26,7 @@
 | [17 M5 Cookies](17-m5-cookies.md) | WKHTTPCookieStore 查询/清理、异步 block、限制 | 实现者、评审者 |
 | [18 macOS CI](18-macos-ci.md) | GitHub Actions 测试/构建/DMG artifact、架构输出 | 实现者、评审者 |
 | [19 基础 TextArea](19-m6-textarea.md) | 多行输入、Enter、上下行、点击 caret、限制 | 实现者、评审者 |
+| [20 选择与剪贴板](20-m6-selection.md) | Shift 选择、Cmd+A/C/X/V、responder 菜单、限制 | 实现者、评审者 |
 
 ## 阅读顺序
 

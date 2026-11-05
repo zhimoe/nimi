@@ -118,7 +118,12 @@ proc newWindow*(opts: WindowOptions): Window =
     surface.mouseDown = proc(x, y: float32) = content.handleMouseDown(x, y)
     surface.mouseUp = proc(x, y: float32) = content.handleMouseUp(x, y)
     surface.mouseMoved = proc(x, y: float32) = content.handleMouseMove(x, y)
-    surface.keyDown = proc(key: string) = content.handleKeyDown(key)
+    surface.keyDown = proc(key: string, modifiers: uint32) =
+      content.handleKeyDown(key, modifiers)
+    surface.copy = proc() = content.copySelection()
+    surface.cut = proc() = content.cutSelection()
+    surface.paste = proc() = content.paste()
+    surface.selectAll = proc() = content.selectAll()
 
   let h = WindowHandler(
     windowId: id,
@@ -185,6 +190,11 @@ proc newWindow*(opts: WindowOptions): Window =
       let w = windows.getOrDefault(wid)
       if w != nil:
         w.invalidate()
+    if currentBackend.clipboard != nil:
+      o.content.engine.clipboardRead = proc(): string =
+        currentBackend.clipboard.readText()
+      o.content.engine.clipboardWrite = proc(text: string) =
+        currentBackend.clipboard.writeText(text)
   windows[id] = win
   # AppKit may not deliver the first key-window notification when the app is
   # launched from a terminal; treat the newly created window as focused and

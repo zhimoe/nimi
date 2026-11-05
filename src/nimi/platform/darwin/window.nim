@@ -167,6 +167,33 @@ proc keyName*(keyCode: int, chars: string): string =
   of 121: "pagedown"
   else: chars
 
+proc surfaceCopy(self: Id, cmd: SEL, sender: Id) {.cdecl.} =
+  when defined(nimiClipDebug): echo "surfaceCopy"
+  if gState == nil: return
+  let id = gState.surfaceToId.getOrDefault(self, 0'u64)
+  let h = gState.surfaceHandlers.getOrDefault(id)
+  if h.copy != nil: h.copy()
+
+proc surfaceCut(self: Id, cmd: SEL, sender: Id) {.cdecl.} =
+  if gState == nil: return
+  let id = gState.surfaceToId.getOrDefault(self, 0'u64)
+  let h = gState.surfaceHandlers.getOrDefault(id)
+  if h.cut != nil: h.cut()
+
+proc surfacePaste(self: Id, cmd: SEL, sender: Id) {.cdecl.} =
+  when defined(nimiClipDebug): echo "surfacePaste"
+  if gState == nil: return
+  let id = gState.surfaceToId.getOrDefault(self, 0'u64)
+  let h = gState.surfaceHandlers.getOrDefault(id)
+  if h.paste != nil: h.paste()
+
+proc surfaceSelectAll(self: Id, cmd: SEL, sender: Id) {.cdecl.} =
+  when defined(nimiClipDebug): echo "surfaceSelectAll"
+  if gState == nil: return
+  let id = gState.surfaceToId.getOrDefault(self, 0'u64)
+  let h = gState.surfaceHandlers.getOrDefault(id)
+  if h.selectAll != nil: h.selectAll()
+
 proc surfaceKeyDown(self: Id, cmd: SEL, event: Id) {.cdecl.} =
   if gState == nil:
     return
@@ -178,7 +205,13 @@ proc surfaceKeyDown(self: Id, cmd: SEL, event: Id) {.cdecl.} =
     return
   let chars = goString(send0(event, sel("characters")))
   let code = int(sendUShort(event, sel("keyCode")))
-  h.keyDown(keyName(code, chars))
+  let flags = sendUInt(event, sel("modifierFlags"))
+  var mods = 0'u32
+  if (flags and NSEventModifierFlagShift) != 0: mods = mods or KeyShift
+  if (flags and NSEventModifierFlagControl) != 0: mods = mods or KeyControl
+  if (flags and NSEventModifierFlagOption) != 0: mods = mods or KeyAlt
+  if (flags and NSEventModifierFlagCommand) != 0: mods = mods or KeyCommand
+  h.keyDown(keyName(code, chars), mods)
 
 proc surfaceClass(): Id =
   registerClass("NimiSurfaceView", loadClass("NSView"), [
@@ -191,6 +224,10 @@ proc surfaceClass(): Id =
     ("mouseDragged:", cast[pointer](surfaceMouseDragged), "v@:@"),
     ("mouseMoved:", cast[pointer](surfaceMouseMoved), "v@:@"),
     ("keyDown:", cast[pointer](surfaceKeyDown), "v@:@"),
+    ("copy:", cast[pointer](surfaceCopy), "v@:@"),
+    ("cut:", cast[pointer](surfaceCut), "v@:@"),
+    ("paste:", cast[pointer](surfacePaste), "v@:@"),
+    ("selectAll:", cast[pointer](surfaceSelectAll), "v@:@"),
   ])
 
 proc delegateClass(): Id =
@@ -205,6 +242,37 @@ proc delegateClass(): Id =
     ("windowDidBecomeMain:", cast[pointer](windowDidBecomeMain), "v@:@"),
     ("windowDidResignMain:", cast[pointer](windowDidResignMain), "v@:@"),
   ])
+
+proc keyTextForCode(keyCode: int): string =
+  case keyCode
+  of 0: "a"
+  of 1: "s"
+  of 2: "d"
+  of 3: "f"
+  of 4: "h"
+  of 5: "g"
+  of 6: "z"
+  of 7: "x"
+  of 8: "c"
+  of 9: "v"
+  of 11: "b"
+  of 12: "q"
+  of 13: "w"
+  of 14: "e"
+  of 15: "r"
+  of 16: "y"
+  of 17: "t"
+  of 31: "o"
+  of 32: "u"
+  of 34: "i"
+  of 35: "p"
+  of 37: "l"
+  of 38: "j"
+  of 40: "k"
+  of 45: "n"
+  of 46: "m"
+  of 49: " "
+  else: ""
 
 # --- window creation -------------------------------------------------------
 
@@ -358,20 +426,47 @@ proc createWindow*(state: DarwinState, opts: PlatformWindowOptions,
           0, 1, 1.0'f32)
         if event != nil:
           sendVoidId(state.nsApp, sel("sendEvent:"), event)
-    proc sendKeyEvent(text: string, keyCode: uint16) =
+    proc sendKeyEvent(text: string, keyCode: uint16, flags: uint32 = 0) =
       let winNum = sendInt(win, sel("windowNumber"))
       let chars = nsString(text)
+      var eventFlags = 0'u32
+      if (flags and KeyShift) != 0: eventFlags = eventFlags or uint32(NSEventModifierFlagShift)
+      if (flags and KeyControl) != 0: eventFlags = eventFlags or uint32(NSEventModifierFlagControl)
+      if (flags and KeyAlt) != 0: eventFlags = eventFlags or uint32(NSEventModifierFlagOption)
+      if (flags and KeyCommand) != 0: eventFlags = eventFlags or uint32(NSEventModifierFlagCommand)
       let event = cast[MsgSendKeyEvent](msgSend)(
         loadClass("NSEvent"),
         sel("keyEventWithType:location:modifierFlags:timestamp:windowNumber:context:characters:charactersIgnoringModifiers:isARepeat:keyCode:"),
-        10, NSPoint(x: 0, y: 0), 0, 0.0, winNum, nil, chars, chars,
-        false, keyCode)
+        10, NSPoint(x: 0, y: 0), NSUInteger(eventFlags), 0.0, winNum, nil,
+        chars, chars, false, keyCode)
       if event != nil:
         sendVoidId(state.nsApp, sel("sendEvent:"), event)
     result.testKey = proc(keyCode: int) =
       sendKeyEvent("", uint16(keyCode))
     result.testKeyText = proc(text: string) =
       sendKeyEvent(text, 0)
+    result.testKeyMods = proc(keyCode: int, modifiers: uint32) =
+      sendKeyEvent(keyTextForCode(keyCode), uint16(keyCode), modifiers)
+    result.testMenuKey = proc(keyCode: int, modifiers: uint32) =
+      let flags = NSUInteger(
+        (if (modifiers and KeyShift) != 0: NSEventModifierFlagShift else: 0) or
+        (if (modifiers and KeyControl) != 0: NSEventModifierFlagControl else: 0) or
+        (if (modifiers and KeyAlt) != 0: NSEventModifierFlagOption else: 0) or
+        (if (modifiers and KeyCommand) != 0: NSEventModifierFlagCommand else: 0))
+      let chars = nsString(keyTextForCode(keyCode))
+      let event = cast[MsgSendKeyEvent](msgSend)(
+        loadClass("NSEvent"),
+        sel("keyEventWithType:location:modifierFlags:timestamp:windowNumber:context:characters:charactersIgnoringModifiers:isARepeat:keyCode:"),
+        10, NSPoint(x: 0, y: 0), flags, 0.0,
+        sendInt(win, sel("windowNumber")), nil, chars, chars, false,
+        uint16(keyCode))
+      if event != nil:
+        let mainMenu = send0(state.nsApp, sel("mainMenu"))
+        if mainMenu != nil:
+          let ok = sendBoolId(mainMenu, sel("performKeyEquivalent:"), event)
+          when defined(nimiClipDebug):
+            echo "performKeyEquivalent code=", keyCode, " ok=", ok,
+                 " chars=", keyTextForCode(keyCode)
     result.destroy = proc() =
       sendVoidId(win, sel("setContentView:"), nil)
       sendVoid(win, sel("close"))

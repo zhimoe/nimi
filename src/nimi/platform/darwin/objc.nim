@@ -38,6 +38,7 @@ type
   MsgSendVoidSize* = proc(a: Id, s: SEL, sz: NSSize) {.cdecl.}
   MsgSendColorComponents* = proc(a: Id, s: SEL, r, g, b, alpha: ptr CGFloat): bool {.cdecl.}
   MsgSendBool* = proc(a: Id, s: SEL): bool {.cdecl.}
+  MsgSendBoolId* = proc(a: Id, s: SEL, b: Id): bool {.cdecl.}
   MsgSendUInt* = proc(a: Id, s: SEL): NSUInteger {.cdecl.}
   MsgSendDouble* = proc(a: Id, s: SEL): float64 {.cdecl.}
   MsgSendCString* = proc(a: Id, s: SEL): cstring {.cdecl.}
@@ -194,6 +195,9 @@ proc sendDouble*(o: Id, s: SEL): float64 =
 proc sendBool*(o: Id, s: SEL): bool =
   cast[MsgSendBool](msgSend)(o, s)
 
+proc sendBoolId*(o: Id, s: SEL, b: Id): bool =
+  cast[MsgSendBoolId](msgSend)(o, s, b)
+
 proc sendCString*(o: Id, s: SEL): cstring =
   cast[MsgSendCString](msgSend)(o, s)
 
@@ -349,6 +353,9 @@ const
 
   NSEventTypeApplicationDefined* = NSUInteger(15)
   NSEventModifierFlagCommand* = NSUInteger(1 shl 20)
+  NSEventModifierFlagShift* = NSUInteger(1 shl 17)
+  NSEventModifierFlagControl* = NSUInteger(1 shl 18)
+  NSEventModifierFlagOption* = NSUInteger(1 shl 19)
   NSTerminateCancel* = NSUInteger(0)
   NSTerminateNow* = NSUInteger(1)
   WKUserScriptInjectionTimeAtDocumentStart* = NSUInteger(0)

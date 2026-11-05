@@ -137,6 +137,23 @@ app.whenReady(proc() =
     w.native.testKeyText("Ada")
     echo "form name: ", state.name
     app.quit()
+  elif mode == "select":
+    discard renderContent(content, 520, 640)
+    var hit: Rect
+    for h in content.engine.hits:
+      if h.key == "name":
+        hit = h.rect
+    w.native.testClick(hit.x + 10, hit.y + hit.h / 2)
+    let previousClipboard = clipboard.readText()
+    w.native.testKeyText("hello world")
+    content.handleKeyDown("a", KeyCommand)
+    content.handleKeyDown("c", KeyCommand)
+    echo "clipboard: ", clipboard.readText()
+    content.handleKeyDown("end")
+    content.handleKeyDown("v", KeyCommand)
+    echo "form name after paste: ", state.name
+    clipboard.writeText(previousClipboard)
+    app.quit()
   elif mode == "textarea":
     discard renderContent(content, 520, 640)
     var hit: Rect
