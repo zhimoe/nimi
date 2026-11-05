@@ -8,7 +8,7 @@ Nimi 的目标是保留 MyGo 的架构与开发体验——系统 WebView + 类�
 
 > 当前状态:**M1 核心已实现**(macOS WebView + typed IPC + TS 生成 + CLI + hello);
 > **M2 核心切片已跑通**(原生 NSView Surface + CoreGraphics/CoreText + 布局/Text/Button + 鼠标/键盘/焦点 + 多行换行 + `Tester`/离屏 PNG + `counter-native`)。
-> **M3 控件、M4 macOS 桌面 API(菜单/对话框/剪贴板/屏幕/主题/窗口/托盘/通知/全局快捷键)、M5 自定义 `nimi://` FileServer/深链/Session/文件监视/Cookie、M6 TextInput/TextArea/选择/剪贴板/Undo/ScrollView、M7 `.app`/DMG/签名/CI**已落地;`examples/desktop-native` 是桌面 API 验收,`examples/form-native` 是原生 GUI 验收,`examples/notes` 是 WebView-first 的完整笔记应用,`examples/protocol-native` 是自定义协议验收。其余差距见 [M3–M7 状态](docs/11-m3-m7-status.md)。
+> **M3 控件/Image/ScrollView、M4 macOS 桌面 API(菜单/对话框/剪贴板/屏幕/主题/窗口/托盘/通知/全局快捷键)、M5 自定义 `nimi://` FileServer/深链/Session/文件监视/Cookie、M6 TextInput/TextArea/选择/剪贴板/Undo/ScrollView、M7 `.app`/DMG/签名/CI**已落地;`examples/desktop-native` 是桌面 API 验收,`examples/form-native` 是原生 GUI 验收,`examples/notes` 是 WebView-first 的完整笔记应用,`examples/protocol-native` 是自定义协议验收。其余差距见 [M3–M7 状态](docs/11-m3-m7-status.md)。
 > Windows/Linux 在 M8/M9。
 > 参考实现:MyGo 0.7.4(MIT License)。
 
@@ -52,6 +52,7 @@ Nimi 的目标是保留 MyGo 的架构与开发体验——系统 WebView + 类�
 | [基础 TextArea](docs/19-m6-textarea.md) | 多行输入、Enter、上下行、点击 caret、限制 |
 | [选择与剪贴板](docs/20-m6-selection.md) | Shift 选择、Cmd+A/C/X/V、responder 菜单、限制 |
 | [ScrollView](docs/21-m6-scrollview.md) | 垂直滚动、scene clip、命中裁剪、滚轮 |
+| [原生 Image](docs/22-m3-image.md) | ImageIO、scene opImage、缓存与离屏渲染 |
 | [Nimi Notes 验收](docs/12-notes-demo.md) | WebView-first 笔记应用:IPC/菜单/导入导出/自动保存/打包 |
 | [官网与 Pages](docs/13-website.md) | 静态站点结构、自定义域名 `nimi.zhi.moe`、DNS 与部署工作流 |
 
@@ -96,7 +97,7 @@ nim c -o:nimi src/nimi/cli.nim
 # 原生 UI:无 HTML,CoreGraphics/CoreText 自绘
 nim c -r --path:src examples/native-smoke/main.nim
 
-# M3 控件:Checkbox/Switch/Slider/Progress/Divider
+# M3 控件/Image/ScrollView:Checkbox/Switch/Slider/Progress/Divider
 nim c -r --path:src examples/widgets-native/main.nim
 
 # macOS 桌面 API:屏幕/主题/窗口/托盘/通知/全局快捷键
@@ -110,6 +111,9 @@ nim c -r --path:src examples/watch-native/main.nim
 
 # 原生 ScrollView 与裁剪
 nim c -r --path:src examples/scroll-native/main.nim
+
+# 原生 Image(ImageIO)
+nim c -r --path:src examples/image-native/main.nim
 
 # 基本 GUI 应用:TextInput + 控件 + 菜单 + 文件/消息对话框
 nim c -r --path:src examples/form-native/main.nim
@@ -153,12 +157,13 @@ nimi/
 │   ├── hello/             # WebView + IPC 验收
 │   ├── native-smoke/      # 原生 Surface 验收
 │   ├── counter-native/    # 原生布局/控件/点击验收
-│   ├── widgets-native/    # M3 控件验收
+│   ├── widgets-native/    # M3 控件/Image/ScrollView验收
 │   ├── form-native/       # 原生 GUI 应用验收
 │   ├── desktop-native/    # macOS 桌面 API 验收
 │   ├── protocol-native/   # 自定义 nimi:// 协议验收
 │   ├── watch-native/      # FSEvents 文件监视验收
 │   ├── scroll-native/     # ScrollView/裁剪验收
+│   ├── image-native/      # Image/ImageIO 验收
 │   └── notes/             # WebView-first 笔记应用验收
 └── spikes/                # 可行性原型(可运行)
     ├── objc_hello/

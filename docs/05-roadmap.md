@@ -23,7 +23,7 @@
 | M0 | 可行性原型 | 1–2 天 | 1–2 天 | ✅ 已完成 |
 | M1 | 仓库骨架 + core + macOS WebView + IPC + `hello` | 6–10 周 | 2–3 月 | 进行中(核心切片已跑通) |
 | M2 | 原生 UI 基础 + CoreText + `counter-native` | 8–12 周 | 4–6 月 | |
-| M3 | 控件/布局/滚动 + Metal 起步 + `gallery` 子集 | 10–16 周 | 7–10 月 | 切片(5 个新控件;Metal/其余控件未开始) |
+| M3 | 控件/布局/滚动 + Metal 起步 + `gallery` 子集 | 10–16 周 | 7–10 月 | 切片(控件/ScrollView/Image;Metal/其余控件未开始) |
 | M4 | 桌面 API:菜单/托盘/通知/快捷键/对话框/剪贴板 | 8–12 周 | 9–13 月 | 切片(macOS 桌面 API 大部分;剪贴板图片/通知点击/托盘图标未完成) |
 | M5 | 文档/会话/Cookie/协议/文件监视/深链/单实例 | 8–12 周 | 11–16 月 | 切片(协议/FileServer/资源复制/深链/Session/FSEvents/Cookie 查询;其余未开始) |
 | M6 | 文本编辑/IME/可访问性 + Metal 完整 | 12–20 周 | 14–21 月 | 切片(TextInput/TextArea/选择/剪贴板/Undo/ScrollView;其余未开始) |

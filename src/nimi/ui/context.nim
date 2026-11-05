@@ -27,6 +27,7 @@ type
     nkDivider
     nkInput
     nkScroll
+    nkImage
 
   Node* = ref object
     kind*: NodeKind
@@ -46,6 +47,7 @@ type
     fixedW*, fixedH*: float32
     contentH*: float32
     scrollY*: float32
+    imagePath*: string
     children*: seq[Node]
     onClick*: proc() {.closure.}
     onDrag*: proc(rect: Rect, x, y: float32) {.closure.}
@@ -223,6 +225,11 @@ proc textInput*(c: Context, value: string, onText: proc(text: string),
 proc scrollView*(c: Context, key: string, height: float32 = 240): Node {.discardable.} =
   addNode(c, Node(kind: nkScroll, key: key, fixedH: height))
 
+proc image*(c: Context, path: string, width: float32 = 120,
+            height: float32 = 120): Node {.discardable.} =
+  addNode(c, Node(kind: nkImage, imagePath: path,
+                  fixedW: width, fixedH: height))
+
 proc textArea*(c: Context, value: string, onText: proc(text: string),
                key: string = "", placeholder: string = "",
                size: float32 = 14, height: float32 = 120): Node {.discardable.} =
@@ -351,6 +358,9 @@ proc measure(n: Node, availW, availH: float32) =
       let m = measureText(sample, n.fontSize, false)
       n.w = if n.fixedW > 0: n.fixedW else: max(200.0'f32, m.width + 2 * n.padX)
       n.h = if n.fixedH > 0: n.fixedH else: max(28.0'f32, m.height + 2 * n.padY)
+  of nkImage:
+    n.w = if n.fixedW > 0: n.fixedW else: 120
+    n.h = if n.fixedH > 0: n.fixedH else: 120
   of nkScroll:
     n.w = if n.fixedW > 0: n.fixedW
           elif availW > 0: availW
@@ -625,6 +635,8 @@ proc paint(n: Node, c: Context) =
         let cx = n.x + n.padX + min(pw, max(0.0'f32, n.w - 2 * n.padX - 1))
         c.scene.rect(Rect(x: cx, y: n.y + 6, w: 1.5'f32, h: n.h - 12),
                      defaultText)
+  of nkImage:
+    c.scene.image(n.imagePath, Rect(x: n.x, y: n.y, w: n.w, h: n.h))
   of nkScroll:
     c.scene.clip(Rect(x: n.x, y: n.y, w: n.w, h: n.h))
     for ch in n.children:

@@ -21,6 +21,24 @@ suite "render":
     check fileExists(path)
     check getFileSize(path) > 100
 
+  test "image png":
+    let icon = "examples/notes/resources/icon.png"
+    if fileExists(icon):
+      proc view(c: Context) =
+        column(c).fill().padding(12, 12).children(c, proc() =
+          image(c, icon, 64, 64)
+          text(c, "image")
+        )
+
+      let t = newTester(view, 160, 120)
+      discard t.render()
+      let path = "/tmp/nimi_test_image.png"
+      if fileExists(path):
+        removeFile(path)
+      check renderSceneToPng(t.scene, path)
+      check fileExists(path)
+      check getFileSize(path) > 100
+
   test "wrapped text png":
     proc view(c: Context) =
       column(c).fill().padding(12, 12).children(c, proc() =

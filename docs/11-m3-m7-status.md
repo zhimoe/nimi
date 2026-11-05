@@ -11,7 +11,7 @@
 
 | 里程碑 | 状态 | 已实现 | 未实现 |
 |---|---|---|---|
-| M3 | 🟡 切片 | Checkbox/Switch/Slider/Progress/Divider;文本换行;焦点/键盘 | Metal 渲染器;其余控件(List/Table/Tabs/Select/TextInput…);动画;可访问性 |
+| M3 | 🟡 切片 | Checkbox/Switch/Slider/Progress/Divider、Image(ImageIO)、文本换行、焦点/键盘 | Metal 渲染器;其余控件(List/Table/Tabs/Select…);动画;可访问性 |
 | M4 | 🟡 切片 | Clipboard、菜单/对话框、屏幕/主题、窗口控制/焦点、托盘、通知、全局快捷键、动态菜单 | 剪贴板图片/文件、通知权限/点击、托盘图标、快捷键冲突提示 |
 | M5 | 🟡 切片 | 自定义 `nimi://` scheme、FileServer、资源复制、URL scheme 深链、持久/临时 Session、FSEvents 文件监视、默认 Cookie 查询/清理、protocol-native/watch-native 示例 | Cookie 写入/删除/并发、内容规则、文档控制器、单实例边界 |
 | M6 | 🟡 切片 | 单行 TextInput、基础 TextArea、选择/Cmd+A/C/X/V/剪贴板、Undo/Redo、ScrollView/裁剪 | IME、可访问性、完整 Metal、滚动条/虚拟列表 |
@@ -39,6 +39,8 @@ M2 的 Tester、离屏 PNG、焦点/键盘、文本换行继续作为 M3–M7 �
 - Slider 使用 `Hit.onDrag`,Engine 保存 `pressedDrag/pressedRect`,拖动时按 hit rect 映射到值。
 - 新增 `tests/test_ui.nim` 的 checkbox/switch/slider 测试。
 - 新增 `examples/widgets-native`,已截图确认。
+- 新增 `ui.image` + scene `opImage` + ImageIO/CG 渲染;示例 `examples/image-native`。
+- 详见 [原生 Image](22-m3-image.md)。
 
 ### M4 菜单与对话框
 
@@ -218,7 +220,7 @@ hdiutil attach -nobrowse -readonly .../counter-0.1.0.dmg
 
 ### M3 剩余
 1. Metal 渲染器(scene → instanced quad,presenter 线程)
-2. List/Table/Tabs/Select/TextInput 等控件
+2. List/Table/Tabs/Select/Radio 等控件
 3. 动画/transition
 4. 可访问性(AccessTree/NSAccessibility)
 

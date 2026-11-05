@@ -28,6 +28,7 @@
 | [19 基础 TextArea](19-m6-textarea.md) | 多行输入、Enter、上下行、点击 caret、限制 | 实现者、评审者 |
 | [20 选择与剪贴板](20-m6-selection.md) | Shift 选择、Cmd+A/C/X/V、responder 菜单、限制 | 实现者、评审者 |
 | [21 ScrollView](21-m6-scrollview.md) | 垂直滚动、scene clip、命中裁剪、滚轮 | 实现者、评审者 |
+| [22 原生 Image](22-m3-image.md) | ImageIO、scene opImage、缓存与限制 | 实现者、评审者 |
 
 ## 阅读顺序
 

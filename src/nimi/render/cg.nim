@@ -3,7 +3,7 @@
 ## bottom-left context). No GPU yet: this is the reference path and the M2
 ## vertical slice.
 
-import std/dynlib
+import std/[dynlib, tables]
 
 import ../scene/scene
 
@@ -53,6 +53,9 @@ let
     proc(c: CFRef) {.cdecl.})
   CGContextClipToRect = fn(cg, "CGContextClipToRect",
     proc(c: CFRef, r: CGRect) {.cdecl.})
+  CGContextDrawImage = fn(cg, "CGContextDrawImage",
+    proc(c: CFRef, r: CGRect, img: CFRef) {.cdecl.})
+  CGImageRelease = fn(cg, "CGImageRelease", proc(img: CFRef) {.cdecl.})
   CGContextFillRect = fn(cg, "CGContextFillRect",
     proc(c: CFRef, r: CGRect) {.cdecl.})
   CGContextSetTextMatrix = fn(cg, "CGContextSetTextMatrix",
@@ -74,6 +77,10 @@ let
   CGBitmapContextCreateImage = fn(cg, "CGBitmapContextCreateImage",
     proc(c: CFRef): CFRef {.cdecl.})
   CGContextRelease = fn(cg, "CGContextRelease", proc(c: CFRef) {.cdecl.})
+  CGImageSourceCreateWithURL = fn(io, "CGImageSourceCreateWithURL",
+    proc(url: CFRef, opts: pointer): CFRef {.cdecl.})
+  CGImageSourceCreateImageAtIndex = fn(io, "CGImageSourceCreateImageAtIndex",
+    proc(src: CFRef, index: int, opts: pointer): CFRef {.cdecl.})
   CGImageDestinationCreateWithURL = fn(io, "CGImageDestinationCreateWithURL",
     proc(url: CFRef, typ: CFRef, count: int, opts: pointer): CFRef {.cdecl.})
   CGImageDestinationAddImage = fn(io, "CGImageDestinationAddImage",
@@ -129,6 +136,27 @@ proc drawText(ctx: CFRef, op: Op, sceneHeight: float32) =
   CGContextSetTextPosition(ctx, CGFloat(op.x), baseline)
   CTLineDraw(line, ctx)
 
+var imageCache: Table[string, CFRef]
+
+proc loadImage(path: string): CFRef =
+  if path.len == 0:
+    return nil
+  if imageCache.hasKey(path):
+    return imageCache[path]
+  let url = CFURLCreateFromFileSystemRepresentation(
+    nil, path.cstring, path.len, false)
+  if url == nil:
+    return nil
+  let src = CGImageSourceCreateWithURL(url, nil)
+  CFRelease(url)
+  if src == nil:
+    return nil
+  let img = CGImageSourceCreateImageAtIndex(src, 0, nil)
+  CFRelease(src)
+  if img != nil:
+    imageCache[path] = img
+  result = img
+
 proc drawScene*(ctx: pointer, scene: Scene) =
   ## ctx is a CGContextRef supplied by AppKit (bottom-left origin).
   let c = cast[CFRef](ctx)
@@ -164,6 +192,14 @@ proc drawScene*(ctx: pointer, scene: Scene) =
         w: CGFloat(r.w), h: CGFloat(r.h)))
     of opRestore:
       CGContextRestoreGState(c)
+    of opImage:
+      let img = loadImage(op.imagePath)
+      if img != nil:
+        let r = op.imageRect
+        CGContextDrawImage(c, CGRect(
+          x: CGFloat(r.x),
+          y: CGFloat(scene.height) - CGFloat(r.y) - CGFloat(r.h),
+          w: CGFloat(r.w), h: CGFloat(r.h)), img)
 
 
 proc renderSceneToPng*(scene: Scene, path: string): bool =

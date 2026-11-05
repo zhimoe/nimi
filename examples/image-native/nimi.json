@@ -1,0 +1,7 @@
+{
+  "name": "Nimi Image",
+  "slug": "nimi-image",
+  "identifier": "com.example.nimi-image",
+  "version": "0.1.0",
+  "main": "main.nim"
+}

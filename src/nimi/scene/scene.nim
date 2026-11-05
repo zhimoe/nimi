@@ -13,6 +13,7 @@ type
     opText
     opClip
     opRestore
+    opImage
 
   Op* = object
     color*: Color
@@ -29,6 +30,9 @@ type
       clipRect*: Rect
     of opRestore:
       discard
+    of opImage:
+      imagePath*: string
+      imageRect*: Rect
 
   Scene* = object
     width*, height*: float32
@@ -52,3 +56,6 @@ proc clip*(s: var Scene, r: Rect) =
 
 proc restoreClip*(s: var Scene) =
   s.ops.add Op(kind: opRestore)
+
+proc image*(s: var Scene, path: string, r: Rect) =
+  s.ops.add Op(kind: opImage, imagePath: path, imageRect: r)
