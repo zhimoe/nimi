@@ -11,6 +11,10 @@ examples/*/main
 # Local reference clone (not part of the public repository)
 /mygo/
 
+# Local CloudMusic demo source (to be ported later; not committed yet)
+/mygo-cloudmusic/
+/cloudmusic/
+
 # Spike binaries and generated images
 /spikes/*/check_bin
 /spikes/objc_hello/spike

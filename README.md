@@ -225,5 +225,7 @@ macOS 可用版本约 4–6 个月;广泛兼容约 14–21 个月;三平台约 2
 5. M5:协议、Session/Cookie、文件监视、文档。
 6. M7 剩余:自动更新、CI/release、DMG 背景、实际公证。
 7. 每个里程碑以可运行示例与测试验收。
+8. CloudMusic demo:将 MyGo 云音乐案例移植为 Nimi 示例;源目录
+   `mygo-cloudmusic/` 暂不纳入仓库,待评估音频、列表/滚动、图片与网络能力后单独排期。
 
 参见 [实施路线图](docs/05-roadmap.md) 与 [M1 实现状态](docs/08-m1-notes.md)。
