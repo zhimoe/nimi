@@ -19,7 +19,11 @@
 - 事件:
   - macOS `scrollWheel:` → `SurfaceHandler.scroll(x, y, dy)`
   - `Tester.scrollAt(x, y, dy)`
-- 示例 `examples/scroll-native`:40 行按钮列表,滚轮/测试滚动
+- 滚动条:
+  - track + thumb 绘制
+  - thumb 尺寸按 viewport/content 比例
+  - 拖动/点击 track 更新 offset
+- 示例 `examples/scroll-native`:40 行按钮列表,滚轮/滚动条/测试滚动
 
 ## 2. 关键决策
 
@@ -29,27 +33,30 @@
 | scroll offset 按 key 存 Engine | 视图每帧重建,offset 不丢;支持多个列表 |
 | 内容先按无界高度测量 | 先知道 contentH,再 clamp offset |
 | 滚动只改变子节点 y,不改布局树 | 与每帧 view 模型兼容 |
-| 暂不做滚动条/惯性 | 先验证裁剪/命中/滚轮;视觉和动量后续补 |
+| 滚动条 thumb 叠加在 viewport 右侧 | 不改变内容布局;点击/拖动都映射到 offset |
+| 暂不做惯性/回弹 | 滚轮已有系统 momentum 事件;自定义动画后续补 |
 | 命中区域带 clip 字段 | 嵌套滚动时求交集;避免滚出内容被点击 |
 
 ## 3. 验证
 
 ```sh
 NIMI_SMOKE=scroll nim c -r --path:src examples/scroll-native/main.nim
-# scroll rows: 40
+# scroll rows: 41
 # content height: 1040 viewport: 260
 # offset: 120
 
 ./scripts/test.sh
 # [OK] scroll view offsets and clips hits
+# [OK] scrollbar drag
 ```
 
-截图确认 viewport 裁剪:只显示 Row 0–9,超出内容不绘制、不可点击。
+截图确认 viewport 裁剪:只显示 Row 0–9,超出内容不绘制、不可点击;
+右侧滚动条 thumb 反映当前位置。
 
 ## 4. 已知限制
 
 - 只有垂直滚动;没有水平滚动
-- 没有滚动条、滚动位置指示、惯性/回弹
+- 没有水平滚动条、惯性/回弹、滚动条 hover 状态
 - 没有 `scrollTo`/键盘 PageUp/PageDown
 - 没有嵌套滚动的优先级策略(当前取最深区域)
 - 没有 scroll anchoring/虚拟列表;40 行全量布局
@@ -58,7 +65,7 @@ NIMI_SMOKE=scroll nim c -r --path:src examples/scroll-native/main.nim
 
 ## 5. 下一步
 
-1. 滚动条 thumb + 滚动位置/焦点自动跟随。
+1. 滚动位置/焦点自动跟随,滚动条 hover/更细粒度交互。
 2. 水平滚动、`scrollTo`、键盘 PageUp/PageDown。
 3. 虚拟列表/布局缓存,支持大列表。
 4. TextArea 内部滚动与 caret 自动可见。

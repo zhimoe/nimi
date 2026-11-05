@@ -175,6 +175,17 @@ suite "ui":
     check t.engine.scrollOffsets["list"] == region.contentH - region.rect.h
     t.scrollAt(region.rect.x + 10, region.rect.y + 10, -10000)
     check t.engine.scrollOffsets["list"] == 0
+    var thumb: Hit
+    for h in t.engine.hits:
+      if h.key == "__scroll:list":
+        thumb = h
+    check thumb.rect.w > 0
+    t.engine.handleMouseDown(thumb.rect.x + 3, thumb.rect.y + 6)
+    t.engine.handleMouseMove(thumb.rect.x + 3,
+                             thumb.rect.y + thumb.rect.h - 6)
+    t.engine.handleMouseUp(thumb.rect.x + 3,
+                           thumb.rect.y + thumb.rect.h - 6)
+    check t.engine.scrollOffsets["list"] > 0
 
   test "undo and redo":
     var value = ""

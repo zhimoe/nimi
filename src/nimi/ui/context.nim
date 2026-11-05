@@ -658,6 +658,17 @@ proc paint(n: Node, c: Context) =
     for ch in n.children:
       paint(ch, c)
     c.scene.restoreClip()
+    if n.contentH > n.h and n.w > 12:
+      let track = Rect(x: n.x + n.w - 8, y: n.y + 2,
+                       w: 6, h: max(1.0'f32, n.h - 4))
+      c.scene.rect(track, rgb(0.35, 0.35, 0.40, 0.10), 3)
+      let maxOff = max(0.0'f32, n.contentH - n.h)
+      let thumbH = max(24.0'f32, track.h * n.h / max(n.contentH, 1))
+      let travel = max(0.0'f32, track.h - thumbH)
+      let t = if maxOff > 0: n.scrollY / maxOff else: 0
+      c.scene.rect(Rect(x: track.x, y: track.y + t * travel,
+                        w: track.w, h: thumbH),
+                   rgb(0.45, 0.45, 0.52, 0.55), 3)
   of nkColumn, nkRow:
     for ch in n.children:
       paint(ch, c)
@@ -698,6 +709,22 @@ proc collectHits(n: Node, engine: Engine, clip: Rect) =
       clip: currentClip)
   for ch in n.children:
     collectHits(ch, engine, currentClip)
+  if n.kind == nkScroll and n.contentH > n.h and n.w > 12:
+    let track = Rect(x: n.x + n.w - 8, y: n.y + 2,
+                     w: 6, h: max(1.0'f32, n.h - 4))
+    let maxOff = max(0.0'f32, n.contentH - n.h)
+    let thumbH = max(24.0'f32, track.h * n.h / max(n.contentH, 1))
+    let travel = max(0.0'f32, track.h - thumbH)
+    engine.hits.add Hit(
+      rect: track,
+      key: "__scroll:" & n.key,
+      clip: currentClip,
+      onDrag: proc(rect: Rect, x, y: float32) =
+        let t = if travel > 0: max(0.0'f32, min(1.0'f32,
+                      (y - rect.y - thumbH / 2) / travel)) else: 0.0'f32
+        engine.scrollOffsets[n.key] = t * maxOff
+        if engine.requestFrame != nil:
+          engine.requestFrame())
 
 # --- frame and input -------------------------------------------------------
 
