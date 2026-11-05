@@ -18,6 +18,8 @@ type
     w*, h*: CGFloat
   NSRect* {.bycopy.} = object
     x*, y*, w*, h*: CGFloat
+  NSRange* {.bycopy.} = object
+    location*, length*: NSUInteger
 
   MsgSend0* = proc(a: Id, s: SEL): Id {.cdecl.}
   MsgSendVoid* = proc(a: Id, s: SEL) {.cdecl.}
@@ -43,6 +45,8 @@ type
   MsgSendDouble* = proc(a: Id, s: SEL): float64 {.cdecl.}
   MsgSendCString* = proc(a: Id, s: SEL): cstring {.cdecl.}
   MsgSendRect* = proc(a: Id, s: SEL): NSRect {.cdecl.}
+  MsgSendRectId* = proc(a: Id, s: SEL, r: NSRect, b: Id): NSRect {.cdecl.}
+  MsgSendRectRect* = proc(a: Id, s: SEL, r: NSRect): NSRect {.cdecl.}
   MsgSendPoint* = proc(a: Id, s: SEL): NSPoint {.cdecl.}
   MsgSendInt* = proc(a: Id, s: SEL): NSInteger {.cdecl.}
   MsgSendUShort* = proc(a: Id, s: SEL): uint16 {.cdecl.}
@@ -96,6 +100,8 @@ let
     symAddr(libobjc, "class_addMethod"))
   objcObjectGetClass = cast[proc(o: Id): Id {.cdecl.}](
     symAddr(libobjc, "object_getClass"))
+  selGetName = cast[proc(s: SEL): cstring {.cdecl.}](
+    symAddr(libobjc, "sel_getName"))
   objcAutoreleasePoolPush = cast[proc(): Id {.cdecl.}](
     symAddr(libobjc, "objc_autoreleasePoolPush"))
   objcAutoreleasePoolPop = cast[proc(pool: Id) {.cdecl.}](
@@ -203,6 +209,15 @@ proc sendCString*(o: Id, s: SEL): cstring =
 
 proc sendRect*(o: Id, s: SEL): NSRect =
   cast[MsgSendRect](msgSend)(o, s)
+
+proc sendRectId*(o: Id, s: SEL, r: NSRect, b: Id): NSRect =
+  cast[MsgSendRectId](msgSend)(o, s, r, b)
+
+proc sendRectRect*(o: Id, s: SEL, r: NSRect): NSRect =
+  cast[MsgSendRectRect](msgSend)(o, s, r)
+
+proc selName*(s: SEL): string =
+  if cast[pointer](s) == nil: "" else: $selGetName(s)
 
 proc sendPoint*(o: Id, s: SEL): NSPoint =
   cast[MsgSendPoint](msgSend)(o, s)

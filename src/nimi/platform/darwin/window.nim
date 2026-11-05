@@ -11,6 +11,8 @@ const
   NimiMessageHandlerName = "nimi"
   NimiWindowDelegateClass = "NimiWindowDelegate"
 
+var imeHandled = false
+
 proc windowLookupId(delegate: Id): uint64 =
   if gState == nil:
     return 0
@@ -31,6 +33,12 @@ proc windowWillClose(self: Id, cmd: SEL, notification: Id) {.cdecl.} =
   let id = windowLookupId(self)
   if id == 0:
     return
+  let surfaceView = gState.surfaceViews.getOrDefault(id)
+  if surfaceView != nil:
+    let ctx = gState.inputContexts.getOrDefault(surfaceView)
+    if ctx != nil:
+      gState.inputContexts.del(surfaceView)
+      release(ctx)
   let h = gState.windowHandlers.getOrDefault(id)
   if h.closed != nil:
     h.closed(id)
@@ -39,11 +47,11 @@ proc windowWillClose(self: Id, cmd: SEL, notification: Id) {.cdecl.} =
   gState.webViews.del(id)
   gState.userContentControllers.del(id)
   gState.windowDelegates.del(id)
-  let surfaceView = gState.surfaceViews.getOrDefault(id)
   if surfaceView != nil:
     gState.surfaceToId.del(surfaceView)
   gState.surfaceViews.del(id)
   gState.surfaceHandlers.del(id)
+  gState.imeWindows.del(id)
   releaseSchemeHandler(id)
 
 proc didReceiveScriptMessage(self: Id, cmd: SEL, controller: Id,
@@ -181,6 +189,110 @@ proc keyName*(keyCode: int, chars: string): string =
   of 121: "pagedown"
   else: chars
 
+proc surfaceHandlerFor(self: Id): SurfaceHandler =
+  if gState == nil:
+    return
+  let id = gState.surfaceToId.getOrDefault(self, 0'u64)
+  if id == 0:
+    return
+  result = gState.surfaceHandlers.getOrDefault(id)
+
+proc imeString(obj: Id): string =
+  if obj == nil:
+    return ""
+  let responds = cast[proc(a: Id, s: SEL, b: SEL): bool {.cdecl.}](msgSend)(
+    obj, sel("respondsToSelector:"), sel("string"))
+  if responds:
+    goString(send0(obj, sel("string")))
+  else:
+    goString(obj)
+
+proc surfaceInsertText(self: Id, cmd: SEL, text: Id,
+                       range: NSRange) {.cdecl.} =
+  imeHandled = true
+  when defined(nimiImeDebug): echo "insertText: ", imeString(text)
+  let h = self.surfaceHandlerFor()
+  if h.insertText != nil:
+    h.insertText(imeString(text))
+
+proc surfaceSetMarkedText(self: Id, cmd: SEL, text: Id, selected: NSRange,
+                          replacement: NSRange) {.cdecl.} =
+  imeHandled = true
+  let h = self.surfaceHandlerFor()
+  if h.setMarkedText != nil:
+    h.setMarkedText(imeString(text))
+
+proc surfaceUnmarkText(self: Id, cmd: SEL) {.cdecl.} =
+  imeHandled = true
+  let h = self.surfaceHandlerFor()
+  if h.unmarkText != nil:
+    h.unmarkText()
+
+proc surfaceHasMarkedText(self: Id, cmd: SEL): bool {.cdecl.} =
+  let h = self.surfaceHandlerFor()
+  result = h.hasMarkedText != nil and h.hasMarkedText()
+
+proc surfaceMarkedRange(self: Id, cmd: SEL): NSRange {.cdecl.} =
+  let h = self.surfaceHandlerFor()
+  if h.hasMarkedText != nil and h.hasMarkedText():
+    let length = if h.markedLength != nil: h.markedLength() else: 0
+    result = NSRange(location: 0, length: NSUInteger(max(0, length)))
+  else:
+    result = NSRange(location: high(NSUInteger), length: 0)
+
+proc surfaceSelectedRange(self: Id, cmd: SEL): NSRange {.cdecl.} =
+  result = NSRange(location: 0, length: 0)
+
+proc surfaceValidAttributes(self: Id, cmd: SEL): Id {.cdecl.} =
+  result = send0(loadClass("NSArray"), sel("array"))
+
+proc surfaceAttributedSubstring(self: Id, cmd: SEL, range: NSRange,
+                                actual: ptr NSRange): Id {.cdecl.} =
+  result = nil
+
+proc surfaceFirstRect(self: Id, cmd: SEL, range: NSRange,
+                      actual: ptr NSRange): NSRect {.cdecl.} =
+  let h = self.surfaceHandlerFor()
+  if h.caretRect == nil:
+    return NSRect(x: 0, y: 0, w: 1, h: 1)
+  let r = h.caretRect()
+  let bounds = sendRect(self, sel("bounds"))
+  let viewRect = NSRect(
+    x: CGFloat(r.x),
+    y: CGFloat(bounds.h - r.y - r.h),
+    w: CGFloat(r.w), h: CGFloat(r.h))
+  let win = send0(self, sel("window"))
+  var screenRect = viewRect
+  if win != nil:
+    let windowRect = sendRectId(self, sel("convertRect:toView:"), viewRect, nil)
+    screenRect = sendRectRect(win, sel("convertRectToScreen:"), windowRect)
+  if actual != nil:
+    actual[] = NSRange(location: 0, length: 0)
+  result = screenRect
+
+proc surfaceCharacterIndex(self: Id, cmd: SEL,
+                           point: NSPoint): NSUInteger {.cdecl.} =
+  result = 0
+
+proc surfaceDoCommand(self: Id, cmd: SEL, selector: SEL) {.cdecl.} =
+  when defined(nimiImeDebug): echo "doCommand: ", selName(selector)
+  let h = self.surfaceHandlerFor()
+  imeHandled = h.command != nil and h.command(selName(selector))
+
+proc surfaceInputContext(self: Id, cmd: SEL): Id {.cdecl.} =
+  when defined(nimiImeDebug): echo "inputContext called"
+  if gState == nil:
+    return nil
+  if gState.inputContexts.hasKey(self):
+    return gState.inputContexts[self]
+  let cls = loadClass("NSTextInputContext")
+  let ctx = sendId1(send0(cls, sel("alloc")),
+                    sel("initWithClient:"), self)
+  if ctx != nil:
+    retain(ctx)
+    gState.inputContexts[self] = ctx
+  result = ctx
+
 proc surfaceCopy(self: Id, cmd: SEL, sender: Id) {.cdecl.} =
   when defined(nimiClipDebug): echo "surfaceCopy"
   if gState == nil: return
@@ -227,6 +339,15 @@ proc surfaceKeyDown(self: Id, cmd: SEL, event: Id) {.cdecl.} =
   if id == 0:
     return
   let h = gState.surfaceHandlers.getOrDefault(id)
+  if gState.imeWindows.getOrDefault(id, false):
+    when defined(nimiImeDebug): echo "ime keydown: ", goString(send0(event, sel("characters")))
+    let events = sendId1(loadClass("NSArray"), sel("arrayWithObject:"), event)
+    if events != nil:
+      imeHandled = false
+      sendVoidId(self, sel("interpretKeyEvents:"), events)
+      if imeHandled:
+        return
+      when defined(nimiImeDebug): echo "ime fallback"
   if h.keyDown == nil:
     return
   let chars = goString(send0(event, sel("characters")))
@@ -257,6 +378,26 @@ proc surfaceClass(): Id =
     ("selectAll:", cast[pointer](surfaceSelectAll), "v@:@"),
     ("undo:", cast[pointer](surfaceUndo), "v@:@"),
     ("redo:", cast[pointer](surfaceRedo), "v@:@"),
+    ("insertText:replacementRange:",
+      cast[pointer](surfaceInsertText), "v@:@{_NSRange=QQ}"),
+    ("setMarkedText:selectedRange:replacementRange:",
+      cast[pointer](surfaceSetMarkedText), "v@:@{_NSRange=QQ}{_NSRange=QQ}"),
+    ("unmarkText", cast[pointer](surfaceUnmarkText), "v@:"),
+    ("hasMarkedText", cast[pointer](surfaceHasMarkedText), "c@:"),
+    ("markedRange", cast[pointer](surfaceMarkedRange), "{_NSRange=QQ}@:"),
+    ("selectedRange", cast[pointer](surfaceSelectedRange), "{_NSRange=QQ}@:"),
+    ("validAttributesForMarkedText",
+      cast[pointer](surfaceValidAttributes), "@@:"),
+    ("attributedSubstringForProposedRange:actualRange:",
+      cast[pointer](surfaceAttributedSubstring),
+      "@@:{_NSRange=QQ}^{_NSRange=QQ}"),
+    ("firstRectForCharacterRange:actualRange:",
+      cast[pointer](surfaceFirstRect),
+      "{CGRect={CGPoint=dd}{CGSize=dd}}@:{_NSRange=QQ}^{_NSRange=QQ}"),
+    ("characterIndexForPoint:", cast[pointer](surfaceCharacterIndex),
+      "Q@:{CGPoint=dd}"),
+    ("doCommandBySelector:", cast[pointer](surfaceDoCommand), "v@::"),
+    ("inputContext", cast[pointer](surfaceInputContext), "@@:"),
   ])
 
 proc delegateClass(): Id =
@@ -327,6 +468,7 @@ proc createWindow*(state: DarwinState, opts: PlatformWindowOptions,
 
   let delegate = send0(delegateClass(), sel("new"))
   state.windowHandlers[id] = h
+  state.imeWindows[id] = opts.ime
   state.delegateToId[delegate] = id
   state.windowDelegates[id] = delegate
 

@@ -28,6 +28,8 @@ type
     trayTargets*: Table[uint64, Id]
     schemeRoots*: Table[pointer, string]
     schemeHandlers*: Table[uint64, Id]
+    imeWindows*: Table[uint64, bool]
+    inputContexts*: Table[pointer, Id]
     nextWatchId*: uint64
     watchStreams*: Table[uint64, pointer]
     watchHandlers*: Table[uint64, proc(e: PlatformFileEvent) {.closure.}]

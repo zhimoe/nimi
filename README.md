@@ -8,7 +8,7 @@ Nimi 的目标是保留 MyGo 的架构与开发体验——系统 WebView + 类�
 
 > 当前状态:**M1 核心已实现**(macOS WebView + typed IPC + TS 生成 + CLI + hello);
 > **M2 核心切片已跑通**(原生 NSView Surface + CoreGraphics/CoreText + 布局/Text/Button + 鼠标/键盘/焦点 + 多行换行 + `Tester`/离屏 PNG + `counter-native`)。
-> **M3 控件/Image/ScrollView、M4 macOS 桌面 API(菜单/对话框/剪贴板/屏幕/主题/窗口/托盘/通知/全局快捷键)、M5 FileServer/深链/Session/文件监视/Cookie/Document、M6 TextInput/TextArea/选择/剪贴板/Undo/ScrollView、M7 `.app`/DMG/签名/CI**已落地;`examples/desktop-native` 是桌面 API 验收,`examples/form-native` 是原生 GUI 验收,`examples/notes` 是 WebView-first 的完整笔记应用,`examples/protocol-native` 是自定义协议验收。其余差距见 [M3–M7 状态](docs/11-m3-m7-status.md)。
+> **M3 控件/Image/ScrollView、M4 macOS 桌面 API(菜单/对话框/剪贴板/屏幕/主题/窗口/托盘/通知/全局快捷键)、M5 FileServer/深链/Session/文件监视/Cookie/Document、M6 TextInput/TextArea/选择/剪贴板/Undo/ScrollView/IME、M7 `.app`/DMG/签名/CI**已落地;`examples/desktop-native` 是桌面 API 验收,`examples/form-native` 是原生 GUI 验收,`examples/notes` 是 WebView-first 的完整笔记应用,`examples/protocol-native` 是自定义协议验收。其余差距见 [M3–M7 状态](docs/11-m3-m7-status.md)。
 > Windows/Linux 在 M8/M9。
 > 参考实现:MyGo 0.7.4(MIT License)。
 
@@ -53,6 +53,7 @@ Nimi 的目标是保留 MyGo 的架构与开发体验——系统 WebView + 类�
 | [基础 TextArea](docs/19-m6-textarea.md) | 多行输入、Enter、上下行、点击 caret、限制 |
 | [选择与剪贴板](docs/20-m6-selection.md) | Shift 选择、Cmd+A/C/X/V、responder 菜单、限制 |
 | [ScrollView](docs/21-m6-scrollview.md) | 垂直滚动、scene clip、命中裁剪、滚轮 |
+| [IME](docs/24-m6-ime.md) | NSTextInputClient、marked text、候选窗位置、fallback |
 | [原生 Image](docs/22-m3-image.md) | ImageIO、scene opImage、缓存与离屏渲染 |
 | [Nimi Notes 验收](docs/12-notes-demo.md) | WebView-first 笔记应用:IPC/菜单/导入导出/自动保存/打包 |
 | [官网与 Pages](docs/13-website.md) | 静态站点结构、自定义域名 `nimi.zhi.moe`、DNS 与部署工作流 |
@@ -255,7 +256,7 @@ macOS 可用版本约 4–6 个月;广泛兼容约 14–21 个月;三平台约 2
 1. Nimi Notes:SQLite/FTS、多窗口、原生确认框、生成 TS 接入打包。
 2. M3 剩余:更多控件、Metal、动画、可访问性。
 3. M4 剩余:通知权限/点击、托盘图标、快捷键冲突提示、剪贴板图片/文件。
-4. M6 剩余:滚动条/虚拟列表、IME、富文本、完整 Metal/可访问性。
+4. M6 剩余:真实 IME 验证、滚动条/虚拟列表、富文本、完整 Metal/可访问性。
 5. M5 剩余:Cookie 写入/删除/并发、自动保存/最近文档、单实例边界/文件关联。
 6. M7 剩余:自动更新、release workflow、DMG 背景、实际公证。
 7. 每个里程碑以可运行示例与测试验收。

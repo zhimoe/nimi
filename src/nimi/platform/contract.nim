@@ -11,6 +11,9 @@ type
   PlatformPoint* = object
     x*, y*: float32
 
+  PlatformRect* = object
+    x*, y*, w*, h*: float32
+
   PlatformDisplay* = object
     id*: string
     name*: string
@@ -37,6 +40,7 @@ type
     scheme*: string
     fileRoot*: string
     ephemeral*: bool
+    ime*: bool
 
   SurfaceHandler* = object
     windowId*: uint64
@@ -52,6 +56,13 @@ type
     selectAll*: proc() {.closure.}
     undo*: proc() {.closure.}
     redo*: proc() {.closure.}
+    insertText*: proc(text: string) {.closure.}
+    setMarkedText*: proc(text: string) {.closure.}
+    unmarkText*: proc() {.closure.}
+    hasMarkedText*: proc(): bool {.closure.}
+    markedLength*: proc(): int {.closure.}
+    caretRect*: proc(): PlatformRect {.closure.}
+    command*: proc(selector: string): bool {.closure.}
 
   WindowHandler* = object
     windowId*: uint64

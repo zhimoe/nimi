@@ -109,7 +109,8 @@ app.whenReady(proc() =
     title: "Nimi Form",
     width: 520,
     height: 640,
-    content: content
+    content: content,
+    ime: true
   ))
   w.invalidate()
   let mode = getEnv("NIMI_SMOKE")

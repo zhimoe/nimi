@@ -30,6 +30,7 @@
 | [21 ScrollView](21-m6-scrollview.md) | 垂直滚动、scene clip、命中裁剪、滚轮 | 实现者、评审者 |
 | [22 原生 Image](22-m3-image.md) | ImageIO、scene opImage、缓存与限制 | 实现者、评审者 |
 | [23 M5 文档](23-m5-document.md) | Document 生命周期、dirty/conflict、FSEvents 外部变更 | 实现者、评审者 |
+| [24 M6 IME](24-m6-ime.md) | NSTextInputClient、marked text、候选窗、fallback | 实现者、评审者 |
 
 ## 阅读顺序
 

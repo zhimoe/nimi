@@ -21,6 +21,7 @@ type
     content*: Content
     files*: FileServer
     session*: SessionMode
+    ime*: bool
 
   CloseEvent* = object
     prevented*: bool
@@ -127,6 +128,13 @@ proc newWindow*(opts: WindowOptions): Window =
     surface.selectAll = proc() = content.selectAll()
     surface.undo = proc() = content.undo()
     surface.redo = proc() = content.redo()
+    surface.insertText = proc(text: string) = content.insertText(text)
+    surface.setMarkedText = proc(text: string) = content.setMarkedText(text)
+    surface.unmarkText = proc() = content.unmarkText()
+    surface.hasMarkedText = proc(): bool = content.hasMarkedText()
+    surface.markedLength = proc(): int = content.markedLength()
+    surface.caretRect = proc(): PlatformRect = content.caretRect()
+    surface.command = proc(selector: string): bool = content.handleCommand(selector)
 
   let h = WindowHandler(
     windowId: id,
@@ -185,7 +193,8 @@ proc newWindow*(opts: WindowOptions): Window =
     content: o.content != nil,
     scheme: if o.files != nil: o.files.scheme else: "",
     fileRoot: if o.files != nil: o.files.root else: "",
-    ephemeral: o.session == smEphemeral)
+    ephemeral: o.session == smEphemeral,
+    ime: o.ime)
   win.native = currentBackend.newWindow(popts, h)
   if o.content != nil:
     let wid = win.id

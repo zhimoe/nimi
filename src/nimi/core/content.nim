@@ -2,6 +2,7 @@
 
 import ../scene/scene
 import ../ui/context
+import ../platform/contract
 
 type
   Content* = ref object
@@ -49,3 +50,49 @@ proc undo*(content: Content) =
 
 proc redo*(content: Content) =
   content.engine.redo()
+
+proc insertText*(content: Content, text: string) =
+  content.engine.insertText(text)
+
+proc setMarkedText*(content: Content, text: string) =
+  content.engine.setMarkedText(text)
+
+proc unmarkText*(content: Content) =
+  content.engine.unmarkText()
+
+proc hasMarkedText*(content: Content): bool =
+  content.engine.hasMarkedText()
+
+proc markedLength*(content: Content): int =
+  content.engine.markedText.len
+
+proc caretRect*(content: Content): PlatformRect =
+  let r = content.engine.caretRect()
+  PlatformRect(x: r.x, y: r.y, w: r.w, h: r.h)
+
+proc handleCommand*(content: Content, selector: string): bool =
+  case selector
+  of "moveLeft:", "moveBackward:": content.engine.handleKeyDown("left"); true
+  of "moveRight:", "moveForward:": content.engine.handleKeyDown("right"); true
+  of "moveUp:": content.engine.handleKeyDown("up"); true
+  of "moveDown:": content.engine.handleKeyDown("down"); true
+  of "moveLeftAndModifySelection:": content.engine.handleKeyDown("left", KeyShift); true
+  of "moveRightAndModifySelection:": content.engine.handleKeyDown("right", KeyShift); true
+  of "moveUpAndModifySelection:": content.engine.handleKeyDown("up", KeyShift); true
+  of "moveDownAndModifySelection:": content.engine.handleKeyDown("down", KeyShift); true
+  of "moveToBeginningOfLine:", "moveToBeginningOfDocument:",
+     "scrollToBeginningOfDocument:": content.engine.handleKeyDown("home"); true
+  of "moveToEndOfLine:", "moveToEndOfDocument:",
+     "scrollToEndOfDocument:": content.engine.handleKeyDown("end"); true
+  of "deleteBackward:", "deleteWordBackward:": content.engine.handleKeyDown("backspace"); true
+  of "deleteForward:", "deleteWordForward:": content.engine.handleKeyDown("delete"); true
+  of "insertNewline:", "insertParagraphSeparator:": content.engine.handleKeyDown("enter"); true
+  of "insertTab:", "insertBacktab:": content.engine.handleKeyDown("tab"); true
+  of "cancelOperation:", "complete:": content.engine.handleKeyDown("escape"); true
+  of "selectAll:": content.engine.selectAll(); true
+  of "copy:": content.engine.copySelection(); true
+  of "cut:": content.engine.cutSelection(); true
+  of "paste:": content.engine.paste(); true
+  of "undo:": content.engine.undo(); true
+  of "redo:": content.engine.redo(); true
+  else: false

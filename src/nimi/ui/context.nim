@@ -99,6 +99,8 @@ type
     clipboardWrite*: proc(text: string) {.closure.}
     undoStacks*: Table[string, seq[EditSnapshot]]
     redoStacks*: Table[string, seq[EditSnapshot]]
+    markedText*: string
+    markedKey*: string
     pendingKeys*: seq[string]
     hits*: seq[Hit]
     requestFrame*: proc() {.closure.}
@@ -603,6 +605,20 @@ proc paint(n: Node, c: Context) =
             break
           c.scene.text(line, n.x + n.padX, ly, n.fontSize, n.color, false)
           ly += n.lineHeight
+      if c.engine != nil and c.engine.markedText.len > 0 and
+          c.engine.markedKey == n.key:
+        let (ml, mc) = caretLineCol(n.lines,
+          if c.engine.caretKey == n.key: c.engine.caretPos else: n.text.len)
+        let my = n.y + n.padY + float32(ml) * n.lineHeight
+        let mx = n.x + n.padX +
+          measureText(n.lines[ml][0 ..< min(mc, n.lines[ml].len)],
+                      n.fontSize, false).width
+        c.scene.text(c.engine.markedText, mx, my, n.fontSize,
+                     rgb(0.22, 0.47, 0.95), false)
+        c.scene.rect(Rect(x: mx, y: my + n.lineHeight - 2,
+                          w: measureText(c.engine.markedText, n.fontSize,
+                                         false).width, h: 1),
+                     rgb(0.22, 0.47, 0.95))
       if c.engine != nil and c.engine.focusedKey == n.key:
         let pos =
           if c.engine.caretKey == n.key:
@@ -934,6 +950,61 @@ proc selectAll*(engine: Engine) =
   engine.caretPos = hit.text.len
   engine.selectionAnchor = 0
   requestFrame(engine)
+
+proc insertText*(engine: Engine, text: string) =
+  let index = focusedInputIndex(engine)
+  if index < 0 or text.len == 0:
+    return
+  let hit = engine.hits[index]
+  var insert = text
+  if not hit.multiline:
+    insert = insert.replace("\r", " ").replace("\n", " ")
+  let sel = selectionRange(engine, hit.key, hit.text.len)
+  engine.snapshot(hit.key, hit.text, engine.caretPos, engine.selectionAnchor)
+  let next = hit.text[0 ..< sel.start] & insert & hit.text[sel.finish .. ^1]
+  engine.markedText = ""
+  engine.markedKey = ""
+  engine.applyInput(index, next, sel.start + insert.len, sel.start + insert.len)
+
+proc setMarkedText*(engine: Engine, text: string) =
+  if text.len == 0:
+    engine.markedText = ""
+    engine.markedKey = ""
+  else:
+    engine.markedText = text
+    engine.markedKey = engine.focusedKey
+  requestFrame(engine)
+
+proc unmarkText*(engine: Engine) =
+  engine.markedText = ""
+  engine.markedKey = ""
+  requestFrame(engine)
+
+proc hasMarkedText*(engine: Engine): bool =
+  engine.markedText.len > 0
+
+proc caretRect*(engine: Engine): Rect =
+  let index = focusedInputIndex(engine)
+  if index < 0:
+    return Rect(x: 0, y: 0, w: 1, h: 18)
+  let hit = engine.hits[index]
+  let text = hit.text
+  let pos =
+    if engine.caretKey == hit.key: max(0, min(engine.caretPos, text.len))
+    else: text.len
+  if hit.multiline:
+    let lines = if hit.lines.len > 0: hit.lines else: @[""]
+    let (lineIdx, col) = caretLineCol(lines, pos)
+    let line = lines[lineIdx]
+    let prefix = if col > 0: line[0 ..< min(col, line.len)] else: ""
+    let x = hit.rect.x + hit.padX +
+      measureText(prefix, hit.fontSize, false).width
+    let y = hit.rect.y + hit.padY + float32(lineIdx) * hit.lineHeight
+    return Rect(x: x, y: y, w: 2, h: max(12, hit.lineHeight))
+  let prefix = if pos > 0: text[0 ..< pos] else: ""
+  let x = hit.rect.x + hit.padX +
+    measureText(prefix, hit.fontSize, false).width
+  Rect(x: x, y: hit.rect.y + 6, w: 2, h: max(12, hit.rect.h - 12))
 
 proc editInput(engine: Engine, index: int, key: string, modifiers: uint32) =
   let hit = engine.hits[index]

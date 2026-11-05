@@ -63,7 +63,8 @@ app.whenReady(proc() =
     title: "Nimi Document",
     width: 720,
     height: 560,
-    content: content
+    content: content,
+    ime: true
   ))
   state.win = w
   state.doc.onChanged(proc(d: Document) =
