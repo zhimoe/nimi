@@ -367,3 +367,19 @@ suite "content renderer":
   test "draw without a renderer reports failure":
     let c = uiView(proc(c: Context) = discard)
     check not drawContent(c, nil, 10, 10)
+
+  test "Unicode editing preserves UTF-8 code points":
+    var value = ""
+    proc view(c: Context) =
+      textInput(c, value, proc(v: string) = value = v, key = "unicode")
+    let t = newTester(view)
+    discard t.click("unicode")
+    t.typeText("中😀文")
+    check value == "中😀文"
+    t.key("left")
+    t.key("backspace")
+    check value == "中文"
+    t.key("delete")
+    check value == "中"
+    t.key("backspace")
+    check value == ""

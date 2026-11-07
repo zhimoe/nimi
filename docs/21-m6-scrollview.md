@@ -70,3 +70,7 @@ NIMI_SMOKE=scroll nim c -r --path:src examples/scroll-native/main.nim
 2. 水平滚动、`scrollTo`、Home/End 到内容边界。
 3. 虚拟列表/布局缓存,支持大列表。
 4. TextArea 内部滚动与 caret 自动可见。
+
+## 2026-11-06：固定行高虚拟列表
+
+新增 `virtualList` 与 `Engine.revealListRow`，Music 队列已接入。API、边界和验收见 [整改基线](28-remediation-status.md)。现有 ScrollView 仍构建全部子项；大列表应显式使用 virtualList。

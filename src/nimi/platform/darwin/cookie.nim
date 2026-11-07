@@ -1,5 +1,6 @@
 ## WKHTTPCookieStore access using global Objective-C blocks.
 
+import std/deques
 import ../contract
 import ./objc
 
@@ -21,6 +22,21 @@ var
   clearBlock: BlockLiteral
   pendingCookieCallback: proc(cookies: seq[PlatformCookie]) {.closure.}
   pendingClearCallback: proc() {.closure.}
+
+var operations: Deque[proc()]
+var operationActive = false
+
+proc advanceOperation() =
+  operationActive = false
+  if operations.len > 0:
+    operationActive = true
+    let operation = operations.popFirst()
+    operation()
+
+proc enqueueOperation(operation: proc()) =
+  operations.addLast(operation)
+  if not operationActive:
+    advanceOperation()
 
 proc cookiesDone(blk: pointer, cookies: Id) {.cdecl.}
 proc clearDone(blk: pointer) {.cdecl.}
@@ -60,14 +76,18 @@ proc cookiesDone(blk: pointer, cookies: Id) {.cdecl.} =
         httpOnly: sendBool(c, sel("isHTTPOnly")))
   let cb = pendingCookieCallback
   pendingCookieCallback = nil
-  if cb != nil:
-    cb(list)
+  try:
+    if cb != nil: cb(list)
+  finally:
+    advanceOperation()
 
 proc clearDone(blk: pointer) {.cdecl.} =
   let cb = pendingClearCallback
   pendingClearCallback = nil
-  if cb != nil:
-    cb()
+  try:
+    if cb != nil: cb()
+  finally:
+    advanceOperation()
 
 proc getCookies(cb: proc(cookies: seq[PlatformCookie])) =
   ensureBlocks()
@@ -76,7 +96,10 @@ proc getCookies(cb: proc(cookies: seq[PlatformCookie])) =
   let cookieStore = if store != nil: send0(store, sel("httpCookieStore")) else: nil
   if cookieStore == nil:
     pendingCookieCallback = nil
-    cb(@[])
+    try:
+      if cb != nil: cb(@[])
+    finally:
+      advanceOperation()
     return
   sendVoidId(cookieStore, sel("getAllCookies:"), cast[pointer](addr cookieBlock))
 
@@ -86,7 +109,10 @@ proc clearCookies(cb: proc()) =
   let store = send0(loadClass("WKWebsiteDataStore"), sel("defaultDataStore"))
   if store == nil:
     pendingClearCallback = nil
-    if cb != nil: cb()
+    try:
+      if cb != nil: cb()
+    finally:
+      advanceOperation()
     return
   let cookieType = nsConstant(webkit, "WKWebsiteDataTypeCookies")
   let types = sendId1(loadClass("NSSet"), sel("setWithObject:"),
@@ -101,6 +127,6 @@ proc installCookieBackend*(b: Backend) =
   if b == nil:
     return
   b.getCookies = proc(cb: proc(cookies: seq[PlatformCookie])) =
-    getCookies(cb)
+    enqueueOperation(proc() = getCookies(cb))
   b.clearCookies = proc(cb: proc()) =
-    clearCookies(cb)
+    enqueueOperation(proc() = clearCookies(cb))

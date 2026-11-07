@@ -1,5 +1,7 @@
 # macOS 后端设计
 
+> 2026-11-06 重评：本文包含目标设计，不能作为当前 API/线程安全/兼容性承诺。实现边界与后续验收以 [整改基线](28-remediation-status.md) 为准；历史工期不作为剩余工期。
+
 > 状态:草案 · 日期:2026-11-04 · 关联:[架构](01-architecture.md)、[原生 UI](03-native-ui.md)、[路线图](05-roadmap.md)
 > 参考:MyGo `internal/darwin`(14.5k 行)、`internal/gpu/metal`(6.1k 行)、`internal/text/coretext_darwin.go`(1.6k 行)
 > 原型:`spikes/objc_hello`、`spikes/wkwebview`、`spikes/coretext`、`spikes/metal`、`spikes/blocks`

@@ -5,7 +5,7 @@
 ##   app -> page: window.__nimi._resolve(id, value)
 ##                window.__nimi._reject(id, message)
 ##
-## Events, channels, secret/token checks and batching land later.
+## Events and secret/token checks are implemented; channels and batching remain planned.
 
 const bridgeJs* = """
 (function () {

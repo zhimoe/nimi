@@ -1,4 +1,4 @@
-import std/[os, unittest]
+import std/[os, unittest, tempfiles]
 
 import nimi/core/document
 
@@ -48,3 +48,29 @@ suite "document":
     check doc.save(path)
     check fileExists(path)
     check readFile(path) == "born in memory"
+
+  test "failed save keeps draft and destination intact":
+    let directory = createTempDir("nimi-save-test-", "")
+    defer: removeDir(directory)
+    let doc = newDocument()
+    doc.setText("unsaved draft")
+    check not doc.save(directory)
+    check doc.dirty
+    check doc.path == ""
+    check dirExists(directory)
+    var leftovers = 0
+    for entry in walkDir(directory): inc leftovers
+    check leftovers == 0
+
+  test "replacement preserves permissions":
+    let directory = createTempDir("nimi-save-mode-", "")
+    let path = directory / "private.txt"
+    defer: removeDir(directory)
+    writeFile(path, "old")
+    setFilePermissions(path, {fpUserRead, fpUserWrite})
+    let doc = openDocument(path)
+    defer: doc.close()
+    doc.setText("new")
+    check doc.save()
+    check readFile(path) == "new"
+    check getFilePermissions(path) == {fpUserRead, fpUserWrite}

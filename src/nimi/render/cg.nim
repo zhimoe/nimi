@@ -164,6 +164,23 @@ proc drawText(ctx: CFRef, op: Op, sceneHeight: float32) =
 var imageCache: Table[string, CFRef]
 var cropCache: Table[tuple[path: string, x, y, w, h: int], CFRef]
 
+var imageCacheLimit = 128
+
+proc clearImageCache*() =
+  ## Render-thread only. Release cached images, including derived crops.
+  for image in cropCache.values: CFRelease(image)
+  cropCache.clear()
+  for image in imageCache.values: CFRelease(image)
+  imageCache.clear()
+
+proc setImageCacheLimit*(entries: int) =
+  ## Limit each cache's entry count, not decoded bytes. Minimum one entry.
+  imageCacheLimit = max(1, entries)
+  clearImageCache()
+
+proc imageCacheStats*(): tuple[images, crops: int] =
+  (imageCache.len, cropCache.len)
+
 proc loadImage(path: string): CFRef =
   if path.len == 0:
     return nil
@@ -180,6 +197,8 @@ proc loadImage(path: string): CFRef =
   let img = CGImageSourceCreateImageAtIndex(src, 0, nil)
   CFRelease(src)
   if img != nil:
+    if imageCache.len >= imageCacheLimit:
+      clearImageCache()
     imageCache[path] = img
   result = img
 
@@ -203,6 +222,9 @@ proc cropImage(path: string, source: Rect): CFRef =
                     w: CGFloat(w), h: CGFloat(h))
   let crop = CGImageCreateWithImageInRect(full, rect)
   if crop != nil:
+    if cropCache.len >= imageCacheLimit:
+      for cached in cropCache.values: CFRelease(cached)
+      cropCache.clear()
     cropCache[key] = crop
   result = crop
 

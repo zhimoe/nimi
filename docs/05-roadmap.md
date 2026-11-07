@@ -1,5 +1,7 @@
 # 实施路线图
 
+> 2026-11-06：当前执行顺序调整为 **正确性 → 异步核心 → 虚拟列表/缓存/音频 → macOS 集成 → 发布验收**，见 [整改与开发基线](28-remediation-status.md)。下列 M0–M10 保留为范围分解；旧工期不是剩余排期，切片落地不代表整项验收完成。
+
 > 状态:草案 · 日期:2026-11-04 · 关联:[可行性](00-feasibility.md)、[架构](01-architecture.md)、[macOS 后端](02-macos-backend.md)、[原生 UI](03-native-ui.md)
 > 估算口径:1 名资深工程师全职 + AI 辅助;复用 MyGo 的 JS/协议/模板/示例;不移植着色器编译器;系统文本引擎。工期为规划量级(±50%)。
 
@@ -482,17 +484,6 @@
 
 ---
 
-## 16. 下一步(M1 启动清单)
+## 16. 当前下一步
 
-1. 评审并确认 `00-feasibility.md` 的兼容边界。
-2. 创建 `nimi.nimble`、`src/nimi.nim`、`config.nims`。
-3. 实现 `core/loop.nim` + `platform/contract.nim` + `platform/fake`。
-4. 实现 `platform/darwin/objc.nim` + `app.nim` + `window.nim`。
-5. 实现 WKWebView + bridge 注入 + 最小 IPC。
-6. 跑通 `examples/hello`。
-7. 接 `nimi init/dev/generate/build`。
-8. 记录基线(二进制大小、启动时间、空闲 CPU)。
-
----
-
-*本路线图会随 M1/M2 的实际进展更新;工期是规划值,不是承诺。*
+按 [整改基线](28-remediation-status.md) 的验收门槛执行。固定行高虚拟列表、缓存条目上限、本地音频与队列会话已落地并有测试。继续完成 Unicode/生命周期正确性与异步任务契约，已新增单 worker 后台任务与逐行 LRC；继续接入远程服务、网络取消/超时、封面与逐字歌词。实际性能与音频原型完成后重新排期；不以原型通过推算完整框架交付日期。

@@ -1,5 +1,7 @@
 # Nimi 可行性分析:用 Nim 重实现 MyGo
 
+> 2026-11-06 重评：本文包含目标设计，不能作为当前 API/线程安全/兼容性承诺。实现边界与后续验收以 [整改基线](28-remediation-status.md) 为准；历史工期不作为剩余工期。
+
 > 状态:草案 · 日期:2026-11-04 · 范围:macOS 优先,Windows/Linux 后续
 > 参考实现:`/Users/zhimoe/code/nimi/mygo`(MyGo 0.7.4,MIT License)
 > 验证代码:`/Users/zhimoe/code/nimi/spikes/`(7 个可运行的 Nim 原型)

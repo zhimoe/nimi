@@ -1,5 +1,7 @@
 # 原生 UI 设计(`ui`)
 
+> 2026-11-06 重评：本文包含目标设计，不能作为当前 API/线程安全/兼容性承诺。实现边界与后续验收以 [整改基线](28-remediation-status.md) 为准；历史工期不作为剩余工期。
+
 > 状态:草案 · 日期:2026-11-04 · 关联:[架构](01-architecture.md)、[macOS 后端](02-macos-backend.md)、[路线图](05-roadmap.md)
 > 参考:MyGo `ui/` 根包 57.3k 行(非测试)、`ui/editor` 21k、`ui/richtext` 8.8k、`ui/markdown` 3.7k、`ui/chart` 2k
 > 公开面:120 个顶层入口、271 个 `Element` 方法、31 个 `Context` 方法

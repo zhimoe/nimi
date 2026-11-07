@@ -1,5 +1,7 @@
 # M3–M7 当前状态(切片)
 
+> 2026-11-06：整改、当前限制与验收级别见 [最新基线](28-remediation-status.md)。历史验证记录不代表完整能力已经验收。
+
 > 日期:2026-11-05 · 对应路线图 M3–M7
 >
 > **重要**:M3–M7 完整范围约 42–66 工程师周。本文件记录当前已落地的切片,
@@ -133,7 +135,7 @@ M2 的 Tester、离屏 PNG、焦点/键盘、文本换行继续作为 M3–M7 �
 ### M7 macOS CI
 
 - `.github/workflows/macos.yml`
-- Nim 2.4.0 + 测试 + CLI + desktop/protocol/notes 三个 DMG
+- Nim 2.4.0 + 测试 + CLI + desktop/protocol/notes/shred-native/shred-metal 五个 DMG
 - artifact 上传;`nimi build` 输出按实际 CPU 架构命名
 - 详见 [macOS CI](18-macos-ci.md)
 
@@ -184,7 +186,7 @@ hdiutil attach -nobrowse -readonly .../counter-0.1.0.dmg
 | 自定义菜单项用 NSMenuItem tag + runtime target | 不需要为每个菜单项创建回调/闭包对象 |
 | 对话框同步阻塞 | 符合文件/消息对话框语义;调用方需在主线程或自行调度 |
 | TextInput 的 caret 存在 Engine,按 key 持久 | 每帧重建 Node 但输入状态不丢;字符编辑先更新 hit.text 以支持同帧多键 |
-| TextInput 按字节处理 caret | M6 先覆盖 ASCII/常用输入;Unicode grapheme/IME 后续 |
+| TextInput 使用字节偏移、导航/删除对齐码点 | UTF-8 码点编辑已整改;grapheme/完整 IME 后续 |
 
 ---
 

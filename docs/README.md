@@ -62,3 +62,7 @@
 | 2026-11-05 | 碎纸效果:MyGo Verlet 物理移植到 `effects/shred`,WebGL 纸带 demo;新增 25 |
 | 2026-11-05 | 原生碎纸:帧驱动、纹理四边形、Metal mask/LayerEffect;新增 26 |
 | 2026-11-05 | 项目回检:renderer 注入、Metal 可移植性、动画语义、可移植测试;新增 27 |
+
+当前整改和开发入口：[28 整改基线](28-remediation-status.md)。
+
+音乐应用集成入口：[Nimi Music](../examples/music/README.md)。

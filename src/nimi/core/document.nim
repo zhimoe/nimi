@@ -2,7 +2,7 @@
 ## change detection via the file watcher. UI policy stays in the application;
 ## this layer owns the file lifecycle.
 
-import std/[os, times]
+import std/[os, times, tempfiles]
 
 import ./watch
 
@@ -104,7 +104,19 @@ proc save*(doc: Document, path: string = ""): bool =
   if target.len == 0:
     return false
   try:
-    writeFile(target, doc.text)
+    # Stage beside the destination so replacement stays on the same volume.
+    let (file, temporary) = createTempFile(".nimi-save-", ".tmp", parentDir(target))
+    var closed = false
+    defer:
+      if not closed: file.close()
+      if fileExists(temporary): removeFile(temporary)
+    file.write(doc.text)
+    file.flushFile()
+    file.close()
+    closed = true
+    if fileExists(target):
+      setFilePermissions(temporary, getFilePermissions(target))
+    moveFile(temporary, target)
   except CatchableError:
     return false
   if doc.path != target:

@@ -6,7 +6,7 @@
 ## docs/03-native-ui.md. It keeps the same view-function model and scene
 ## output, without the generation handles and layout cache yet.
 
-import std/[strutils, tables]
+import std/[strutils, tables, math]
 
 import ../keys
 import ../scene/scene
@@ -45,6 +45,9 @@ type
     lines*: seq[string]
     lineHeight*: float32
     fixedW*, fixedH*: float32
+    virtualList*: bool
+    itemCount*, firstItem*: int
+    itemHeight*: float32
     contentH*: float32
     scrollY*: float32
     imagePath*: string
@@ -302,6 +305,54 @@ proc children*(n: Node, c: Context, body: proc()) =
   body()
   c.parent = prev
 
+proc revealListRow*(engine: Engine, key: string, index, count: int,
+                    rowHeight, viewportHeight: float32) =
+  ## Make a fixed-height row visible without moving an already visible row.
+  if engine == nil or index < 0 or index >= count or rowHeight <= 0 or
+      viewportHeight <= 0: return
+  if classify(rowHeight) in {fcNan, fcInf, fcNegInf} or
+      classify(viewportHeight) in {fcNan, fcInf, fcNegInf}: return
+  let top = float32(index) * rowHeight
+  let bottom = top + rowHeight
+  let current = engine.scrollOffsets.getOrDefault(key, 0)
+  var offset = current
+  if top < current: offset = top
+  elif bottom > current + viewportHeight: offset = bottom - viewportHeight
+  engine.scrollOffsets[key] = clamp(offset, 0'f32,
+    max(0'f32, float32(count) * rowHeight - viewportHeight))
+  if engine.requestFrame != nil: engine.requestFrame()
+
+proc virtualList*(c: Context, key: string, count: int, rowHeight, viewportHeight: float32,
+                  buildRow: proc(c: Context, index: int), overscan: int = 2): Node {.discardable.} =
+  ## Fixed-height rows. Builder runs only for the viewport plus overscan.
+  ## Keep row contents within rowHeight; use stable keys for interactive children.
+  if count < 0 or rowHeight <= 0 or viewportHeight <= 0 or
+      classify(rowHeight) in {fcNan, fcInf, fcNegInf} or
+      classify(viewportHeight) in {fcNan, fcInf, fcNegInf}:
+    raise newException(ValueError, "Invalid virtual list dimensions")
+  let extent = float32(count) * rowHeight
+  if classify(extent) in {fcInf, fcNan}:
+    raise newException(ValueError, "Virtual list extent overflow")
+  let offset = clamp(c.engine.scrollOffsets.getOrDefault(key, 0),
+                     0'f32, max(0'f32, extent - viewportHeight))
+  c.engine.scrollOffsets[key] = offset
+  let extra = clamp(overscan, 0, 100)
+  let first = max(0, int(floor(offset / rowHeight)) - extra)
+  let last = min(count, int(ceil((offset + viewportHeight) / rowHeight)) + extra)
+  result = scrollView(c, key, viewportHeight)
+  result.virtualList = true
+  result.itemCount = count
+  result.firstItem = first
+  result.itemHeight = rowHeight
+  let previous = c.parent
+  c.parent = result
+  defer: c.parent = previous
+  for index in first ..< last:
+    let row = column(c).fill().height(rowHeight)
+    c.parent = row
+    try: buildRow(c, index)
+    finally: c.parent = result
+
 # --- direct painting (custom views) ---------------------------------------
 
 proc drawRect*(c: Context, x, y, w, h: float32, color: Color,
@@ -379,7 +430,8 @@ proc measure(n: Node, availW, availH: float32) =
       maxW = max(maxW, ch.w)
     if n.children.len > 1:
       sumH += n.gap * float32(n.children.len - 1)
-    n.contentH = max(sumH + 2 * n.padY, n.h)
+    n.contentH = if n.virtualList: max(float32(n.itemCount) * n.itemHeight, n.h)
+                 else: max(sumH + 2 * n.padY, n.h)
     if n.fixedW <= 0 and maxW > 0:
       n.w = max(n.w, maxW + 2 * n.padX)
   of nkColumn, nkRow:
@@ -410,6 +462,7 @@ proc arrange(n: Node, x, y: float32) =
   n.y = y
   if n.kind == nkScroll:
     var cy = n.y + n.padY - n.scrollY
+    if n.virtualList: cy += float32(n.firstItem) * n.itemHeight
     for ch in n.children:
       arrange(ch, n.x + n.padX, cy)
       cy += ch.h + n.gap
@@ -826,6 +879,19 @@ proc requestFrame(engine: Engine) =
   if engine.requestFrame != nil:
     engine.requestFrame()
 
+proc runeStart(text: string, offset: int): int =
+  result = max(0, min(offset, text.len))
+  while result > 0 and result < text.len and (ord(text[result]) and 0xC0) == 0x80:
+    dec result
+
+proc previousRune(text: string, offset: int): int =
+  runeStart(text, max(0, offset - 1))
+
+proc nextRune(text: string, offset: int): int =
+  result = min(text.len, offset + 1)
+  while result < text.len and (ord(text[result]) and 0xC0) == 0x80:
+    inc result
+
 proc caretIndexLine(text: string, x, left, fontSize: float32): int =
   let local = x - left
   if local <= 0:
@@ -833,6 +899,7 @@ proc caretIndexLine(text: string, x, left, fontSize: float32): int =
   var best = 0
   var bestDist = abs(local)
   for i in 1 .. text.len:
+    if runeStart(text, i) != i: continue
     let w = measureText(text[0 ..< i], fontSize, false).width
     let d = abs(w - local)
     if d < bestDist:
@@ -1199,24 +1266,25 @@ proc editInput(engine: Engine, index: int, key: string, modifiers: uint32) =
       text = text[0 ..< sel.start] & text[sel.finish .. ^1]
       caret = sel.start
     elif caret > 0:
-      text = text[0 ..< caret - 1] & text[caret .. ^1]
-      dec caret
+      let start = previousRune(text, caret)
+      text = text[0 ..< start] & text[caret .. ^1]
+      caret = start
   of "delete":
     if hasSel:
       text = text[0 ..< sel.start] & text[sel.finish .. ^1]
       caret = sel.start
     elif caret < text.len:
-      text = text[0 ..< caret] & text[caret + 1 .. ^1]
+      text = text[0 ..< caret] & text[nextRune(text, caret) .. ^1]
   of "left":
     if hasSel and not shift:
       caret = sel.start
     elif caret > 0:
-      dec caret
+      caret = previousRune(text, caret)
   of "right":
     if hasSel and not shift:
       caret = sel.finish
     elif caret < text.len:
-      inc caret
+      caret = nextRune(text, caret)
   of "home":
     if hit.multiline:
       caret = lineOffset(lines, lineIdx)
@@ -1231,7 +1299,7 @@ proc editInput(engine: Engine, index: int, key: string, modifiers: uint32) =
     if hit.multiline and lines.len > 0:
       let target = if key == "up": max(0, lineIdx - 1)
                    else: min(lines.high, lineIdx + 1)
-      caret = lineOffset(lines, target) + min(col, lines[target].len)
+      caret = lineOffset(lines, target) + runeStart(lines[target], min(col, lines[target].len))
   of "escape":
     engine.focusedKey = ""
     engine.caretKey = ""
@@ -1353,7 +1421,9 @@ proc clickKey*(engine: Engine, key: string): bool =
   ## Test/dev hook: click a control by its key in the last built frame.
   for hit in engine.hits:
     if hit.key == key:
-      hit.onClick()
-      requestFrame(engine)
+      let x = hit.rect.x + hit.rect.w / 2
+      let y = hit.rect.y + hit.rect.h / 2
+      engine.handleMouseDown(x, y)
+      engine.handleMouseUp(x, y)
       return true
   result = false

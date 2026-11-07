@@ -1,6 +1,7 @@
 ## Headless UI driver for tests and screenshots. It wraps the same Engine the
 ## window uses, so layout, hit testing and painting are identical.
 
+import std/unicode
 import ./context
 import ../scene/scene
 
@@ -37,7 +38,7 @@ proc key*(t: Tester, key: string, modifiers: uint32 = 0) =
   discard t.render()
 
 proc typeText*(t: Tester, text: string) =
-  for ch in text:
+  for ch in text.runes:
     t.engine.handleKeyDown($ch)
   discard t.render()
 

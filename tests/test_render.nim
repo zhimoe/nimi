@@ -70,3 +70,22 @@ suite "render":
     check renderSceneToPng(t.scene, path)
     check fileExists(path)
     check getFileSize(path) > 100
+
+  test "image cache is bounded and explicitly releasable":
+    let source = "examples/notes/resources/icon.png"
+    let copy = "/tmp/nimi_cache_second.png"
+    copyFile(source, copy)
+    defer:
+      removeFile(copy)
+      setImageCacheLimit(128)
+    setImageCacheLimit(1)
+    for path in [source, copy, source]:
+      let current = path
+      proc view(c: Context) =
+        image(c, current, 32, 32)
+      let t = newTester(view, 32, 32)
+      discard t.render()
+      check renderSceneToPng(t.scene, "/tmp/nimi_cache_render.png")
+      check imageCacheStats().images == 1
+    clearImageCache()
+    check imageCacheStats() == (0, 0)
