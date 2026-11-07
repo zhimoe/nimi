@@ -1,4 +1,4 @@
-import std/[tables, unittest]
+import std/[tables, unicode, unittest]
 
 import nimi/ui
 import nimi/core/[content, window]
@@ -383,3 +383,65 @@ suite "content renderer":
     check value == "中"
     t.key("backspace")
     check value == ""
+
+  test "wrapped lines map clicks to the correct byte offset":
+    var value = "abcdefghijklmnop"
+    proc view(c: Context) =
+      textArea(c, value, proc(v: string) = value = v,
+               key = "wrapped", height = 80).width(46)
+    let t = newTester(view, 120, 160)
+    discard t.render()
+    var hit: Hit
+    for h in t.engine.hits:
+      if h.key == "wrapped": hit = h
+    check hit.input
+    check hit.lines.len >= 2
+    check hit.lineStarts.len == hit.lines.len
+    check hit.lineStarts[1] == hit.lines[0].len
+    let expected = value[0 ..< hit.lineStarts[1]] & "X" &
+      value[hit.lineStarts[1] .. ^1]
+    t.clickAt(hit.rect.x + hit.padX + 1,
+              hit.rect.y + hit.padY + hit.lineHeight + 2)
+    t.typeText("X")
+    check value == expected
+
+  test "editing moves over grapheme clusters, not code points":
+    var value = "👨‍👩‍👧‍👦x"
+    proc view(c: Context) =
+      textInput(c, value, proc(v: string) = value = v, key = "grapheme")
+    let t = newTester(view)
+    discard t.click("grapheme")
+    t.key("end")
+    t.key("left")
+    t.key("backspace")
+    check value == "x"
+    value = "e" & Rune(0x0301).toUTF8 & "x"
+    discard t.render()
+    t.key("end")
+    t.key("left")
+    t.key("backspace")
+    check value == "x"
+
+suite "window lifecycle":
+  test "closing is idempotent and drops listeners":
+    let w = Window(id: 900)
+    var closedCount = 0
+    var closeCount = 0
+    var frameCount = 0
+    w.onClose(proc(e: var CloseEvent) = inc closeCount)
+    w.onClosed(proc() = inc closedCount)
+    w.startAnimation(60, proc(time, dt: float64) = inc frameCount)
+    check w.isAnimating
+    fireClosed(w)
+    check w.closed
+    check closedCount == 1
+    check closeCount == 0
+    check frameCount == 0
+    check w.frameListeners.len == 0
+    check not w.isAnimating
+    fireClosed(w)
+    check closedCount == 1
+    w.onClosed(proc() = inc closedCount)
+    check closedCount == 2
+    w.onClose(proc(e: var CloseEvent) = inc closeCount)
+    check w.closeListeners.len == 0

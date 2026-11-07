@@ -12,6 +12,9 @@ type
 
   TextLayout* = object
     lines*: seq[string]
+    lineStarts*: seq[int]
+      ## Byte offset of each line in the source text. Wrapped lines are
+      ## adjacent (no separator byte), unlike lines split at newlines.
     width*, height*, lineHeight*, ascent*: float32
 
   CFRef = pointer
@@ -98,16 +101,23 @@ proc layoutText*(text: string, size: float32, bold: bool,
   result.ascent = sample.ascent
 
   if maxWidth <= 0:
+    var start = 0
     for line in text.split('\n'):
       result.lines.add line
+      result.lineStarts.add start
+      start += line.len + 1
     if result.lines.len == 0:
       result.lines.add ""
+      result.lineStarts.add 0
   else:
     var line = ""
+    var start = 0
     for r in text.runes:
       let ch = $r
       if ch == "\n":
         result.lines.add line
+        result.lineStarts.add start
+        start += line.len + 1
         line = ""
         continue
       let candidate = line & ch
@@ -117,12 +127,18 @@ proc layoutText*(text: string, size: float32, bold: bool,
         let cut = line.rfind(' ')
         if cut > 0:
           result.lines.add line[0 ..< cut]
+          result.lineStarts.add start
           line = line[cut + 1 .. ^1] & ch
+          start += cut + 1
         else:
           result.lines.add line
+          result.lineStarts.add start
+          start += line.len
           line = ch
-    if line.len > 0 or result.lines.len == 0:
+    if line.len > 0 or result.lines.len == 0 or
+        (text.len > 0 and text[^1] == '\n'):
       result.lines.add line
+      result.lineStarts.add start
 
   result.width = 0
   for line in result.lines:

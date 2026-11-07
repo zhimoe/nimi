@@ -4,6 +4,7 @@
 import std/unicode
 import ./context
 import ../scene/scene
+import ../text/range
 
 type
   Tester* = ref object
@@ -41,6 +42,36 @@ proc typeText*(t: Tester, text: string) =
   for ch in text.runes:
     t.engine.handleKeyDown($ch)
   discard t.render()
+
+proc imeInsertText*(t: Tester, text: string,
+                    replacement: TextRange = NoTextRange) =
+  t.engine.insertText(text, replacement)
+  discard t.render()
+
+proc imeSetMarkedText*(t: Tester, text: string,
+                       selected: TextRange = NoTextRange,
+                       replacement: TextRange = NoTextRange) =
+  t.engine.setMarkedText(text, selected, replacement)
+  discard t.render()
+
+proc imeUnmarkText*(t: Tester) =
+  t.engine.unmarkText()
+  discard t.render()
+
+proc imeMarkedRange*(t: Tester): TextRange =
+  t.engine.markedRange()
+
+proc imeSelectedRange*(t: Tester): TextRange =
+  t.engine.selectedRange()
+
+proc imeAttributedSubstring*(t: Tester, range: TextRange): string =
+  t.engine.attributedSubstring(range)
+
+proc imeTextLength*(t: Tester): int =
+  t.engine.textLength()
+
+proc imeCharacterIndexAt*(t: Tester, x, y: float32): int =
+  t.engine.characterIndexAt(x, y)
 
 proc scrollAt*(t: Tester, x, y, dy: float32) =
   t.engine.handleScroll(x, y, dy)

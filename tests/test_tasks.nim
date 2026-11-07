@@ -1,9 +1,21 @@
 import std/[unittest, monotimes, times, os]
 import nimi/core/tasks
 
-proc echoWork(input: string): string {.gcsafe.} = input & "!"
-proc failingWork(input: string): string {.gcsafe.} =
+proc echoWork(input: string, context: TaskContext): string {.gcsafe.} = input & "!"
+proc failingWork(input: string, context: TaskContext): string {.gcsafe.} =
   raise newException(ValueError, input)
+proc slowWork(input: string, context: TaskContext): string {.gcsafe.} =
+  for _ in 0 ..< 100:
+    if context.isCancelled(): return "cancelled"
+    sleep(2)
+  input
+proc waitForContext(input: string, context: TaskContext): string {.gcsafe.} =
+  while not context.isCancelled():
+    sleep(2)
+  "stopped"
+proc stuckWork(input: string, context: TaskContext): string {.gcsafe.} =
+  sleep(500)
+  input
 
 proc finish(executor: TaskExecutor) =
   let deadline = getMonoTime() + initDuration(seconds = 10)
@@ -51,3 +63,38 @@ suite "background tasks":
     defer: executor.close()
     discard executor.submit("x", echoWork, proc(r: TaskResult) = executor.close())
     executor.finish()
+
+  test "timeout reports an error and discards the late result":
+    let executor = newTaskExecutor()
+    defer: executor.close()
+    var results: seq[string]
+    discard executor.submit("slow", slowWork,
+      proc(r: TaskResult) = results.add(r.error), timeoutMs = 10)
+    sleep(40)
+    executor.poll()
+    check results == @["Task timed out"]
+    sleep(300)
+    executor.poll()
+    check results == @["Task timed out"]
+    executor.finish()
+
+  test "cancellation reaches work cooperatively":
+    let executor = newTaskExecutor()
+    defer: executor.close()
+    var called = false
+    let id = executor.submit("wait", waitForContext,
+      proc(r: TaskResult) = called = true)
+    sleep(10)
+    executor.cancel(id)
+    executor.finish()
+    check not called
+
+  test "close is bounded when work ignores cancellation":
+    let executor = newTaskExecutor()
+    discard executor.submit("stuck", stuckWork, nil)
+    sleep(10)
+    let started = getMonoTime()
+    executor.close(20)
+    let elapsed = getMonoTime() - started
+    check elapsed < initDuration(milliseconds = 500)
+    check executor.submit("late", echoWork, nil) == 0

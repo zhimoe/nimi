@@ -239,20 +239,39 @@ proc imeString(obj: Id): string =
   else:
     goString(obj)
 
+proc toTextRange(r: NSRange): TextRange =
+  if r.location == high(NSUInteger):
+    NoTextRange
+  else:
+    TextRange(location: int(r.location), length: int(r.length))
+
+proc toNSRange(r: TextRange): NSRange =
+  if r.location < 0:
+    NSRange(location: high(NSUInteger), length: 0)
+  else:
+    NSRange(location: NSUInteger(r.location),
+            length: NSUInteger(max(0, r.length)))
+
 proc surfaceInsertText(self: Id, cmd: SEL, text: Id,
                        range: NSRange) {.cdecl.} =
   imeHandled = true
   when defined(nimiImeDebug): echo "insertText: ", imeString(text)
   let h = self.surfaceHandlerFor()
   if h.insertText != nil:
-    h.insertText(imeString(text))
+    h.insertText(imeString(text), toTextRange(range))
 
 proc surfaceSetMarkedText(self: Id, cmd: SEL, text: Id, selected: NSRange,
                           replacement: NSRange) {.cdecl.} =
   imeHandled = true
+  when defined(nimiImeDebug):
+    let s = toTextRange(selected)
+    let r = toTextRange(replacement)
+    echo "setMarkedText: ", imeString(text), " selected=", s.location, "+",
+         s.length, " replacement=", r.location, "+", r.length
   let h = self.surfaceHandlerFor()
   if h.setMarkedText != nil:
-    h.setMarkedText(imeString(text))
+    h.setMarkedText(imeString(text), toTextRange(selected),
+                    toTextRange(replacement))
 
 proc surfaceUnmarkText(self: Id, cmd: SEL) {.cdecl.} =
   imeHandled = true
@@ -266,21 +285,40 @@ proc surfaceHasMarkedText(self: Id, cmd: SEL): bool {.cdecl.} =
 
 proc surfaceMarkedRange(self: Id, cmd: SEL): NSRange {.cdecl.} =
   let h = self.surfaceHandlerFor()
-  if h.hasMarkedText != nil and h.hasMarkedText():
-    let length = if h.markedLength != nil: h.markedLength() else: 0
-    result = NSRange(location: 0, length: NSUInteger(max(0, length)))
+  if h.markedRange != nil:
+    result = toNSRange(h.markedRange())
   else:
     result = NSRange(location: high(NSUInteger), length: 0)
 
 proc surfaceSelectedRange(self: Id, cmd: SEL): NSRange {.cdecl.} =
-  result = NSRange(location: 0, length: 0)
+  let h = self.surfaceHandlerFor()
+  if h.selectedRange != nil:
+    result = toNSRange(h.selectedRange())
+  else:
+    result = NSRange(location: 0, length: 0)
 
 proc surfaceValidAttributes(self: Id, cmd: SEL): Id {.cdecl.} =
   result = send0(loadClass("NSArray"), sel("array"))
 
 proc surfaceAttributedSubstring(self: Id, cmd: SEL, range: NSRange,
                                 actual: ptr NSRange): Id {.cdecl.} =
-  result = nil
+  let h = self.surfaceHandlerFor()
+  if range.location == high(NSUInteger) or h.attributedSubstring == nil:
+    return nil
+  let total = if h.textLength != nil: h.textLength() else: 0
+  let start = max(0, min(int(range.location), total))
+  let finish = max(start, min(start + int(range.length), total))
+  let text = h.attributedSubstring(
+    TextRange(location: start, length: finish - start))
+  if actual != nil:
+    actual[] = NSRange(location: NSUInteger(start),
+                       length: NSUInteger(finish - start))
+  let attributed = sendId1(
+    send0(loadClass("NSAttributedString"), sel("alloc")),
+    sel("initWithString:"), nsString(text))
+  if attributed != nil:
+    autorelease(attributed)
+  result = attributed
 
 proc surfaceFirstRect(self: Id, cmd: SEL, range: NSRange,
                       actual: ptr NSRange): NSRect {.cdecl.} =
@@ -299,12 +337,21 @@ proc surfaceFirstRect(self: Id, cmd: SEL, range: NSRange,
     let windowRect = sendRectId(self, sel("convertRect:toView:"), viewRect, nil)
     screenRect = sendRectRect(win, sel("convertRectToScreen:"), windowRect)
   if actual != nil:
-    actual[] = NSRange(location: 0, length: 0)
+    actual[] = if range.location == high(NSUInteger):
+      NSRange(location: 0, length: 0)
+    else:
+      range
   result = screenRect
 
 proc surfaceCharacterIndex(self: Id, cmd: SEL,
                            point: NSPoint): NSUInteger {.cdecl.} =
-  result = 0
+  let h = self.surfaceHandlerFor()
+  if h.characterIndexAt == nil:
+    return 0
+  let bounds = sendRect(self, sel("bounds"))
+  let index = h.characterIndexAt(float32(point.x),
+                                 float32(bounds.h - point.y))
+  result = NSUInteger(max(0, index))
 
 proc surfaceDoCommand(self: Id, cmd: SEL, selector: SEL) {.cdecl.} =
   when defined(nimiImeDebug): echo "doCommand: ", selName(selector)

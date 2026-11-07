@@ -73,11 +73,14 @@ proc undo*(content: Content) =
 proc redo*(content: Content) =
   content.engine.redo()
 
-proc insertText*(content: Content, text: string) =
-  content.engine.insertText(text)
+proc insertText*(content: Content, text: string,
+                 replacement: TextRange = NoTextRange) =
+  content.engine.insertText(text, replacement)
 
-proc setMarkedText*(content: Content, text: string) =
-  content.engine.setMarkedText(text)
+proc setMarkedText*(content: Content, text: string,
+                    selected: TextRange = NoTextRange,
+                    replacement: TextRange = NoTextRange) =
+  content.engine.setMarkedText(text, selected, replacement)
 
 proc unmarkText*(content: Content) =
   content.engine.unmarkText()
@@ -85,8 +88,20 @@ proc unmarkText*(content: Content) =
 proc hasMarkedText*(content: Content): bool =
   content.engine.hasMarkedText()
 
-proc markedLength*(content: Content): int =
-  content.engine.markedText.len
+proc markedRange*(content: Content): TextRange =
+  content.engine.markedRange()
+
+proc selectedRange*(content: Content): TextRange =
+  content.engine.selectedRange()
+
+proc attributedSubstring*(content: Content, range: TextRange): string =
+  content.engine.attributedSubstring(range)
+
+proc textLength*(content: Content): int =
+  content.engine.textLength()
+
+proc characterIndexAt*(content: Content, x, y: float32): int =
+  content.engine.characterIndexAt(x, y)
 
 proc caretRect*(content: Content): PlatformRect =
   let r = content.engine.caretRect()

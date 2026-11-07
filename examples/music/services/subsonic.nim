@@ -2,6 +2,8 @@
 ## are sent to system curl through stdin, never command-line arguments/logs.
 import std/[json, uri, strutils, md5, sysrand, osproc, streams, os, tempfiles, sha1]
 
+import nimi/core/tasks
+
 type
   ServerConfig* = object
     address*, username*, password*: string
@@ -32,19 +34,46 @@ proc endpoint*(config: ServerConfig, methodName: string,
   base.query = encodeQuery(query)
   result = $base
 
+proc waitCancelable(process: Process, context: TaskContext): bool =
+  ## Poll so a cooperative cancellation can terminate curl. Responses are
+  ## written to a file, so waiting without draining stdout cannot deadlock.
+  while process.running:
+    if context.isCancelled():
+      process.terminate()
+      sleep(50)
+      if process.running:
+        process.kill()
+      return false
+    sleep(10)
+  true
+
 proc request*(config: ServerConfig, methodName: string,
-              params: openArray[(string, string)] = []): JsonNode {.gcsafe.} =
+              params: openArray[(string, string)] = [],
+              context: TaskContext = TaskContext()): JsonNode {.gcsafe.} =
   let url = endpoint(config, methodName, params)
   if '\n' in url or '\r' in url: raise newException(ValueError, "Invalid server URL")
+  let (responseFile, temporary) = createTempFile(
+    ".nimi-response-", ".json", getTempDir())
+  responseFile.close()
+  defer:
+    if fileExists(temporary): removeFile(temporary)
   let process = startProcess("/usr/bin/curl", args = ["-q", "--silent", "--fail",
-    "--max-time", "15", "--max-filesize", "8388608", "--config", "-"],
+    "--max-time", "15", "--max-filesize", "8388608",
+    "--output", temporary, "--write-out", "%{http_code}", "--config", "-"],
     options = {poStdErrToStdOut})
   defer: process.close()
   process.inputStream.write("url = \"" & url.replace("\\", "\\\\").replace("\"", "\\\"") & "\"\n")
   process.inputStream.close()
-  let body = process.outputStream.readAll()
+  let completed = waitCancelable(process, context)
+  let status = process.outputStream.readAll().strip
   let code = process.waitForExit()
-  if code != 0: raise newException(IOError, "Music server request failed (transport " & $code & ")")
+  if not completed or context.isCancelled():
+    raise newException(IOError, "Music server request cancelled")
+  if code != 0 or status != "200":
+    raise newException(IOError, "Music server request failed (transport " & $code & ")")
+  if not fileExists(temporary):
+    raise newException(IOError, "Invalid music server response")
+  let body = readFile(temporary)
   if body.len > 8_388_608: raise newException(IOError, "Music server response exceeds limit")
   try:
     result = parseJson(body)["subsonic-response"]
@@ -54,10 +83,11 @@ proc request*(config: ServerConfig, methodName: string,
   except JsonParsingError, KeyError:
     raise newException(IOError, "Invalid music server response")
 
-proc searchTracks*(config: ServerConfig, query: string, offset = 0): seq[RemoteTrack] =
+proc searchTracks*(config: ServerConfig, query: string, offset = 0,
+                   context: TaskContext = TaskContext()): seq[RemoteTrack] =
   let response = request(config, "search3", [("query", query),
     ("songCount", "100"), ("songOffset", $max(0, offset)),
-    ("artistCount", "0"), ("albumCount", "0")])
+    ("artistCount", "0"), ("albumCount", "0")], context)
   let songs = response{"searchResult3", "song"}
   if songs == nil: return
   if songs.kind != JArray: raise newException(IOError, "Invalid music catalog")
@@ -68,16 +98,19 @@ proc searchTracks*(config: ServerConfig, query: string, offset = 0): seq[RemoteT
       artist: song{"artist"}.getStr, album: song{"album"}.getStr,
       coverId: song{"coverArt"}.getStr, duration: song{"duration"}.getInt))
 
-proc searchTask*(input: string): string {.gcsafe.} =
+proc searchTask*(input: string, context: TaskContext): string {.gcsafe.} =
   let data = parseJson(input)
   let config = ServerConfig(address: data["address"].getStr,
     username: data["username"].getStr, password: data["password"].getStr)
-  let tracks = searchTracks(config, data["query"].getStr)
+  let tracks = searchTracks(config, data["query"].getStr, context = context)
   result = $(%tracks)
 
-proc downloadTrack*(config: ServerConfig, id, cacheDir: string, cacheBudget: int64 = 1_073_741_824): string {.gcsafe.} =
+proc downloadTrack*(config: ServerConfig, id, cacheDir: string,
+                    cacheBudget: int64 = 1_073_741_824,
+                    context: TaskContext = TaskContext()): string {.gcsafe.} =
   ## Download-before-play baseline. Cache identity includes server and account,
   ## never credentials. Only successful transfers replace the cache entry.
+  if context.isCancelled(): raise newException(IOError, "Music download cancelled")
   if id.len == 0: raise newException(ValueError, "Missing song ID")
   let url = endpoint(config, "stream", [("id", id)])
   createDir(cacheDir)
@@ -95,8 +128,11 @@ proc downloadTrack*(config: ServerConfig, id, cacheDir: string, cacheBudget: int
   if '\n' in url or '\r' in url: raise newException(ValueError, "Invalid server URL")
   process.inputStream.write("url = \"" & url.replace("\\", "\\\\").replace("\"", "\\\"") & "\"\n")
   process.inputStream.close()
+  let completed = waitCancelable(process, context)
   let httpStatus = process.outputStream.readAll().strip
   let code = process.waitForExit()
+  if not completed or context.isCancelled():
+    raise newException(IOError, "Music download cancelled")
   if code != 0 or httpStatus != "200" or getFileSize(temporary) == 0:
     raise newException(IOError, "Music download failed")
   if getFileSize(temporary) > 134_217_728:
@@ -117,8 +153,8 @@ proc downloadTrack*(config: ServerConfig, id, cacheDir: string, cacheBudget: int
   moveFile(temporary, target)
   result = target
 
-proc downloadTask*(input: string): string {.gcsafe.} =
+proc downloadTask*(input: string, context: TaskContext): string {.gcsafe.} =
   let data = parseJson(input)
   result = downloadTrack(ServerConfig(address: data["address"].getStr,
     username: data["username"].getStr, password: data["password"].getStr),
-    data["id"].getStr, data["cacheDir"].getStr)
+    data["id"].getStr, data["cacheDir"].getStr, context = context)

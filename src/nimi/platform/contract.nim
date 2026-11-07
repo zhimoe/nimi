@@ -2,7 +2,8 @@
 ## above it. Calls and callbacks are main-thread only.
 
 import ../keys
-export keys
+import ../text/range
+export keys, range
 
 type
   AppOptions* = object
@@ -56,11 +57,15 @@ type
     selectAll*: proc() {.closure.}
     undo*: proc() {.closure.}
     redo*: proc() {.closure.}
-    insertText*: proc(text: string) {.closure.}
-    setMarkedText*: proc(text: string) {.closure.}
+    insertText*: proc(text: string, replacement: TextRange) {.closure.}
+    setMarkedText*: proc(text: string, selected, replacement: TextRange) {.closure.}
     unmarkText*: proc() {.closure.}
     hasMarkedText*: proc(): bool {.closure.}
-    markedLength*: proc(): int {.closure.}
+    markedRange*: proc(): TextRange {.closure.}
+    selectedRange*: proc(): TextRange {.closure.}
+    attributedSubstring*: proc(range: TextRange): string {.closure.}
+    textLength*: proc(): int {.closure.}
+    characterIndexAt*: proc(x, y: float32): int {.closure.}
     caretRect*: proc(): PlatformRect {.closure.}
     command*: proc(selector: string): bool {.closure.}
 

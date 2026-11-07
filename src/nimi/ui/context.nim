@@ -10,7 +10,7 @@ import std/[strutils, tables, math]
 
 import ../keys
 import ../scene/scene
-import ../text/measure
+import ../text/[grapheme, measure, range]
 
 export scene
 
@@ -43,6 +43,7 @@ type
     center*: bool
     wrap*: bool
     lines*: seq[string]
+    lineStarts*: seq[int]
     lineHeight*: float32
     fixedW*, fixedH*: float32
     virtualList*: bool
@@ -51,6 +52,8 @@ type
     contentH*: float32
     scrollY*: float32
     imagePath*: string
+    displayText*: string
+      ## Input text with an active IME composition inserted at the caret.
     children*: seq[Node]
     onClick*: proc() {.closure.}
     onDrag*: proc(rect: Rect, x, y: float32) {.closure.}
@@ -69,9 +72,11 @@ type
     onDrag*: proc(rect: Rect, x, y: float32) {.closure.}
     input*: bool
     text*: string
+    displayText*: string
     onText*: proc(text: string) {.closure.}
     multiline*: bool
     lines*: seq[string]
+    lineStarts*: seq[int]
     lineHeight*: float32
     padX*, padY*, fontSize*: float32
     clip*: Rect
@@ -105,6 +110,12 @@ type
     redoStacks*: Table[string, seq[EditSnapshot]]
     markedText*: string
     markedKey*: string
+    markedStart*: int
+      ## Byte offset in the document where the composition replaces text.
+    markedEnd*: int
+    markedSelectedStart*: int
+      ## UTF-16 offset and length of the selection inside markedText.
+    markedSelectedLen*: int
     pendingKeys*: seq[string]
     hits*: seq[Hit]
     requestFrame*: proc() {.closure.}
@@ -132,6 +143,54 @@ proc addNode(c: Context, n: Node): Node =
   else:
     c.root = n
   result = n
+
+# --- IME composition mapping ----------------------------------------------
+
+proc markedActive*(engine: Engine, key: string): bool =
+  engine != nil and engine.markedText.len > 0 and engine.markedKey == key
+
+proc markedDocRange(engine: Engine, text: string): tuple[start, finish: int] =
+  let start = max(0, min(engine.markedStart, text.len))
+  result = (start, max(start, min(engine.markedEnd, text.len)))
+
+proc displayTextFor*(engine: Engine, key, text: string):
+                     tuple[text: string, markedStart, markedLen: int] =
+  ## The document text with the active composition substituted in. The
+  ## document itself stays untouched until insertText commits it.
+  if not markedActive(engine, key):
+    return (text, 0, 0)
+  let (start, finish) = markedDocRange(engine, text)
+  result.text = text[0 ..< start] & engine.markedText & text[finish .. ^1]
+  result.markedStart = start
+  result.markedLen = engine.markedText.len
+
+proc displayCaretFor*(engine: Engine, key, text: string, docCaret: int): int =
+  ## Map a document byte offset into the display text from displayTextFor.
+  let caret = max(0, min(docCaret, text.len))
+  if not markedActive(engine, key):
+    return caret
+  let (start, finish) = markedDocRange(engine, text)
+  if caret <= start: caret
+  elif caret >= finish: caret - (finish - start) + engine.markedText.len
+  else: start + engine.markedText.len
+
+proc displayByteToDoc*(engine: Engine, key, text: string,
+                       displayOffset: int): int =
+  let offset = max(0, min(displayOffset, text.len + engine.markedText.len))
+  if not markedActive(engine, key):
+    return max(0, min(offset, text.len))
+  let (start, finish) = markedDocRange(engine, text)
+  if offset <= start: offset
+  elif offset >= start + engine.markedText.len:
+    min(text.len, finish + (offset - start - engine.markedText.len))
+  else:
+    start
+
+proc clearComposition(engine: Engine) =
+  engine.markedText.setLen(0)
+  engine.markedKey = ""
+  engine.markedSelectedStart = 0
+  engine.markedSelectedLen = 0
 
 # --- constructors ----------------------------------------------------------
 
@@ -217,10 +276,12 @@ proc divider*(c: Context): Node {.discardable.} =
 proc textInput*(c: Context, value: string, onText: proc(text: string),
                 key: string = "", placeholder: string = "",
                 size: float32 = 14): Node {.discardable.} =
+  let name = if key.len > 0: key else: "input"
   addNode(c, Node(
     kind: nkInput,
-    key: if key.len > 0: key else: "input",
+    key: name,
     text: value,
+    displayText: displayTextFor(c.engine, name, value).text,
     onText: onText,
     placeholder: placeholder,
     fontSize: size,
@@ -239,10 +300,12 @@ proc image*(c: Context, path: string, width: float32 = 120,
 proc textArea*(c: Context, value: string, onText: proc(text: string),
                key: string = "", placeholder: string = "",
                size: float32 = 14, height: float32 = 120): Node {.discardable.} =
+  let name = if key.len > 0: key else: "textarea"
   addNode(c, Node(
     kind: nkInput,
-    key: if key.len > 0: key else: "textarea",
+    key: name,
     text: value,
+    displayText: displayTextFor(c.engine, name, value).text,
     onText: onText,
     placeholder: placeholder,
     multiline: true,
@@ -403,12 +466,13 @@ proc measure(n: Node, availW, availH: float32) =
             elif availW > 0: availW
             else: 320.0'f32
       n.h = if n.fixedH > 0: n.fixedH else: 120.0'f32
-      let layout = layoutText(n.text, n.fontSize, false,
+      let layout = layoutText(n.displayText, n.fontSize, false,
                               max(1.0'f32, n.w - 2 * n.padX))
       n.lines = layout.lines
+      n.lineStarts = layout.lineStarts
       n.lineHeight = layout.lineHeight
     else:
-      let sample = if n.text.len > 0: n.text else: n.placeholder
+      let sample = if n.displayText.len > 0: n.displayText else: n.placeholder
       let m = measureText(sample, n.fontSize, false)
       n.w = if n.fixedW > 0: n.fixedW else: max(200.0'f32, m.width + 2 * n.padX)
       n.h = if n.fixedH > 0: n.fixedH else: max(28.0'f32, m.height + 2 * n.padY)
@@ -505,22 +569,21 @@ proc darken(c: Color, amount: float32): Color =
   Color(r: max(c.r - amount, 0), g: max(c.g - amount, 0),
         b: max(c.b - amount, 0), a: c.a)
 
-proc caretLineCol(lines: seq[string], pos: int): tuple[line, col: int] =
-  var offset = 0
-  for i, line in lines:
-    let finish = offset + line.len
-    if pos <= finish:
-      return (i, max(0, pos - offset))
-    offset = finish + 1
-  if lines.len > 0:
-    result = (lines.high, lines[^1].len)
-  else:
-    result = (0, 0)
+proc caretLineCol(lines: seq[string], starts: seq[int],
+                  pos: int): tuple[line, col: int] =
+  if lines.len == 0:
+    return (0, 0)
+  result = (0, max(0, min(pos, lines[0].len)))
+  for i in 0 ..< min(lines.len, starts.len):
+    if starts[i] <= pos:
+      result = (i, max(0, min(pos - starts[i], lines[i].len)))
+    else:
+      break
 
-proc lineOffset(lines: seq[string], index: int): int =
-  let last = min(index, lines.len)
-  for i in 0 ..< last:
-    result += lines[i].len + 1
+proc lineOffset(starts: seq[int], index: int): int =
+  if starts.len == 0:
+    return 0
+  starts[max(0, min(index, starts.high))]
 
 proc clampInt(value, lo, hi: int): int =
   max(lo, min(value, hi))
@@ -546,7 +609,7 @@ proc paintSelection(n: Node, c: Context,
               else: 0.0'f32
     var ly = n.y + n.padY - off
     for i, line in n.lines:
-      let lineStart = lineOffset(n.lines, i)
+      let lineStart = lineOffset(n.lineStarts, i)
       let lineFinish = lineStart + line.len
       let a = max(result.start, lineStart)
       let b = min(result.finish, lineFinish)
@@ -572,6 +635,36 @@ proc paintFocus(n: Node, c: Context, radius: float32 = 6) =
   if c.engine != nil and c.engine.focusedKey == n.key:
     c.scene.rect(Rect(x: n.x - 3, y: n.y - 3, w: n.w + 6, h: n.h + 6),
                  rgb(0.35, 0.62, 1.0), radius)
+
+const compositionColor = Color(r: 0.22, g: 0.47, b: 0.95)
+
+proc paintInputLine(n: Node, c: Context, line: string, x, y: float32,
+                    lineStart, markedStart, markedLen: int) =
+  ## Draw one laid-out line, coloring and underlining the composition range.
+  let lineFinish = lineStart + line.len
+  let markStart = max(lineStart, markedStart)
+  let markFinish = min(lineFinish, markedStart + markedLen)
+  if markedLen <= 0 or markStart >= markFinish:
+    c.scene.text(line, x, y, n.fontSize, n.color, false)
+    return
+  let a = markStart - lineStart
+  let b = markFinish - lineStart
+  var cx = x
+  if a > 0:
+    let prefix = line[0 ..< a]
+    c.scene.text(prefix, cx, y, n.fontSize, n.color, false)
+    cx += measureText(prefix, n.fontSize, false).width
+  let marked = line[a ..< b]
+  c.scene.text(marked, cx, y, n.fontSize, compositionColor, false)
+  let markedWidth = measureText(marked, n.fontSize, false).width
+  let underlineY =
+    y + (if n.multiline: max(1.0'f32, n.lineHeight - 2)
+         else: n.fontSize + 2)
+  c.scene.rect(Rect(x: cx, y: underlineY, w: markedWidth, h: 1),
+               compositionColor)
+  cx += markedWidth
+  if b < line.len:
+    c.scene.text(line[b .. ^1], cx, y, n.fontSize, n.color, false)
 
 proc paint(n: Node, c: Context) =
   case n.kind
@@ -654,43 +747,29 @@ proc paint(n: Node, c: Context) =
         0.0'f32
       c.scene.clip(Rect(x: n.x + 1, y: n.y + 1,
                         w: max(1.0'f32, n.w - 2), h: max(1.0'f32, n.h - 2)))
-      if c.engine != nil and c.engine.focusedKey == n.key:
+      let composing = c.engine != nil and markedActive(c.engine, n.key)
+      let info =
+        if c.engine != nil: displayTextFor(c.engine, n.key, n.text)
+        else: (text: n.text, markedStart: 0, markedLen: 0)
+      if c.engine != nil and c.engine.focusedKey == n.key and not composing:
         discard paintSelection(n, c, c.engine)
-      let textColor = if n.text.len > 0: n.color else: rgb(0.55, 0.55, 0.60)
-      if n.text.len == 0:
+      if n.displayText.len == 0:
         c.scene.text(n.placeholder, n.x + n.padX, n.y + n.padY,
-                     n.fontSize, textColor, false)
+                     n.fontSize, rgb(0.55, 0.55, 0.60), false)
       else:
-        var i = 0
-        for line in n.lines:
+        for i, line in n.lines:
           let ly = n.y + n.padY + float32(i) * n.lineHeight - off
-          i += 1
           if ly + n.lineHeight < n.y + n.padY:
             continue
           if ly > n.y + n.h - n.padY:
             break
-          c.scene.text(line, n.x + n.padX, ly, n.fontSize, n.color, false)
-      if c.engine != nil and c.engine.markedText.len > 0 and
-          c.engine.markedKey == n.key:
-        let (ml, mc) = caretLineCol(n.lines,
-          if c.engine.caretKey == n.key: c.engine.caretPos else: n.text.len)
-        let my = n.y + n.padY + float32(ml) * n.lineHeight - off
-        let mx = n.x + n.padX +
-          measureText(n.lines[ml][0 ..< min(mc, n.lines[ml].len)],
-                      n.fontSize, false).width
-        c.scene.text(c.engine.markedText, mx, my, n.fontSize,
-                     rgb(0.22, 0.47, 0.95), false)
-        c.scene.rect(Rect(x: mx, y: my + n.lineHeight - 2,
-                          w: measureText(c.engine.markedText, n.fontSize,
-                                         false).width, h: 1),
-                     rgb(0.22, 0.47, 0.95))
+          paintInputLine(n, c, line, n.x + n.padX, ly,
+                         lineOffset(n.lineStarts, i),
+                         info.markedStart, info.markedLen)
       if c.engine != nil and c.engine.focusedKey == n.key:
-        let pos =
-          if c.engine.caretKey == n.key:
-            max(0, min(c.engine.caretPos, n.text.len))
-          else:
-            n.text.len
-        let (lineIdx, col) = caretLineCol(n.lines, pos)
+        let pos = displayCaretFor(c.engine, n.key, n.text,
+          if c.engine.caretKey == n.key: c.engine.caretPos else: n.text.len)
+        let (lineIdx, col) = caretLineCol(n.lines, n.lineStarts, pos)
         if lineIdx < n.lines.len:
           let line = n.lines[lineIdx]
           let prefix = if col > 0: line[0 ..< min(col, line.len)] else: ""
@@ -715,18 +794,28 @@ proc paint(n: Node, c: Context) =
                           w: track.w, h: thumbH),
                      rgb(0.45, 0.45, 0.52, 0.5), 2)
     else:
-      let shown = if n.text.len > 0: n.text else: n.placeholder
-      if c.engine != nil and c.engine.focusedKey == n.key:
+      let composing = c.engine != nil and markedActive(c.engine, n.key)
+      if c.engine != nil and c.engine.focusedKey == n.key and not composing:
         discard paintSelection(n, c, c.engine)
-      let textColor = if n.text.len > 0: n.color else: rgb(0.55, 0.55, 0.60)
-      let m = measureText(shown, n.fontSize, false)
-      c.scene.text(shown, n.x + n.padX, n.y + (n.h - m.height) / 2,
-                   n.fontSize, textColor, false)
+      let m = measureText(n.displayText, n.fontSize, false)
+      if n.displayText.len == 0:
+        c.scene.text(n.placeholder, n.x + n.padX,
+                     n.y + (n.h - measureText(n.placeholder, n.fontSize,
+                                               false).height) / 2,
+                     n.fontSize, rgb(0.55, 0.55, 0.60), false)
+      else:
+        let info =
+          if c.engine != nil: displayTextFor(c.engine, n.key, n.text)
+          else: (text: n.text, markedStart: 0, markedLen: 0)
+        paintInputLine(n, c, n.displayText, n.x + n.padX,
+                       n.y + (n.h - m.height) / 2, 0,
+                       info.markedStart, info.markedLen)
       if c.engine != nil and c.engine.focusedKey == n.key:
-        let pos =
-          if c.engine.caretKey == n.key: max(0, min(c.engine.caretPos, n.text.len))
-          else: n.text.len
-        let prefix = if pos > 0: n.text[0 ..< pos] else: ""
+        let pos = displayCaretFor(c.engine, n.key, n.text,
+          if c.engine.caretKey == n.key: c.engine.caretPos else: n.text.len)
+        let prefix =
+          if pos > 0: n.displayText[0 ..< min(pos, n.displayText.len)]
+          else: ""
         let pw = measureText(prefix, n.fontSize, false).width
         let cx = n.x + n.padX + min(pw, max(0.0'f32, n.w - 2 * n.padX - 1))
         c.scene.rect(Rect(x: cx, y: n.y + 6, w: 1.5'f32, h: n.h - 12),
@@ -779,9 +868,11 @@ proc collectHits(n: Node, engine: Engine, clip: Rect) =
       onDrag: n.onDrag,
       input: n.kind == nkInput,
       text: n.text,
+      displayText: n.displayText,
       onText: n.onText,
       multiline: n.multiline,
       lines: n.lines,
+      lineStarts: n.lineStarts,
       lineHeight: n.lineHeight,
       padX: n.padX,
       padY: n.padY,
@@ -879,38 +970,29 @@ proc requestFrame(engine: Engine) =
   if engine.requestFrame != nil:
     engine.requestFrame()
 
-proc runeStart(text: string, offset: int): int =
-  result = max(0, min(offset, text.len))
-  while result > 0 and result < text.len and (ord(text[result]) and 0xC0) == 0x80:
-    dec result
-
-proc previousRune(text: string, offset: int): int =
-  runeStart(text, max(0, offset - 1))
-
-proc nextRune(text: string, offset: int): int =
-  result = min(text.len, offset + 1)
-  while result < text.len and (ord(text[result]) and 0xC0) == 0x80:
-    inc result
-
 proc caretIndexLine(text: string, x, left, fontSize: float32): int =
   let local = x - left
   if local <= 0:
     return 0
   var best = 0
   var bestDist = abs(local)
-  for i in 1 .. text.len:
-    if runeStart(text, i) != i: continue
-    let w = measureText(text[0 ..< i], fontSize, false).width
-    let d = abs(w - local)
-    if d < bestDist:
-      bestDist = d
-      best = i
+  for boundary in graphemeBoundaries(text):
+    if boundary == 0:
+      continue
+    let width = measureText(text[0 ..< boundary], fontSize, false).width
+    let distance = abs(width - local)
+    if distance < bestDist:
+      bestDist = distance
+      best = boundary
   if local > measureText(text, fontSize, false).width:
     best = text.len
   result = best
 
+proc hitText(hit: Hit): string =
+  if hit.displayText.len > 0: hit.displayText else: hit.text
+
 proc caretIndex(hit: Hit, x: float32): int =
-  result = caretIndexLine(hit.text, x, hit.rect.x + hit.padX, hit.fontSize)
+  result = caretIndexLine(hitText(hit), x, hit.rect.x + hit.padX, hit.fontSize)
 
 proc caretIndexAt(hit: Hit, x, y: float32, scrollY: float32 = 0): int =
   if not hit.multiline or hit.lines.len == 0:
@@ -918,9 +1000,7 @@ proc caretIndexAt(hit: Hit, x, y: float32, scrollY: float32 = 0): int =
   let lineIdx = max(0, min(hit.lines.high,
     int((y - hit.rect.y - hit.padY + scrollY) /
         max(hit.lineHeight, 1))))
-  var offset = 0
-  for i in 0 ..< lineIdx:
-    offset += hit.lines[i].len + 1
+  let offset = lineOffset(hit.lineStarts, lineIdx)
   let line = hit.lines[lineIdx]
   result = offset + caretIndexLine(line, x, hit.rect.x + hit.padX, hit.fontSize)
 
@@ -928,14 +1008,14 @@ proc isWordChar(ch: char): bool =
   ch.isAlphaNumeric or ch == '_' or ord(ch) >= 128
 
 proc selectWordOrLine(engine: Engine, hit: Hit, clicks: int) =
-  if not hit.input or hit.text.len == 0:
+  if not hit.input or hit.text.len == 0 or markedActive(engine, hit.key):
     return
   let pos = max(0, min(engine.caretPos, hit.text.len))
   var start, finish: int
   if clicks >= 3:
     if hit.multiline and hit.lines.len > 0:
-      let (lineIdx, _) = caretLineCol(hit.lines, pos)
-      start = lineOffset(hit.lines, lineIdx)
+      let (lineIdx, _) = caretLineCol(hit.lines, hit.lineStarts, pos)
+      start = lineOffset(hit.lineStarts, lineIdx)
       finish = start + hit.lines[lineIdx].len
     else:
       start = 0
@@ -952,6 +1032,8 @@ proc selectWordOrLine(engine: Engine, hit: Hit, clicks: int) =
       inc finish
     if start == finish and finish < hit.text.len:
       inc finish
+  start = graphemeStartAt(hit.text, start)
+  finish = graphemeCeil(hit.text, finish)
   engine.caretKey = hit.key
   engine.caretPos = finish
   engine.selectionAnchor = start
@@ -964,6 +1046,9 @@ proc handleMouseDown*(engine: Engine, x, y: float32, clicks: int = 1) =
   if i >= 0:
     let hit = engine.hits[i]
     engine.pressedKey = hit.key
+    if engine.markedText.len > 0 and engine.markedKey != hit.key:
+      engine.markedText.setLen(0)
+      engine.markedKey = ""
     if not (hit.key.startsWith("__scroll:") or
             hit.key.startsWith("__textscroll:")):
       engine.focusedKey = hit.key
@@ -973,8 +1058,9 @@ proc handleMouseDown*(engine: Engine, x, y: float32, clicks: int = 1) =
       hit.onDrag(hit.rect, x, y)
     if hit.input:
       engine.caretKey = hit.key
-      engine.caretPos = caretIndexAt(
+      let displayCaret = caretIndexAt(
         hit, x, y, engine.scrollOffsets.getOrDefault(hit.key, 0))
+      engine.caretPos = displayByteToDoc(engine, hit.key, hit.text, displayCaret)
       engine.selectionAnchor = engine.caretPos
       engine.selectingInput = hit.key
       if clicks >= 2:
@@ -1003,8 +1089,9 @@ proc handleMouseMove*(engine: Engine, x, y: float32) =
   if engine.selectingInput.len > 0:
     for hit in engine.hits:
       if hit.key == engine.selectingInput and hit.input:
-        engine.caretPos = caretIndexAt(
-        hit, x, y, engine.scrollOffsets.getOrDefault(hit.key, 0))
+        let displayCaret = caretIndexAt(
+          hit, x, y, engine.scrollOffsets.getOrDefault(hit.key, 0))
+        engine.caretPos = displayByteToDoc(engine, hit.key, hit.text, displayCaret)
         requestFrame(engine)
         return
   let i = hitIndex(engine, x, y)
@@ -1047,12 +1134,16 @@ proc ensureCaretVisible(engine: Engine, index: int) =
   let hit = engine.hits[index]
   if not hit.multiline or hit.rect.w <= 0:
     return
-  let caret =
+  let docCaret =
     if engine.caretKey == hit.key: max(0, min(engine.caretPos, hit.text.len))
     else: hit.text.len
+  var caret = displayCaretFor(engine, hit.key, hit.text, docCaret)
   let width = max(1.0'f32, hit.rect.w - 2 * hit.padX)
-  let layout = layoutText(hit.text, hit.fontSize, false, width)
-  let (lineIdx, _) = caretLineCol(layout.lines, caret)
+  let display = displayTextFor(engine, hit.key, hit.text)
+  if display.markedLen > 0:
+    caret = max(caret, display.markedStart + display.markedLen)
+  let layout = layoutText(display.text, hit.fontSize, false, width)
+  let (lineIdx, _) = caretLineCol(layout.lines, layout.lineStarts, caret)
   let viewportH = max(1.0'f32, hit.rect.h - 2 * hit.padY)
   let top = float32(lineIdx) * layout.lineHeight
   var off = engine.scrollOffsets.getOrDefault(hit.key, 0)
@@ -1065,6 +1156,7 @@ proc ensureCaretVisible(engine: Engine, index: int) =
 
 proc applySnapshot(engine: Engine, index: int, s: EditSnapshot) =
   let hit = engine.hits[index]
+  engine.clearComposition()
   engine.hits[index].text = s.text
   engine.caretKey = hit.key
   engine.caretPos = s.caret
@@ -1109,6 +1201,7 @@ proc redo*(engine: Engine) =
 proc applyInput(engine: Engine, index: int, text: string,
                 caret, anchor: int) =
   let hit = engine.hits[index]
+  engine.clearComposition()
   engine.hits[index].text = text
   engine.caretKey = hit.key
   engine.caretPos = caret
@@ -1165,37 +1258,170 @@ proc selectAll*(engine: Engine) =
   engine.selectionAnchor = 0
   requestFrame(engine)
 
-proc insertText*(engine: Engine, text: string) =
+proc replacementDocRange(engine: Engine, hit: Hit,
+                         replacement: TextRange):
+                         tuple[start, finish: int, overlaps: bool] =
+  ## Resolve an AppKit range (UTF-16, in the document including composition)
+  ## into document byte offsets. `overlaps` means "replace the composition".
+  if not replacement.valid:
+    if markedActive(engine, hit.key):
+      let (start, finish) = markedDocRange(engine, hit.text)
+      return (start, finish, true)
+    let sel = selectionRange(engine, hit.key, hit.text.len)
+    return (sel.start, sel.finish, false)
+  if not markedActive(engine, hit.key):
+    let start = utf8OffsetForUtf16(hit.text, replacement.location)
+    let finish = utf8OffsetForUtf16(hit.text, replacement.finish)
+    return (min(start, finish), max(start, finish), false)
+  let info = displayTextFor(engine, hit.key, hit.text)
+  let (docStart, docFinish) = markedDocRange(engine, hit.text)
+  let start = utf8OffsetForUtf16(info.text, replacement.location)
+  let finish = utf8OffsetForUtf16(info.text, replacement.finish)
+  let markedFinish = info.markedStart + info.markedLen
+  if start >= markedFinish:
+    let offset = start - markedFinish
+    let mappedFinish = finish - markedFinish
+    return (docFinish + offset, docFinish + mappedFinish, false)
+  if finish <= info.markedStart:
+    return (start, finish, false)
+  (docStart, docFinish, true)
+
+proc insertText*(engine: Engine, text: string,
+                 replacement: TextRange = NoTextRange) =
   let index = focusedInputIndex(engine)
   if index < 0 or text.len == 0:
+    if engine.markedText.len > 0 and text.len == 0:
+      engine.clearComposition()
+      requestFrame(engine)
     return
   let hit = engine.hits[index]
   var insert = text
   if not hit.multiline:
     insert = insert.replace("\r", " ").replace("\n", " ")
-  let sel = selectionRange(engine, hit.key, hit.text.len)
-  engine.snapshot(hit.key, hit.text, engine.caretPos, engine.selectionAnchor)
-  let next = hit.text[0 ..< sel.start] & insert & hit.text[sel.finish .. ^1]
-  engine.markedText = ""
-  engine.markedKey = ""
-  engine.applyInput(index, next, sel.start + insert.len, sel.start + insert.len)
-
-proc setMarkedText*(engine: Engine, text: string) =
-  if text.len == 0:
-    engine.markedText = ""
-    engine.markedKey = ""
+  var start, finish: int
+  if markedActive(engine, hit.key):
+    let resolved = replacementDocRange(engine, hit, replacement)
+    if resolved.overlaps:
+      (start, finish) = markedDocRange(engine, hit.text)
+    else:
+      start = resolved.start
+      finish = resolved.finish
+  elif replacement.valid:
+    start = utf8OffsetForUtf16(hit.text, replacement.location)
+    finish = utf8OffsetForUtf16(hit.text, replacement.finish)
+    if start > finish: swap(start, finish)
   else:
-    engine.markedText = text
-    engine.markedKey = engine.focusedKey
+    let sel = selectionRange(engine, hit.key, hit.text.len)
+    start = sel.start
+    finish = sel.finish
+  start = max(0, min(start, hit.text.len))
+  finish = max(start, min(finish, hit.text.len))
+  engine.snapshot(hit.key, hit.text, engine.caretPos, engine.selectionAnchor)
+  let next = hit.text[0 ..< start] & insert & hit.text[finish .. ^1]
+  engine.clearComposition()
+  engine.applyInput(index, next, start + insert.len, start + insert.len)
+
+proc setMarkedText*(engine: Engine, text: string,
+                    selected: TextRange = NoTextRange,
+                    replacement: TextRange = NoTextRange) =
+  let index = focusedInputIndex(engine)
+  if index < 0:
+    return
+  let hit = engine.hits[index]
+  if text.len == 0:
+    engine.clearComposition()
+    requestFrame(engine)
+    return
+  if not markedActive(engine, hit.key):
+    var start, finish: int
+    if replacement.valid:
+      start = utf8OffsetForUtf16(hit.text, replacement.location)
+      finish = utf8OffsetForUtf16(hit.text, replacement.finish)
+      if start > finish: swap(start, finish)
+    else:
+      let sel = selectionRange(engine, hit.key, hit.text.len)
+      start = sel.start
+      finish = sel.finish
+    engine.markedStart = max(0, min(start, hit.text.len))
+    engine.markedEnd = max(engine.markedStart, min(finish, hit.text.len))
+  elif replacement.valid:
+    let resolved = replacementDocRange(engine, hit, replacement)
+    if not resolved.overlaps:
+      engine.markedStart = max(0, min(resolved.start, hit.text.len))
+      engine.markedEnd = max(engine.markedStart,
+                             min(resolved.finish, hit.text.len))
+  engine.markedText = text
+  engine.markedKey = hit.key
+  let units = utf16Length(text)
+  if selected.valid:
+    engine.markedSelectedStart = max(0, min(selected.location, units))
+    engine.markedSelectedLen = max(0, min(selected.length,
+      units - engine.markedSelectedStart))
+  else:
+    engine.markedSelectedStart = units
+    engine.markedSelectedLen = 0
+  engine.ensureCaretVisible(index)
   requestFrame(engine)
 
 proc unmarkText*(engine: Engine) =
-  engine.markedText = ""
-  engine.markedKey = ""
+  engine.clearComposition()
   requestFrame(engine)
 
 proc hasMarkedText*(engine: Engine): bool =
   engine.markedText.len > 0
+
+proc markedRange*(engine: Engine): TextRange =
+  let index = focusedInputIndex(engine)
+  if index < 0 or not markedActive(engine, engine.hits[index].key):
+    return NoTextRange
+  let hit = engine.hits[index]
+  let (start, _) = markedDocRange(engine, hit.text)
+  TextRange(location: utf16OffsetForUtf8(hit.text, start),
+            length: utf16Length(engine.markedText))
+
+proc selectedRange*(engine: Engine): TextRange =
+  let index = focusedInputIndex(engine)
+  if index < 0:
+    return TextRange(location: 0, length: 0)
+  let hit = engine.hits[index]
+  if markedActive(engine, hit.key):
+    let (start, _) = markedDocRange(engine, hit.text)
+    let prefix = utf16OffsetForUtf8(hit.text, start)
+    return TextRange(location: prefix + engine.markedSelectedStart,
+                     length: engine.markedSelectedLen)
+  let sel = selectionRange(engine, hit.key, hit.text.len)
+  let a = utf16OffsetForUtf8(hit.text, sel.start)
+  let b = utf16OffsetForUtf8(hit.text, sel.finish)
+  TextRange(location: min(a, b), length: abs(a - b))
+
+proc attributedSubstring*(engine: Engine, range: TextRange): string =
+  let index = focusedInputIndex(engine)
+  if index < 0 or range.location < 0 or range.length < 0:
+    return ""
+  let hit = engine.hits[index]
+  let text = displayTextFor(engine, hit.key, hit.text).text
+  let total = utf16Length(text)
+  let start = max(0, min(range.location, total))
+  let finish = max(start, min(range.finish, total))
+  let first = utf8OffsetForUtf16(text, start)
+  let last = utf8OffsetForUtf16(text, finish)
+  text[first ..< max(first, last)]
+
+proc textLength*(engine: Engine): int =
+  let index = focusedInputIndex(engine)
+  if index < 0:
+    return 0
+  let hit = engine.hits[index]
+  utf16Length(displayTextFor(engine, hit.key, hit.text).text)
+
+proc characterIndexAt*(engine: Engine, x, y: float32): int =
+  let index = hitIndex(engine, x, y)
+  if index < 0 or not engine.hits[index].input:
+    return 0
+  let hit = engine.hits[index]
+  let caret = caretIndexAt(hit, x, y,
+    engine.scrollOffsets.getOrDefault(hit.key, 0))
+  utf16OffsetForUtf8(hitText(hit), caret)
 
 proc caretRect*(engine: Engine): Rect =
   let index = focusedInputIndex(engine)
@@ -1203,12 +1429,13 @@ proc caretRect*(engine: Engine): Rect =
     return Rect(x: 0, y: 0, w: 1, h: 18)
   let hit = engine.hits[index]
   let text = hit.text
-  let pos =
+  let docPos =
     if engine.caretKey == hit.key: max(0, min(engine.caretPos, text.len))
     else: text.len
+  let pos = displayCaretFor(engine, hit.key, text, docPos)
   if hit.multiline:
     let lines = if hit.lines.len > 0: hit.lines else: @[""]
-    let (lineIdx, col) = caretLineCol(lines, pos)
+    let (lineIdx, col) = caretLineCol(lines, hit.lineStarts, pos)
     let line = lines[lineIdx]
     let prefix = if col > 0: line[0 ..< min(col, line.len)] else: ""
     let x = hit.rect.x + hit.padX +
@@ -1216,7 +1443,8 @@ proc caretRect*(engine: Engine): Rect =
     let off = engine.scrollOffsets.getOrDefault(hit.key, 0)
     let y = hit.rect.y + hit.padY + float32(lineIdx) * hit.lineHeight - off
     return Rect(x: x, y: y, w: 2, h: max(12, hit.lineHeight))
-  let prefix = if pos > 0: text[0 ..< pos] else: ""
+  let display = displayTextFor(engine, hit.key, text).text
+  let prefix = if pos > 0: display[0 ..< min(pos, display.len)] else: ""
   let x = hit.rect.x + hit.padX +
     measureText(prefix, hit.fontSize, false).width
   Rect(x: x, y: hit.rect.y + 6, w: 2, h: max(12, hit.rect.h - 12))
@@ -1258,7 +1486,7 @@ proc editInput(engine: Engine, index: int, key: string, modifiers: uint32) =
   let hasSel = sel.finish > sel.start
   let anchorBefore = if hasSel: engine.selectionAnchor else: caret
   let lines = if hit.multiline: hit.lines else: @[text]
-  let (lineIdx, col) = caretLineCol(lines, caret)
+  let (lineIdx, col) = caretLineCol(lines, hit.lineStarts, caret)
   var handled = true
   case key
   of "backspace":
@@ -1266,7 +1494,7 @@ proc editInput(engine: Engine, index: int, key: string, modifiers: uint32) =
       text = text[0 ..< sel.start] & text[sel.finish .. ^1]
       caret = sel.start
     elif caret > 0:
-      let start = previousRune(text, caret)
+      let start = graphemeStartBefore(text, caret)
       text = text[0 ..< start] & text[caret .. ^1]
       caret = start
   of "delete":
@@ -1274,37 +1502,40 @@ proc editInput(engine: Engine, index: int, key: string, modifiers: uint32) =
       text = text[0 ..< sel.start] & text[sel.finish .. ^1]
       caret = sel.start
     elif caret < text.len:
-      text = text[0 ..< caret] & text[nextRune(text, caret) .. ^1]
+      text = text[0 ..< caret] & text[graphemeEndAfter(text, caret) .. ^1]
   of "left":
     if hasSel and not shift:
       caret = sel.start
     elif caret > 0:
-      caret = previousRune(text, caret)
+      caret = graphemeStartBefore(text, caret)
   of "right":
     if hasSel and not shift:
       caret = sel.finish
     elif caret < text.len:
-      caret = nextRune(text, caret)
+      caret = graphemeEndAfter(text, caret)
   of "home":
     if hit.multiline:
-      caret = lineOffset(lines, lineIdx)
+      caret = lineOffset(hit.lineStarts, lineIdx)
     else:
       caret = 0
   of "end":
     if hit.multiline:
-      caret = lineOffset(lines, lineIdx) + lines[lineIdx].len
+      caret = lineOffset(hit.lineStarts, lineIdx) + lines[lineIdx].len
     else:
       caret = text.len
   of "up", "down":
     if hit.multiline and lines.len > 0:
       let target = if key == "up": max(0, lineIdx - 1)
                    else: min(lines.high, lineIdx + 1)
-      caret = lineOffset(lines, target) + runeStart(lines[target], min(col, lines[target].len))
+      caret = lineOffset(hit.lineStarts, target) +
+        graphemeStartAt(lines[target], min(col, lines[target].len))
   of "escape":
     engine.focusedKey = ""
     engine.caretKey = ""
     engine.caretPos = 0
     engine.selectionAnchor = 0
+    engine.markedText.setLen(0)
+    engine.markedKey = ""
     requestFrame(engine)
     return
   of "enter", "\n":
@@ -1349,6 +1580,7 @@ proc handleKeyDown*(engine: Engine, key: string, modifiers: uint32 = 0) =
       let next =
         if current < 0: 0
         else: (current + step + engine.hits.len) mod engine.hits.len
+      engine.clearComposition()
       engine.focusedKey = engine.hits[next].key
       engine.caretKey = ""
       engine.selectionAnchor = 0

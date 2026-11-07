@@ -39,6 +39,7 @@ type
     animationActive*: bool
     animationFps*: int
     focused*: bool
+    closed*: bool
 
   Page* = ref object
     window*: Window
@@ -54,16 +55,35 @@ proc randomHex(n: int): string =
     result.add toHex(b, 2)
 
 proc fireShouldClose*(w: Window): bool =
+  if w.closed:
+    return false
   var e = CloseEvent()
   for fn in w.closeListeners:
     fn(e)
   result = not e.prevented
 
 proc fireClosed*(w: Window) =
-  for fn in w.closedListeners:
+  ## Idempotent. Runs callbacks once, then drops every per-window listener so
+  ## late native events or animation ticks cannot reach application code.
+  if w.closed:
+    return
+  w.closed = true
+  let callbacks = w.closedListeners
+  w.closedListeners.setLen(0)
+  for fn in callbacks:
     fn()
+  w.closeListeners.setLen(0)
+  w.titleListeners.setLen(0)
+  w.focusListeners.setLen(0)
+  w.frameListeners.setLen(0)
+  w.animationActive = false
+
+proc isClosed*(w: Window): bool =
+  w == nil or w.closed
 
 proc handleMessage*(w: Window, msg: string) =
+  if w.closed:
+    return
   try:
     if w.secret.len > 0:
       if msg.len <= w.secret.len or not msg.startsWith(w.secret):
@@ -95,7 +115,7 @@ proc handleMessage*(w: Window, msg: string) =
     discard
 
 proc invalidate*(w: Window) =
-  if w.native != nil and w.native.requestFrame != nil:
+  if not w.closed and w.native != nil and w.native.requestFrame != nil:
     w.native.requestFrame()
 
 proc newWindow*(opts: WindowOptions): Window =
@@ -131,11 +151,19 @@ proc newWindow*(opts: WindowOptions): Window =
     surface.selectAll = proc() = content.selectAll()
     surface.undo = proc() = content.undo()
     surface.redo = proc() = content.redo()
-    surface.insertText = proc(text: string) = content.insertText(text)
-    surface.setMarkedText = proc(text: string) = content.setMarkedText(text)
+    surface.insertText = proc(text: string, replacement: TextRange) =
+      content.insertText(text, replacement)
+    surface.setMarkedText = proc(text: string, selected, replacement: TextRange) =
+      content.setMarkedText(text, selected, replacement)
     surface.unmarkText = proc() = content.unmarkText()
     surface.hasMarkedText = proc(): bool = content.hasMarkedText()
-    surface.markedLength = proc(): int = content.markedLength()
+    surface.markedRange = proc(): TextRange = content.markedRange()
+    surface.selectedRange = proc(): TextRange = content.selectedRange()
+    surface.attributedSubstring = proc(range: TextRange): string =
+      content.attributedSubstring(range)
+    surface.textLength = proc(): int = content.textLength()
+    surface.characterIndexAt = proc(x, y: float32): int =
+      content.characterIndexAt(x, y)
     surface.caretRect = proc(): PlatformRect = content.caretRect()
     surface.command = proc(selector: string): bool = content.handleCommand(selector)
 
@@ -244,6 +272,8 @@ proc startAnimation*(w: Window, fps: int = 60,
   ## invalidate the surface immediately. Repeating the call adds another
   ## listener; changing `fps` restarts the timer at the new rate. The callback
   ## is not tied to the WebView or to a particular renderer.
+  if w.closed:
+    return
   if fn != nil:
     w.frameListeners.add(fn)
   let rate = if fps > 0: fps else: 60
@@ -267,9 +297,11 @@ proc stopAnimation*(w: Window) =
     w.native.stopAnimation()
 
 proc isAnimating*(w: Window): bool =
-  w.animationActive
+  not w.closed and w.animationActive
 
 proc setTitle*(w: Window, title: string) =
+  if w.closed:
+    return
   w.options.title = title
   if w.native != nil:
     w.native.setTitle(title)
@@ -278,11 +310,11 @@ proc title*(w: Window): string =
   w.options.title
 
 proc show*(w: Window) =
-  if w.native != nil:
+  if not w.closed and w.native != nil:
     w.native.show()
 
 proc hide*(w: Window) =
-  if w.native != nil and w.native.hide != nil:
+  if not w.closed and w.native != nil and w.native.hide != nil:
     w.native.hide()
 
 proc focus*(w: Window) =
@@ -310,11 +342,11 @@ proc toggleFullScreen*(w: Window) =
     w.native.toggleFullScreen()
 
 proc isFullScreen*(w: Window): bool =
-  if w.native != nil and w.native.isFullScreen != nil:
+  if not w.closed and w.native != nil and w.native.isFullScreen != nil:
     result = w.native.isFullScreen()
 
 proc isFocused*(w: Window): bool =
-  if w.native != nil and w.native.isFocused != nil:
+  if not w.closed and w.native != nil and w.native.isFocused != nil:
     result = w.native.isFocused()
 
 proc setSize*(w: Window, width, height: int) =
@@ -334,44 +366,53 @@ proc setAlwaysOnTop*(w: Window, always: bool) =
     w.native.setAlwaysOnTop(always)
 
 proc close*(w: Window) =
-  if w.native != nil:
+  if not w.closed and w.native != nil:
     w.native.close()
 
 proc destroy*(w: Window) =
+  if w.closed:
+    return
   if w.native != nil:
     w.native.destroy()
+  w.fireClosed()
   windows.del(w.id)
 
 proc eval*(w: Window, js: string) =
-  if w.native != nil:
+  if not w.closed and w.native != nil:
     w.native.eval(js)
 
 proc loadHTML*(w: Window, html: string, baseURL: string = "") =
-  if w.native != nil:
+  if not w.closed and w.native != nil:
     w.native.loadHTML(html, baseURL)
 
 proc loadURL*(w: Window, url: string) =
-  if w.native != nil:
+  if not w.closed and w.native != nil:
     w.native.loadURL(url)
 
 proc page*(w: Window): Page =
   Page(window: w)
 
 proc onClose*(w: Window, fn: proc(e: var CloseEvent)) =
-  w.closeListeners.add fn
+  if not w.closed:
+    w.closeListeners.add fn
 
 proc onClosed*(w: Window, fn: proc()) =
-  w.closedListeners.add fn
+  if w.closed:
+    fn()
+  else:
+    w.closedListeners.add fn
 
 proc onTitleChanged*(w: Window, fn: proc(title: string)) =
-  w.titleListeners.add fn
+  if not w.closed:
+    w.titleListeners.add fn
 
 proc onFocusChanged*(w: Window, fn: proc(focused: bool)) =
-  w.focusListeners.add fn
+  if not w.closed:
+    w.focusListeners.add fn
 
 proc emitPage*(w: Window, name: string, payload: JsonNode) =
   ## Send a typed event to the page. `window.nimi.on(name, fn)` receives it.
-  if w.native != nil:
+  if not w.closed and w.native != nil:
     let encodedName = %*name
     w.native.eval("window.__nimi._event(" & $encodedName & "," & $payload & ")")
 

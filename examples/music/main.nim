@@ -13,11 +13,13 @@ let background = newTaskExecutor()
 let downloads = newTaskExecutor(2)
 var lyricTask: uint64
 var lyricLines: seq[LyricLine]
-proc readLyrics(path: string): string {.gcsafe.} =
+proc readLyrics(path: string, context: TaskContext): string {.gcsafe.} =
+  if context.isCancelled(): raise newException(IOError, "Lyrics load cancelled")
   let sidecar = changeFileExt(path, "lrc")
   if fileExists(sidecar):
     if getFileSize(sidecar) > 2_000_000: raise newException(IOError, "Lyrics file exceeds 2 MB")
     result = readFile(sidecar)
+  if context.isCancelled(): raise newException(IOError, "Lyrics load cancelled")
 
 var downloadId: uint64
 var catalogTask: uint64
@@ -183,8 +185,8 @@ app.whenReady(proc() =
     player.seek(saved.position)
   w.onClosed(proc() =
     persist()
-    background.close()
-    downloads.close()
+    background.close(100)
+    downloads.close(100)
     player.close()
   )
   w.startAnimation(10, proc(time, dt: float64) =
@@ -196,6 +198,6 @@ app.whenReady(proc() =
 )
 app.onBeforeQuit(proc(e: var QuitEvent) = persist())
 app.run()
-downloads.close()
-background.close()
+downloads.close(100)
+background.close(100)
 player.close()
