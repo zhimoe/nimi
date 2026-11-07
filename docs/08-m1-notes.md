@@ -118,7 +118,7 @@ exit=0
 | 限制 | 计划 |
 |---|---|
 | Channel 尚未暴露给页面 | M2 |
-| 绑定方法在主线程同步执行(无工作线程池) | M2 |
+| 同步 `bindService` 仍在主线程；耗时方法需显式注册到后台工作池 | 已提供 `bindBackgroundService`，见 [异步 IPC](29-async-ipc.md) |
 | 无 trusted/untrusted 细分(只有 secret/token) | M2 |
 | 无 focus 跟踪,`focusedWindow()` 返回任意窗口 | M2 |
 | 无 `Eval` 返回值、无页面导航事件 | M2 |
@@ -133,7 +133,7 @@ exit=0
 
 ## 5. 下一步(M1 剩余)
 
-1. 工作线程池:绑定方法移出主线程;`CallContext` 取消。
+1. 后台 IPC 的 per-call 超时/取消、流式返回；同步 `bindService` 保持 UI 线程契约。
 2. Channel 页面侧消息 + TS 事件/Channel 描述符。
 3. `Eval` 返回值、导航事件、页面标题。
 4. trusted/untrusted 细分、消息大小限制。

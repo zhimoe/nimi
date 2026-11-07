@@ -3,7 +3,7 @@
 
 import std/[json, strutils, sysrand, tables]
 
-import ./[content, events, fileserver, ipc]
+import ./[content, events, fileserver, ipc, ipcpool]
 import ../platform/contract
 
 type
@@ -81,6 +81,25 @@ proc fireClosed*(w: Window) =
 proc isClosed*(w: Window): bool =
   w == nil or w.closed
 
+proc completeIpcCall*(result: IpcResult) =
+  ## Main thread. Resolve a page promise after a background worker finishes.
+  let w = windows.getOrDefault(result.windowId)
+  if w == nil or w.closed or w.native == nil or w.native.eval == nil:
+    return
+  if result.error.len > 0:
+    w.native.eval("window.__nimi._reject(" & $result.callId & "," &
+                  $(%*result.error) & ")")
+    return
+  try:
+    let value = parseJson(result.value)
+    w.native.eval("window.__nimi._resolve(" & $result.callId & "," &
+                  $value & ")")
+  except CatchableError:
+    w.native.eval("window.__nimi._reject(" & $result.callId & "," &
+                  $(%*"invalid background IPC response") & ")")
+
+setIpcCompletion(completeIpcCall)
+
 proc handleMessage*(w: Window, msg: string) =
   if w.closed:
     return
@@ -103,6 +122,12 @@ proc handleMessage*(w: Window, msg: string) =
     let target = node["method"].getStr
     let args =
       if node.hasKey("args"): node["args"] else: newJArray()
+    if hasBackgroundMethod(target):
+      let work = backgroundWork(target)
+      if not submitIpc(w.id, int64(callId), target, $args, work):
+        w.native.eval("window.__nimi._reject(" & $callId & "," &
+                      $(%*"IPC queue is full or worker pool is closed") & ")")
+      return
     try:
       let value = dispatch(target, args)
       w.native.eval("window.__nimi._resolve(" & $callId & "," & $value & ")")

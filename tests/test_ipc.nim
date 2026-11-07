@@ -52,3 +52,51 @@ suite "ipc":
     check "greet(name: string): Promise<string>" in ts
     check "add(a: number, b: number): Promise<number>" in ts
     check "call(\"Greeter.greet\", name)" in ts
+
+proc backgroundEcho(args: string): string {.gcsafe.} =
+  let values = parseJson(args)
+  $(%*("bg:" & values[0].getStr))
+
+suite "background ipc registry":
+  test "background methods register and generate TypeScript":
+    bindBackgroundService("Background", [
+      backgroundMethod("echo", backgroundEcho,
+        params = [ParamDef(name: "text", typ: "string")],
+        resultType = "string")
+    ])
+    check hasBackgroundMethod("Background.echo")
+    check not hasBackgroundMethod("Background.missing")
+    check backgroundWork("Background.echo") != nil
+    check methodNames()[^1] == "Background.echo"
+    let ts = generateTypeScript()
+    check "export const Background" in ts
+    check "echo(text: string): Promise<string>" in ts
+    check "call(\"Background.echo\", text)" in ts
+
+  test "background methods cannot shadow UI-thread methods":
+    expect ValueError:
+      bindBackgroundService("Greeter", [
+        backgroundMethod("greet", backgroundEcho)
+      ])
+    expect ValueError:
+      bindBackgroundService("Background", [
+        backgroundMethod("echo", backgroundEcho)
+      ])
+
+type
+  Mixed = ref object
+
+proc ping(self: Mixed): string = "pong"
+
+proc mixedWork(args: string): string {.gcsafe.} = args
+
+suite "background ipc merging":
+  test "sync and background methods share one TypeScript object":
+    bindService(Mixed(), ping)
+    bindBackgroundService("Mixed", [
+      backgroundMethod("slow", mixedWork, resultType = "string")
+    ])
+    let ts = generateTypeScript()
+    check ts.count("export const Mixed") == 1
+    check "ping(): Promise<string>" in ts
+    check "slow(): Promise<string>" in ts

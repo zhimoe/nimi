@@ -10,6 +10,13 @@ proc dispatchTrampoline(ctx: pointer) {.cdecl.} =
   if gState != nil and gState.handler.dispatch != nil:
     gState.handler.dispatch()
 
+proc wakeMain*() {.nimcall, gcsafe.} =
+  ## Worker-safe wake without touching the closure queue. The cast only covers
+  ## dispatch_async_f's non-gcsafe function-pointer type; dispatchTrampoline
+  ## itself runs later on the main queue.
+  {.cast(gcsafe).}:
+    dispatchAsyncMain(dispatchTrampoline)
+
 proc postWake(state: DarwinState) =
   let event = newEventId(NSEventTypeApplicationDefined,
                          NSPoint(x: 0, y: 0), 0, 0, 0x6d67)

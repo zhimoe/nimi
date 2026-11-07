@@ -60,7 +60,7 @@
 
 **目标**:`examples/hello` 的 Nim 版。页面调用 Nim `Greeter.greet`,返回字符串;`nimi generate` 输出 TS;`nimi dev` 可启动;`nimi build` 产出 `.app`。
 
-**当前状态(2026-11-04)**:核心垂直切片已跑通。已实现 AppKit 窗口、WKWebView、bridge 注入、JS→Nim JSON 调用、`bindService` 宏、TS 生成、IPC secret/token、页面侧事件、`init/generate/dev/build/doctor` CLI、dev 文件监听/自动重启、`.app` 打包、单元测试。50 次连续调用 + 关窗退出压测通过。剩余项:工作线程池、页面侧 Channel、`Eval` 返回值、trusted/untrusted 细分、更多 IPC 类型黄金测试。详见 [M1 实现状态](08-m1-notes.md)。
+**当前状态(2026-11-07)**:核心垂直切片已跑通。已实现 AppKit 窗口、WKWebView、bridge 注入、JS→Nim JSON 调用、`bindService` 宏、TS 生成、IPC secret/token、页面侧事件、`init/generate/dev/build/doctor` CLI、dev 文件监听/自动重启、`.app` 打包、单元测试。后台 IPC 已有显式服务注册、有界工作池和主线程结果回投，见 [异步 IPC](29-async-ipc.md)。50 次连续调用 + 关窗退出压测通过。剩余项:per-call 超时/取消、页面侧 Channel、`Eval` 返回值、trusted/untrusted 细分、更多 IPC 类型黄金测试。详见 [M1 实现状态](08-m1-notes.md)。
 
 ### 3.1 工作包
 
@@ -103,7 +103,7 @@
 
 - [ ] 复用 `packages/bridge` 源码,构建 `bridge.js`;改命名空间为 `nimi`(保留 `mygo` 别名)。
 - [ ] `core/bridge.nim`:注入脚本、secret、消息解析、`dom-ready`、事件保留、批量 `eval`。
-- [ ] `core/ipc.nim`:`ServiceDef`/`MethodDef`/`TypeDef`;`{.rpc.}` + `bindService(instance, procs...)` 宏(显式 proc 列表,按 self 类型选重载);JSON 编解码;工作线程池;错误/panic 转换;`CallContext`。
+- [ ] `core/ipc.nim`:`ServiceDef`/`MethodDef`/`TypeDef`;`{.rpc.}` + `bindService(instance, procs...)` 宏(显式 proc 列表,按 self 类型选重载);JSON 编解码;显式后台服务 + 有界工作池;错误/panic 转换;`CallContext`。异步边界见 [异步 IPC](29-async-ipc.md)。
 - [ ] `core/channel.nim`:`Channel[T]`、1 MiB 窗口、ack、close、取消。
 - [ ] `core/events_ipc.nim`: `newEvent[T]`、`emit`、`broadcast`。
 - [ ] 内置 `nimi:window` 服务(最小:close/minimize/maximize)。
@@ -486,4 +486,4 @@
 
 ## 16. 当前下一步
 
-按 [整改基线](28-remediation-status.md) 的验收门槛执行。grapheme 编辑、IME UTF-16 range、窗口关闭失效、任务取消/超时、固定行高虚拟列表、缓存条目上限、本地音频与队列会话均已落地并有自动测试；真实拼音/日文输入法仍需人工验收。下一阶段是异步 IPC/工作池、音乐封面与元数据、macOS 集成和发布验证。实际性能与音频原型完成后重新排期；不以原型通过推算完整框架交付日期。
+按 [整改基线](28-remediation-status.md) 的验收门槛执行。grapheme 编辑、IME UTF-16 range、窗口关闭失效、任务取消/超时、固定行高虚拟列表、缓存条目上限、本地音频与队列会话均已落地并有自动测试；后台 IPC 已有工作池。真实拼音/日文输入法仍需人工验收。下一阶段是后台 IPC 的超时/取消与流式返回、音乐封面与元数据、macOS 集成和发布验证。实际性能与音频原型完成后重新排期；不以原型通过推算完整框架交付日期。

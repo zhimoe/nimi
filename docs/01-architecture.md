@@ -313,7 +313,9 @@ nimi.app.run()
 - `Backend.init` 必须在主线程调用;`Backend.run` 阻塞直到退出。
 - 所有 `platform.*` 方法与 handler 回调在主线程执行。
 - 事件监听器同步执行;可取消事件(`onClose`、`onBeforeQuit`、`onWillNavigate`)必须同步返回决定。
-- 绑定方法在工作线程池执行,可阻塞。
+- 同步 `bindService` 方法在主线程执行,应保持短小;显式注册的
+  `bindBackgroundService` 方法在 IPC 工作池执行,可阻塞。详见
+  [异步 IPC](29-async-ipc.md)。
 
 ### 5.2 主线程调度原语
 
@@ -336,10 +338,10 @@ proc deliver*[T](f: Future[T], value: T)
 
 ### 5.3 工作线程池
 
-- 固定大小(默认 `max(2, cpuCores div 2)`,可配置),任务队列 + 条件变量。
-- 每个 IPC 调用是一个 `Task`:入参是已解析的 `JsonNode`/原始 JSON 字符串,结果是 JSON 字符串或异常。
-- 取消:任务持有 `CallContext`(原子取消标志 + 页面/窗口引用);页面导航/窗口关闭时置位;阻塞操作应定期检查。
-- 不在工作线程触碰 UI 对象;需要 UI 的结果经 `postMain` 回主线程。
+- 当前实现:`core/ipcpool.nim`,默认 4 worker、最多 256 个在途请求;可配置。
+- 仅显式注册的 `bindBackgroundService` 方法进入池;入参和结果都是 JSON 字符串。
+- 取消/超时尚未实现;工作函数必须自行限制阻塞 I/O 的时间。页面导航/窗口关闭后结果丢弃。
+- 不在工作线程触碰 UI 对象;结果经 `Channel` + `wakeMainThread` 回到主线程,由 `drainIpcPool` 投递。详见 [异步 IPC](29-async-ipc.md)。
 
 ### 5.4 内存模型
 

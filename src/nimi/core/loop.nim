@@ -12,6 +12,7 @@ var
   queueLock: Lock
   signalHook: proc() {.closure.}
   mainHook: proc(): bool {.closure.}
+  wakeHook: proc() {.nimcall, gcsafe.}
   initialized = false
   shuttingDown = false
 
@@ -24,6 +25,20 @@ proc setLoopHooks*(signal: proc(), isMain: proc(): bool) =
   ## Called once by the backend after it starts.
   signalHook = signal
   mainHook = isMain
+
+proc setWakeHook*(hook: proc() {.nimcall, gcsafe.}) =
+  ## Thread-safe wake primitive for workers that only touch Channels. It must
+  ## not capture GC-managed state. Called once by the backend bootstrap.
+  wakeHook = hook
+
+proc wakeMainThread*() {.gcsafe.} =
+  ## Safe from worker threads: signals the native main queue without touching
+  ## the closure queue. The main dispatch drains IPC results on wake.
+  if wakeHook != nil:
+    try:
+      wakeHook()
+    except CatchableError:
+      discard
 
 proc isMainThread*(): bool =
   if mainHook == nil:

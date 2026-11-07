@@ -295,6 +295,10 @@ nimi.app.run()
 
 ## 4. IPC 与 TypeScript 生成
 
+> 2026-11-07：当前实现中，`bindService` 方法在 UI 线程同步执行，耗时方法可用
+> `bindBackgroundService` 注册到有界工作池。线程模型、背压和关闭语义见
+> [异步 IPC 与工作池](29-async-ipc.md)；本节其余内容保留为目标协议设计。
+
 ### 4.1 协议(与 MyGo 对齐)
 
 详见 `01-architecture.md` §7.1。要点:

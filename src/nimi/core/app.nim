@@ -2,7 +2,7 @@
 
 import std/[os, tables]
 
-import ./[content, ipc, loop, menu, window]
+import ./[content, ipc, ipcpool, loop, menu, window]
 import ../platform/contract
 
 when defined(macosx):
@@ -153,6 +153,7 @@ proc run*(a: App) =
     let backend = darwinApp.newDarwinBackend()
     currentBackend = backend
     setLoopHooks(backend.signal, backend.isMainThread)
+    setWakeHook(darwinApp.wakeMain)
     allClosedHook = proc() =
       if not a.quitting:
         discard a.requestQuit()
@@ -173,9 +174,12 @@ proc run*(a: App) =
         fn(url)
     handler.dispatch = proc() =
       drainMain()
+      drainIpcPool()
     backend.init(handler, AppOptions(name: a.name))
     installMenu(a)
     backend.run()
+    setIpcCompletion(nil)
+    shutdownIpcPool(200)
     shutdownLoop()
   else:
     raise newException(BackendError,
