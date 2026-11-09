@@ -24,7 +24,7 @@
   - thumb 尺寸按 viewport/content 比例
   - 拖动/点击 track 更新 offset
 - 键盘:PageUp/PageDown 滚动最近鼠标所在/焦点所在区域
-- 示例 `examples/scroll-native`:40 行按钮列表,滚轮/滚动条/测试滚动
+- 示例 `examples/widgets-native`（ScrollView 区）:40 行按钮列表,滚轮/滚动条/测试滚动
 
 ## 2. 关键决策
 
@@ -41,7 +41,7 @@
 ## 3. 验证
 
 ```sh
-NIMI_SMOKE=scroll nim c -r --path:src examples/scroll-native/main.nim
+NIMI_SMOKE=scroll nim c -r --path:src examples/widgets-native/main.nim
 # scroll rows: 41
 # content height: 1040 viewport: 260
 # offset: 120

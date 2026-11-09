@@ -100,10 +100,12 @@ nim c -o:nimi src/nimi/cli.nim
 ./nimi dev examples/hello        # 关闭窗口退出
 
 # 原生 UI:无 HTML,CoreGraphics/CoreText 自绘
-nim c -r --path:src examples/native-smoke/main.nim
+nim c -r --path:src examples/counter-native/main.nim
 
 # M3 控件/Image/ScrollView:Checkbox/Switch/Slider/Progress/Divider
 nim c -r --path:src examples/widgets-native/main.nim
+NIMI_SMOKE=image nim c -r --path:src examples/widgets-native/main.nim
+NIMI_SMOKE=scroll nim c -r --path:src examples/widgets-native/main.nim
 
 # macOS 桌面 API:屏幕/主题/窗口/托盘/通知/全局快捷键
 nim c -r --path:src examples/desktop-native/main.nim
@@ -116,12 +118,6 @@ nim c -r --path:src examples/watch-native/main.nim
 
 # Document 控制器 + TextArea + 冲突提示
 nim c -r --path:src examples/document-native/main.nim
-
-# 原生 ScrollView 与裁剪
-nim c -r --path:src examples/scroll-native/main.nim
-
-# 原生 Image(ImageIO)
-nim c -r --path:src examples/image-native/main.nim
 
 # 基本 GUI 应用:TextInput + 控件 + 菜单 + 文件/消息对话框
 nim c -r --path:src examples/form-native/main.nim
@@ -174,16 +170,13 @@ nimi/
 ├── tests/                 # IPC/loop/ui/render/desktop/fileserver/document/shred/metal
 ├── examples/             # 验收示例,清单与保留建议见 examples/README.md
 │   ├── hello/             # WebView + IPC 验收
-│   ├── native-smoke/      # 原生 Surface 验收(可退役候选)
 │   ├── counter-native/    # 原生布局/控件/点击验收
-│   ├── widgets-native/    # M3 控件/Image/ScrollView验收
+│   ├── widgets-native/    # M3 控件/Image/ScrollView 验收
 │   ├── form-native/       # 原生 GUI 应用验收
 │   ├── desktop-native/    # macOS 桌面 API 验收
 │   ├── protocol-native/   # 自定义 nimi:// 协议验收
 │   ├── watch-native/      # FSEvents 文件监视验收
 │   ├── document-native/   # Document 控制器/冲突验收
-│   ├── scroll-native/     # ScrollView/裁剪验收
-│   ├── image-native/      # Image/ImageIO 验收
 │   ├── shredder/          # WebGL 碎纸效果 + Verlet 物理验收
 │   ├── shred-native/      # CoreGraphics 纹理四边形 + 帧驱动验收
 │   ├── shred-metal/       # Metal mask/LayerEffect 验收

@@ -14,7 +14,7 @@
   - 按路径缓存 `CGImage`
 - Native UI:`ui.image(c, path, width, height)`
 - 离屏 PNG 也可包含图片
-- 示例 `examples/image-native`
+- 示例合并到 `examples/widgets-native`（Image 区）
 - 测试 `test_render` 覆盖图片离屏渲染
 
 ## 2. 关键决策
@@ -30,7 +30,7 @@
 ## 3. 验证
 
 ```sh
-NIMI_SMOKE=image nim c -r --path:src examples/image-native/main.nim
+NIMI_SMOKE=image nim c -r --path:src examples/widgets-native/main.nim
 # image path: .../examples/notes/resources/icon.png
 # png written: true
 

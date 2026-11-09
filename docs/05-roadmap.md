@@ -174,7 +174,7 @@
 
 **目标**:`examples/counter-native` 运行;点击/键盘改变数字;headless Tester 通过;CPU 渲染。
 
-**当前状态(2026-11-04)**:核心切片已跑通。`NSView` Surface、`drawRect:` → CGContext、CoreGraphics/CoreText 渲染、CoreText 真实文本测量、rune 级换行、Column/Row 布局、Text/Button、命中测试、鼠标事件、方向键、Tab/Enter 焦点、`ui.Tester`、离屏 PNG、`Window.invalidate()` 链路可用;`examples/native-smoke` 和 `examples/counter-native` 已实际截图验证,鼠标/键盘/焦点的坐标与 AppKit NSEvent 测试通过;`tests/test_ui.nim`/`test_render.nim` 无窗口测试通过。剩余项:ellipsis/maxLines、场景/像素 golden、TextInput、完整焦点模型、Scroll/List、Metal。详见 [M2 实现状态](10-m2-notes.md)。
+**当前状态(2026-11-04)**:核心切片已跑通。`NSView` Surface、`drawRect:` → CGContext、CoreGraphics/CoreText 渲染、CoreText 真实文本测量、rune 级换行、Column/Row 布局、Text/Button、命中测试、鼠标事件、方向键、Tab/Enter 焦点、`ui.Tester`、离屏 PNG、`Window.invalidate()` 链路可用;`examples/counter-native` 和 `examples/widgets-native` 已实际截图验证,鼠标/键盘/焦点的坐标与 AppKit NSEvent 测试通过;`tests/test_ui.nim`/`test_render.nim` 无窗口测试通过。剩余项:ellipsis/maxLines、场景/像素 golden、TextInput、完整焦点模型、Scroll/List、Metal。详见 [M2 实现状态](10-m2-notes.md)。
 
 ### 4.1 工作包
 
@@ -490,4 +490,4 @@
 
 ## 16. 当前下一步
 
-按 [整改基线](28-remediation-status.md) 的验收门槛执行。grapheme 编辑、IME UTF-16 range、窗口关闭失效、任务取消/超时、固定行高虚拟列表、缓存条目上限、本地音频与队列会话均已落地并有自动测试；后台 IPC 已有工作池。真实拼音/日文输入法仍需人工验收。下一阶段是后台 IPC 的超时/取消与流式返回、音乐封面与元数据、macOS 集成和发布验证。实际性能与音频原型完成后重新排期；不以原型通过推算完整框架交付日期。
+按 [整改基线](28-remediation-status.md) 的验收门槛执行。grapheme 编辑、IME UTF-16 range、窗口关闭失效、任务取消/超时、固定行高虚拟列表、缓存条目上限、本地音频与队列会话均已落地并有自动测试；后台 IPC 已有工作池。真实拼音/日文输入法仍需人工验收。下一阶段是后台 IPC 的超时/取消与流式返回、音乐封面与 Now Playing、macOS 集成和发布验证。实际性能与音频原型完成后重新排期；不以原型通过推算完整框架交付日期。

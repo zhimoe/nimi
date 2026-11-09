@@ -41,3 +41,17 @@ suite "playback queue":
     check q.nextIndex() == 1
     check not q.select(99)
     check q.selected == 0
+
+suite "track metadata":
+  test "identity deduplicates local paths and remote IDs":
+    var q = initPlaybackQueue()
+    q.add(localTrack("/music/song.mp3"))
+    q.add(localTrack("/music/song.mp3"))
+    q.add(Track(path: "/cache/a.audio", title: "远方", artist: "歌手",
+                album: "专辑", source: "subsonic", remoteId: "id-1"))
+    q.add(Track(path: "/cache/other.audio", title: "重复",
+                source: "subsonic", remoteId: "id-1"))
+    check q.tracks.len == 2
+    check q.tracks[0].displayTitle() == "song"
+    check q.tracks[1].displayTitle() == "远方"
+    check q.tracks[1].displaySubtitle() == "歌手 — 专辑"

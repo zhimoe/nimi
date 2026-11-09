@@ -50,6 +50,7 @@ jobs:
           ./nimi build examples/desktop-native
           ./nimi build examples/protocol-native
           ./nimi build examples/notes
+          ./nimi build examples/music
           ./nimi build examples/shred-native
           ./nimi build examples/shred-metal
           for dmg in examples/*/dist/*/*.dmg; do

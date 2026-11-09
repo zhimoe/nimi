@@ -32,7 +32,7 @@
 |---|---|---|---|
 | WebView / IPC | 绑定服务、事件、Channel（1 MiB 窗口/ack）、trusted/untrusted、preload、注入脚本顺序、Eval、页面导航/下载/权限、`WebViewAvailable`、GPU 进程 ID | 类型化 IPC、事件、后台工作池、secret/token；无 Channel、preload、trust 细分、下载/权限 | 保留 `docs/04` 的目标协议；M1 剩余项改为“Channel、preload/trust、页面下载/权限、Eval 返回值”；后台池见 `29` |
 | 原生 UI | ~100 组件：editor、richtext、markdown、chart、video、table/tree/outline/grid、split/sidebar/toolbar、calendar/date/time/color、combobox/autocomplete/token、find bar/diff viewer；无障碍、RTL、transitions/motion/transforms/shaders、Tester、WASM 浏览器 | 少量基础控件、TextInput/TextArea、ScrollView、固定行高虚拟列表、基础 IME | `docs/03` 的 120 入口是旧快照；M3 只承诺基础控件；编辑器/富文本/图表/视频/无障碍进入 M6/M10/P2，不挤进 M3 |
-| 音频 | Go 内混音；WAV/MP3/Vorbis/FLAC/AAC/ALAC（含 MP4 容器）；流式解码、seek、loop、变速/保持音高；Now Playing/媒体键；三平台输出 | AVAudioPlayer 本地文件、播放/暂停/seek/音量；WAV 测试；无流式、混音、格式矩阵 | 音乐应用先完成元数据/封面/Now Playing；通用音频引擎（混音、流式、格式注册）列为 M10/P2，不阻塞 1.0 |
+| 音频 | Go 内混音；WAV/MP3/Vorbis/FLAC/AAC/ALAC（含 MP4 容器）；流式解码、seek、loop、变速/保持音高；Now Playing/媒体键；三平台输出 | AVAudioPlayer 本地文件、播放/暂停/seek/音量；Track 元数据/会话 v2 已完成；无流式、混音、格式矩阵 | 音乐应用下一步做封面/Now Playing；通用音频引擎（混音、流式、格式注册）列为 M10/P2，不阻塞 1.0 |
 | 原生模块 | Swift/Rust/Zig 实现 Go 接口，无 cgo；`mygo native build/add/check/call/publish`；视图/回调/缓冲区/纹理 | 未规划 | 新增 M10/P2 条目；明确 1.0 不做，插件/动态库继续走现有路线 |
 | 桌面 API | Now Playing/媒体键、Power、Network/Proxy、Secrets、权限（PermissionFlow）、Downloads、拖放、通知点击/权限、最近文档、Jump List、登录项、窗口状态、vibrancy、SetInputRegion | 菜单/托盘/通知/快捷键/对话框/剪贴板/屏幕/主题/窗口控制/Cookie 查询/文件监视/Document | `docs/14` 后补差距表；M4 增加 Now Playing、Power、Secrets、拖放、通知点击；M5 增加 Downloads、权限、窗口状态 |
 | 文档 | autosave、恢复副本、外部修改、File 菜单、最近文档、文件关联、每窗口文档 | Document 控制器、原子保存、外部冲突检测；无 autosave/recovery/recent 菜单 | M5 扩展验收：崩溃恢复、自动保存、最近文档、关闭/退出询问 |
@@ -82,11 +82,8 @@
 |---|---|---|
 | `hello` | M1 WebView/JS IPC 最小闭环 | 保留 |
 | `counter-native` | M2 原生 UI 最小验收 | 保留 |
-| `native-smoke` | 最早的 NSView/CG 静态画面 | **可删除**：counter-native/widgets-native 已覆盖 |
 | `form-native` | TextInput/TextArea/菜单/对话框/IME | 保留 |
-| `widgets-native` | Checkbox/Switch/Slider/Progress/Divider | 保留 |
-| `image-native` | Image/PNG 渲染 | 暂留；后续可并入 widgets-native |
-| `scroll-native` | ScrollView/裁剪/滚动条 | 暂留；后续可并入 widgets-native |
+| `widgets-native` | Checkbox/Switch/Slider/Progress/Divider + Image + ScrollView | 保留（已合并 image-native/scroll-native） |
 | `protocol-native` | 自定义协议/FileServer | 保留 |
 | `watch-native` | FSEvents 文件监视 | 保留 |
 | `document-native` | Document 控制器 | 保留 |
@@ -97,12 +94,14 @@
 | `shred-native` | CoreGraphics 纹理四边形/帧驱动 | 保留（CPU 路径） |
 | `shred-metal` | Metal mask/LayerEffect | 保留（GPU 路径） |
 
-结论：
+已执行：
 
-- **唯一明确可删**：`native-smoke`。删除时同步改 `README.md`、`docs/05`、`docs/10`。
-- **可合并候补**：`image-native`、`scroll-native` 可并入 `widgets-native`，但会牵动 `docs/21`、`docs/22`；暂时保留成本很低。
-- **不建议删**：`shred-native`/`shred-metal`/`shredder` 分别覆盖 CPU/GPU/WebView 三条渲染路径；`notes`/`music` 分别覆盖 WebView-first 与原生-first 两种应用形态。
-- CI 目前只构建 `desktop-native`、`protocol-native`、`notes`、`shred-native`、`shred-metal`；`music` 未进 DMG 构建，建议补入。
+- 删除 `native-smoke`；自定义绘制验收由 `counter-native`/`widgets-native` 覆盖。
+- 将 `image-native`、`scroll-native` 合并进 `widgets-native`，保留 `NIMI_SMOKE=image|scroll` 两个冒烟入口。
+- `shred-native`/`shred-metal`/`shredder` 分别覆盖 CPU/GPU/WebView 三条渲染路径，保留；`notes`/`music` 分别覆盖 WebView-first 与原生-first 两种应用形态，保留。
+- CI 构建 `desktop-native`、`protocol-native`、`notes`、`music`、`shred-native`、`shred-metal`；music 已补入 DMG 构建。
+
+已同步更新 `README.md`、`docs/05`、`docs/10`、`docs/11`、`docs/21`、`docs/22` 与 `examples/README.md`。
 
 ---
 

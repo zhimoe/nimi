@@ -7,11 +7,8 @@
 |---|---|---|
 | `hello` | M1 WebView + bridge + typed IPC 最小闭环 | 保留 |
 | `counter-native` | M2 原生 UI、Tester、离屏 PNG | 保留 |
-| `native-smoke` | 最早的 NSView/CoreGraphics 静态画面 | **可删除**：已被 counter-native/widgets-native 覆盖 |
 | `form-native` | TextInput/TextArea、菜单、对话框、IME | 保留 |
-| `widgets-native` | Checkbox/Switch/Slider/Progress/Divider | 保留 |
-| `image-native` | Image/PNG 渲染 | 暂留；可并入 widgets-native |
-| `scroll-native` | ScrollView/裁剪/滚动条 | 暂留；可并入 widgets-native |
+| `widgets-native` | Checkbox/Switch/Slider/Progress/Divider + Image + ScrollView | 保留（已合并原 image-native/scroll-native） |
 | `protocol-native` | 自定义 `nimi://` 协议/FileServer | 保留 |
 | `watch-native` | FSEvents 文件监视 | 保留 |
 | `document-native` | Document 控制器 | 保留 |
@@ -29,7 +26,14 @@
 - `desktop-native`
 - `protocol-native`
 - `notes`
+- `music`
 - `shred-native`
 - `shred-metal`
 
-`music` 已经是完整原生应用，建议加入 DMG 构建/冒烟；其余示例按需编译即可。
+其余示例按需编译即可。
+
+已退役：
+
+- `native-smoke`（被 counter-native/widgets-native 覆盖）
+- `image-native`（Image 区并入 widgets-native；`NIMI_SMOKE=image` 保留）
+- `scroll-native`（ScrollView 区并入 widgets-native；`NIMI_SMOKE=scroll` 保留）

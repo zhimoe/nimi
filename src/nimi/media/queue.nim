@@ -1,21 +1,67 @@
 ## Playback order is independent of audio output and UI.
-import std/random
+import std/[os, random]
 
 type
+  Track* = object
+    path*: string
+    title*: string
+    artist*: string
+    album*: string
+    source*: string
+      ## "local" or a remote service such as "subsonic".
+    remoteId*: string
+    coverId*: string
+    duration*: float64
+
   RepeatMode* = enum repeatOff, repeatAll, repeatOne
+
   PlaybackQueue* = object
-    tracks*: seq[string]
+    tracks*: seq[Track]
     selected*: int
     repeatMode*: RepeatMode
     shuffle*: bool
     history: seq[int]
     random: Rand
 
+proc identity*(track: Track): string =
+  ## Stable queue identity: remote tracks by service and ID, local by path.
+  if track.source.len > 0 and track.remoteId.len > 0:
+    track.source & ":" & track.remoteId
+  else:
+    track.path
+
+proc displayTitle*(track: Track): string =
+  if track.title.len > 0: track.title
+  elif track.path.len > 0: splitFile(track.path).name
+  else: "Untitled"
+
+proc displaySubtitle*(track: Track): string =
+  if track.artist.len > 0 and track.album.len > 0:
+    track.artist & " — " & track.album
+  elif track.artist.len > 0:
+    track.artist
+  else:
+    track.album
+
+proc localTrack*(path: string): Track =
+  let title = splitFile(path).name
+  Track(path: path, title: if title.len > 0: title else: extractFilename(path),
+        source: "local")
+
 proc initPlaybackQueue*(seed: int64 = 1): PlaybackQueue =
   PlaybackQueue(selected: -1, random: initRand(seed))
 
+proc add*(q: var PlaybackQueue, track: Track) =
+  let key = track.identity
+  if key.len == 0:
+    return
+  for existing in q.tracks:
+    if existing.identity == key:
+      return
+  q.tracks.add track
+
 proc add*(q: var PlaybackQueue, path: string) =
-  if path.len > 0 and path notin q.tracks: q.tracks.add(path)
+  q.add(localTrack(path))
 
 proc select*(q: var PlaybackQueue, index: int): bool =
   if index < 0 or index >= q.tracks.len: return false

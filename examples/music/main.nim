@@ -65,14 +65,15 @@ proc persist() =
 proc selectTrack(index: int, previous = false, autoplay = true) =
   downloads.cancel(downloadId)
   if index < 0 or index >= queue.tracks.len: return
+  let track = queue.tracks[index]
   try:
-    let next = openAudio(queue.tracks[index])
+    let next = openAudio(track.path)
     next.setVolume(volume)
     player.close()
     player = next
     background.cancel(lyricTask)
     lyricLines.setLen(0)
-    lyricTask = background.submit(queue.tracks[index], readLyrics, proc(r: TaskResult) =
+    lyricTask = background.submit(track.path, readLyrics, proc(r: TaskResult) =
       if r.error.len == 0: lyricLines = parseLrc(r.value)
     )
     if previous: queue.selectPrevious(index)
@@ -85,7 +86,7 @@ proc selectTrack(index: int, previous = false, autoplay = true) =
       if candidate >= 0: selectTrack(candidate)
       else: status = "Queue finished"
     if autoplay and not player.play(): status = "Audio output unavailable"
-    else: status = extractFilename(queue.tracks[index])
+    else: status = track.displayTitle()
   except CatchableError as e:
     status = e.msg
 
@@ -99,19 +100,23 @@ proc playRemote(track: RemoteTrack) =
     proc(r: TaskResult) =
       if r.error.len > 0: catalogStatus = r.error
       else:
-        queue.add(r.value)
-        for index, path in queue.tracks:
-          if path == r.value:
+        let downloaded = Track(path: r.value, title: track.title,
+          artist: track.artist, album: track.album, source: "subsonic",
+          remoteId: track.id, coverId: track.coverId,
+          duration: float64(track.duration))
+        queue.add(downloaded)
+        for index, item in queue.tracks:
+          if item.identity == downloaded.identity:
             selectTrack(index)
             break
-        catalogStatus = "Downloaded " & track.title
+        catalogStatus = "Downloaded " & downloaded.displayTitle()
   )
   if downloadId == 0: catalogStatus = "Background queue is busy"
 
 proc importTracks() =
   let paths = dialog.open("Import music")
   for path in paths:
-    if path notin queue.tracks: queue.tracks.add(path)
+    queue.add(path)
   if queue.selected < 0 and queue.tracks.len > 0: selectTrack(0)
 
 proc view(c: Context) =
@@ -167,8 +172,13 @@ proc view(c: Context) =
       virtualList(c, "queue.tracks", queue.tracks.len, 40, 280,
         proc(c: Context, i: int) =
           let index = i
-          button(c, (if i == queue.selected: "▶ " else: "") & extractFilename(queue.tracks[i]),
-            proc() = selectTrack(index), key = "track-" & $i).height(36)
+          let track = queue.tracks[i]
+          var label = (if i == queue.selected: "▶ " else: "") &
+            track.displayTitle()
+          let subtitle = track.displaySubtitle()
+          if subtitle.len > 0: label &= " — " & subtitle
+          button(c, label, proc() = selectTrack(index),
+            key = "track-" & $i).height(36)
       )
   )
 
@@ -194,7 +204,7 @@ app.whenReady(proc() =
     downloads.poll()
   )
   for path in commandLineParams():
-    if fileExists(path): queue.tracks.add(path)
+    if fileExists(path): queue.add(path)
 )
 app.onBeforeQuit(proc(e: var QuitEvent) = persist())
 app.run()

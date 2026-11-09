@@ -6,19 +6,14 @@
 
 ## 1. 已跑通的切片
 
-两个**没有任何 HTML/WKWebView** 的 Nimi 窗口:
+一个**没有任何 HTML/WKWebView** 的 Nimi 窗口:
 
 ```sh
-# 自定义绘制:背景/文字/圆角矩形
-nim c -r --path:src examples/native-smoke/main.nim
-
 # 交互式 counter:Column/Row/Text/Button + 命中测试
 nim c -r --path:src examples/counter-native/main.nim
 ```
 
-`native-smoke` 实际截图确认:深色背景、`Native UI from Nim`、`CoreGraphics + CoreText, no HTML`、蓝色圆角矩形。
-
-`counter-native` 实际截图确认:白色背景、大号数字、`- / Reset / +` 三个按钮、提示文本;布局居中。点击 `+`/`-`/`Reset`、方向键、Tab+Enter 都会改变数字并重绘。
+`counter-native` 实际截图确认:白色背景、大号数字、`- / Reset / +` 三个按钮、提示文本;布局居中。点击 `+`/`-`/`Reset`、方向键、Tab+Enter 都会改变数字并重绘。最早的 `native-smoke` 静态画面已退役，自定义绘制路径由 counter-native/widgets-native 覆盖。
 
 多行换行也已验证:`The quick brown fox... 你好世界,这是自动换行。` 在 220px 宽内正确分成多行,离屏 PNG 输出确认。
 
@@ -85,7 +80,6 @@ WindowOptions.content
 | `src/nimi/ui.nim` | UI 门面 |
 | `src/nimi/core/content.nim` | `Content`/`uiView`/`renderContent` |
 | `src/nimi/platform/darwin/window.nim` | Surface 分支、`NimiSurfaceView`、drawRect 回调 |
-| `examples/native-smoke/main.nim` | 自定义绘制验收 |
 | `examples/counter-native/main.nim` | Column/Row/Text/Button + 点击验收 |
 | `tests/test_ui.nim` | 无窗口布局/命中/点击/键盘/Tester 测试 |
 | `tests/test_render.nim` | 离屏 PNG 渲染测试 |
