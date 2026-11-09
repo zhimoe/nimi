@@ -94,14 +94,21 @@ global shortcut: true
 
 按对 Nimi 当前目标的价值排序，尚未实现：
 
-1. Now Playing / 媒体键（音乐应用需要）。
-2. Keychain/Secrets（Subsonic 凭据）。
-3. Cookie 写入/删除、Session 隔离。
-4. 通知权限、点击回调、移除。
-5. 拖放（文件/文本/URL）、窗口输入区域。
-6. Power/App Nap、Network 状态与代理。
-7. 最近文档、Jump List、登录项、文件关联、窗口状态恢复。
-8. 托盘图标/模板图、剪贴板图片/文件、自定义格式。
-9. 自动化 socket（与 MyGo `MYGO_AUTOMATION` 兼容）。
+1. Keychain/Secrets（Subsonic 凭据）。
+2. Cookie 写入/删除、Session 隔离。
+3. 通知权限、点击回调、移除。
+4. 拖放（文件/文本/URL）、窗口输入区域。
+5. Power/App Nap、Network 状态与代理。
+6. 最近文档、Jump List、登录项、文件关联、窗口状态恢复。
+7. 托盘图标/模板图、剪贴板图片/文件、自定义格式。
+8. 自动化 socket（与 MyGo `MYGO_AUTOMATION` 兼容）。
 
 这些不是 1.0 全部必需；优先级见 [30](30-mygo-alignment.md) 与 [28](28-remediation-status.md)。
+
+## 7. Now Playing / 媒体键（2026-11-09）
+
+- 新增 `core/nowplaying`：`NowPlayingInfo`（标题/歌手/专辑/时长/位置/播放状态/可用命令）与 `MediaCommand`（play/pause/toggle/stop/next/previous/seek）。
+- Darwin 后端懒加载 `MediaPlayer.framework`，使用 `MPNowPlayingInfoCenter` 显示状态、`MPRemoteCommandCenter` 接收媒体键/系统媒体控制。
+- 命令回调仍在主线程；`setNowPlaying`/`clearNowPlaying` 可在 `whenReady` 后调用。
+- Music 已接入：切歌、播放/暂停、seek、下一首/上一首和停止会更新系统状态；退出/关窗清除。
+- 未做：封面 artwork、真实媒体键人工验收、Windows/Linux 媒体控制。

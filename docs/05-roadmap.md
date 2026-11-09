@@ -261,10 +261,10 @@
 
 **目标**:`gallery` 子集;常用表单/列表/弹层;60fps;Metal 渲染基础。
 
-**当前状态(2026-11-05)**:已新增 Checkbox/Switch/Slider/Progress/Divider、Image、ScrollView、纹理四边形、
-`Window.startAnimation` 帧驱动,以及碎纸专用 Metal mask/LayerEffect 原型;List/Table/Tabs/Select、
-通用 Metal scene 合成器仍未开始。详见 [M3–M7 状态](11-m3-m7-status.md) 与
-[原生碎纸](26-native-shred.md)。
+**当前状态(2026-11-09)**:已新增 Checkbox/Switch/Slider/Progress/Divider、Image、ScrollView、
+固定行高虚拟列表、纹理四边形、`Window.startAnimation` 帧驱动,以及碎纸专用 Metal
+mask/LayerEffect 原型;List/Table/Tabs/Select、通用 Metal scene 合成器仍未开始。
+详见 [M3–M7 状态](11-m3-m7-status.md) 与 [原生碎纸](26-native-shred.md)。
 
 ### 工作包
 
@@ -285,7 +285,7 @@
 
 ## 6. M4:桌面 API(8–12 周)
 
-**当前状态(2026-11-05)**:Clipboard、菜单/NSMenu/role、动态菜单、Open/Save/Message/Confirm 对话框、屏幕/光标、明暗主题/强调色、窗口控制/焦点、NSStatusItem 托盘、NSUserNotification 通知、Carbon 全局快捷键已实现。`examples/desktop-native` 是验收示例;`examples/notes` 是实际笔记应用。剩余:通知权限/点击、托盘图标、快捷键冲突提示、剪贴板图片/文件,见 [macOS 桌面 API](14-macos-desktop-apis.md)。
+**当前状态(2026-11-09)**:Clipboard、菜单/NSMenu/role、动态菜单、Open/Save/Message/Confirm 对话框、屏幕/光标、明暗主题/强调色、窗口控制/焦点、NSStatusItem 托盘、NSUserNotification 通知、Carbon 全局快捷键、Now Playing/媒体键基础已实现。`examples/desktop-native` 是验收示例;`examples/notes` 是 WebView-first 应用,`examples/music` 是原生-first 应用。剩余:通知权限/点击、托盘图标、快捷键冲突提示、剪贴板图片/文件、Now Playing artwork 与真实媒体键验收,见 [macOS 桌面 API](14-macos-desktop-apis.md)。
 
 - 菜单完整:role/动态更新/上下文菜单/Dock 菜单。
 - 托盘:图标/菜单/点击/深浅色。
@@ -490,4 +490,4 @@
 
 ## 16. 当前下一步
 
-按 [整改基线](28-remediation-status.md) 的验收门槛执行。grapheme 编辑、IME UTF-16 range、窗口关闭失效、任务取消/超时、固定行高虚拟列表、缓存条目上限、本地音频与队列会话均已落地并有自动测试；后台 IPC 已有工作池。真实拼音/日文输入法仍需人工验收。下一阶段是后台 IPC 的超时/取消与流式返回、音乐封面与 Now Playing、macOS 集成和发布验证。实际性能与音频原型完成后重新排期；不以原型通过推算完整框架交付日期。
+按 [整改基线](28-remediation-status.md) 的验收门槛执行。grapheme 编辑、IME UTF-16 range、窗口关闭失效、任务取消/超时、固定行高虚拟列表、缓存条目上限、本地音频与队列会话均已落地并有自动测试；后台 IPC 已有工作池。真实拼音/日文输入法仍需人工验收。下一阶段是后台 IPC 的超时/取消与流式返回、音乐封面 artwork/缓存管理与流式播放、macOS 集成和发布验证。实际性能与音频原型完成后重新排期；不以原型通过推算完整框架交付日期。

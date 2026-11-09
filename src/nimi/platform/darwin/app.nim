@@ -1,7 +1,7 @@
 ## NSApplication lifecycle and the macOS Backend implementation.
 
 import ../contract
-import ./[clipboard, cookie, desktop, dialogs, menu, objc, shortcuts, tray, types, watch, window]
+import ./[clipboard, cookie, desktop, dialogs, menu, nowplaying, objc, shortcuts, tray, types, watch, window]
 
 const
   NimiAppDelegateClass = "NimiAppDelegate"
@@ -127,6 +127,7 @@ proc newDarwinBackend*(): Backend =
   installDesktopBackend(result)
   installShortcutBackend(result)
   installCookieBackend(result)
+  installNowPlayingBackend(result)
   result.setMenu = proc(menu: PlatformMenu, h: MenuHandler) =
     installPlatformMenu(menu, h)
   result.newTray = proc(opts: PlatformTrayOptions): NativeTray =

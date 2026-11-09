@@ -13,7 +13,7 @@ nim c -r --path:src examples/music/main.nim
 
 播放器通过 AVAudioPlayer delegate 接收真正的结束事件；暂停不触发自动切歌。播放器必须在主线程使用并显式 close（活动播放器注册表会持有对象）；切换文件先确认解码成功，再关闭旧播放器。解码发生在主线程，大文件的加载延迟尚待测量。当前每秒刷新 10 次，后续改为按播放状态驱动。
 
-远程歌曲的封面通过后台 `getCoverArt` 下载，缓存到 `getCacheDir()/nimi-music/covers`，当前播放区显示封面；会话保存封面路径。待完成：流式播放、服务登录与 Keychain、媒体键/Now Playing、视觉和交互对齐参考应用。当前示例不是最终复刻验收结果。
+远程歌曲的封面通过后台 `getCoverArt` 下载，缓存到 `getCacheDir()/nimi-music/covers`，当前播放区显示封面；会话保存封面路径。Now Playing 已接入 `MPNowPlayingInfoCenter`/`MPRemoteCommandCenter`：系统媒体控制显示标题/歌手/专辑/进度，播放/暂停/seek/上一首/下一首/停止回传到应用。待完成：封面 artwork、流式播放、服务登录与 Keychain、真实媒体键人工验收、视觉和交互对齐参考应用。当前示例不是最终复刻验收结果。
 
 曲库使用固定行高虚拟列表；Now playing 将当前歌曲定位到可见区域。一万行构建数量和点击行为已有自动测试，真实大曲库性能尚待测量。
 

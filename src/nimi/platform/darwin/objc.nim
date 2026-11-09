@@ -345,6 +345,10 @@ proc nsNumberInt*(value: int): Id =
   cast[proc(a: Id, s: SEL, v: NSInteger): Id {.cdecl.}](msgSend)(
     loadClass("NSNumber"), sel("numberWithInteger:"), NSInteger(value))
 
+proc nsNumberDouble*(value: float64): Id =
+  cast[proc(a: Id, s: SEL, v: cdouble): Id {.cdecl.}](msgSend)(
+    loadClass("NSNumber"), sel("numberWithDouble:"), cdouble(value))
+
 proc nsNumberBool*(value: bool): Id =
   cast[proc(a: Id, s: SEL, v: bool): Id {.cdecl.}](msgSend)(
     loadClass("NSNumber"), sel("numberWithBool:"), value)

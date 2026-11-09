@@ -127,6 +127,15 @@ type
   PlatformNotification* = object
     title*, subtitle*, body*: string
 
+  PlatformMediaCommand* = enum
+    pmcPlay, pmcPause, pmcTogglePlayPause, pmcStop, pmcNext, pmcPrevious, pmcSeek
+
+  PlatformNowPlayingInfo* = object
+    title*, artist*, album*: string
+    duration*, position*: float64
+    playing*: bool
+    commands*: set[PlatformMediaCommand]
+
   PlatformTrayOptions* = object
     title*, tooltip*: string
 
@@ -200,6 +209,10 @@ type
     setMenu*: proc(menu: PlatformMenu, h: MenuHandler) {.closure.}
     newTray*: proc(opts: PlatformTrayOptions): NativeTray {.closure.}
     notify*: proc(n: PlatformNotification) {.closure.}
+    setNowPlaying*: proc(info: PlatformNowPlayingInfo) {.closure.}
+    clearNowPlaying*: proc() {.closure.}
+    setMediaCommandHandler*: proc(fn: proc(cmd: PlatformMediaCommand,
+                                           position: float64)) {.closure.}
     watchFiles*: proc(path: string,
                       h: proc(e: PlatformFileEvent)): NativeFileWatcher {.closure.}
     getCookies*: proc(cb: proc(cookies: seq[PlatformCookie])) {.closure.}

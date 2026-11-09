@@ -67,6 +67,18 @@ proc setCover(identity, path: string) =
       queue.tracks[index].coverPath = path
       return
 
+proc updateNowPlaying() =
+  if player == nil or queue.selected < 0 or queue.selected >= queue.tracks.len:
+    clearNowPlaying()
+    return
+  let track = queue.tracks[queue.selected]
+  setNowPlaying(NowPlayingInfo(
+    title: track.displayTitle(), artist: track.artist, album: track.album,
+    duration: player.duration, position: player.position,
+    playing: player.playing,
+    commands: {mcPlay, mcPause, mcTogglePlayPause, mcStop, mcNext,
+               mcPrevious, mcSeek}))
+
 
 proc selectTrack(index: int, previous = false, autoplay = true) =
   downloads.cancel(downloadId)
@@ -93,6 +105,7 @@ proc selectTrack(index: int, previous = false, autoplay = true) =
       else: status = "Queue finished"
     if autoplay and not player.play(): status = "Audio output unavailable"
     else: status = track.displayTitle()
+    updateNowPlaying()
   except CatchableError as e:
     status = e.msg
 
@@ -164,6 +177,7 @@ proc view(c: Context) =
         if player.playing: player.pause()
         elif player != nil: discard player.play()
         elif queue.tracks.len > 0: selectTrack(0)
+        updateNowPlaying()
       , key = "play")
       button(c, "Next", proc() = selectTrack(queue.nextIndex()), key = "next")
     )
@@ -177,8 +191,10 @@ proc view(c: Context) =
     let line = lyricLines.activeLine(player.position)
     text(c, (if line >= 0: lyricLines[line].text else: ""), 16).height(24)
     let length = player.duration
-    slider(c, float32(player.position), proc(v: float32) = player.seek(v),
-      minValue = 0, maxValue = float32(max(1.0, length)), key = "seek").width(600)
+    slider(c, float32(player.position), proc(v: float32) =
+      player.seek(v)
+      updateNowPlaying()
+    , minValue = 0, maxValue = float32(max(1.0, length)), key = "seek").width(600)
     text(c, $int(player.position) & " / " & $int(length) & " s", 12)
     slider(c, volume, proc(v: float32) =
       volume = v
@@ -213,6 +229,30 @@ proc view(c: Context) =
 
 app.setName("Nimi Music")
 app.whenReady(proc() =
+  onMediaCommand(proc(cmd: MediaCommand, position: float64) =
+    if player == nil:
+      return
+    case cmd
+    of mcPlay:
+      discard player.play()
+    of mcPause:
+      player.pause()
+    of mcTogglePlayPause:
+      if player.playing: player.pause()
+      else: discard player.play()
+    of mcStop:
+      player.pause()
+      player.seek(0)
+    of mcNext:
+      let candidate = queue.nextIndex()
+      if candidate >= 0: selectTrack(candidate)
+    of mcPrevious:
+      let candidate = queue.previousIndex()
+      if candidate >= 0: selectTrack(candidate, previous = true)
+    of mcSeek:
+      player.seek(position)
+    updateNowPlaying()
+  )
   let w = newWindow(WindowOptions(title: "Nimi Music", width: 760, height: 820,
     content: uiView(view)))
   let saved = loadSession(sessionPath)
@@ -224,6 +264,7 @@ app.whenReady(proc() =
     player.seek(saved.position)
   w.onClosed(proc() =
     persist()
+    clearNowPlaying()
     background.close(100)
     downloads.close(100)
     player.close()
@@ -237,6 +278,7 @@ app.whenReady(proc() =
 )
 app.onBeforeQuit(proc(e: var QuitEvent) = persist())
 app.run()
+clearNowPlaying()
 downloads.close(100)
 background.close(100)
 player.close()

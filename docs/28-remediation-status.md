@@ -26,7 +26,7 @@ CG renderer 新增 clearImageCache、setImageCacheLimit、imageCacheStats。原�
 1. 正确性：grapheme 编辑、IME UTF-16/range、保存失败恢复、窗口关闭回调失效。验收：中日韩/emoji 编辑、关闭期间任务完成、失败保存不丢原文件。代码与合成测试已完成；真实拼音/日文输入法人工验收仍待执行。
 2. 异步核心：明确主线程契约，任务标识/取消/关闭清理，再实现工作池；补错误返回与复杂类型生成。验收：慢请求期间 UI 可交互、旧结果不污染新页面。当前 TaskExecutor 支持协作取消、超时和有限等待关闭；后台 IPC 已有有界工作池，同步 `bindService` 仍按 UI 线程契约执行。
 3. 音乐应用基础：固定行高虚拟列表、有限容量封面缓存、音频后端原型。验收：一万行仅构建视口及 overscan；播放/暂停/seek/切歌/结束/关闭可重复验证。
-4. macOS 完善：Session Cookie、凭据存储、Now Playing、通知与拖放。每项需要打包应用实测。
+4. macOS 完善：Session Cookie、凭据存储、Now Playing（基础已接入，需真实媒体键验收）、通知与拖放。每项需要打包应用实测。
 5. 发布：真实签名公证、干净机器启动、升级回滚；再拓展通用 Metal 和其他平台。
 
 不把以上工作压成一个“框架完成百分比”。每项分别记录：设计目标、已实现、自动测试、真实场景验收。工期待异步和音频原型完成后重新估算。
@@ -40,7 +40,7 @@ CG renderer 新增 clearImageCache、setImageCacheLimit、imageCacheStats。原�
 新增 `src/nimi/audio.nim`（显式导入，不扩大默认 facade）及 `examples/music`。
 macOS AVAudioPlayer 后端提供本地解码、播放/暂停、时长/进度、seek、音量与显式关闭。
 真实 WAV 测试覆盖成功路径、无效文件和关闭后的操作；网络流仍未实现；播放结束 delegate 已接入并实测。
-原生界面已经接入本地队列与播放控制。队列已支持自动下一首、单曲/列表循环、随机与历史返回；会话保存并恢复曲目元数据、位置、音量和模式。真实无声 WAV 的结束回调、回调内关闭，以及队列/会话逻辑均有测试。下一步补 Now Playing、远程服务 UI 对齐与缓存管理。
+原生界面已经接入本地队列与播放控制。队列已支持自动下一首、单曲/列表循环、随机与历史返回；会话保存并恢复曲目元数据、位置、音量和模式。真实无声 WAV 的结束回调、回调内关闭，以及队列/会话逻辑均有测试。Now Playing/媒体键基础已接入；下一步补封面 artwork、远程服务 UI 对齐与缓存管理。
 
 ## 曲库虚拟化
 
@@ -95,4 +95,11 @@ Music 新增后台 Subsonic token 认证和 search3 曲库搜索。系统 curl �
 - 本地标题取文件名（去扩展名）；远程下载完成后保留搜索结果的标题/歌手/专辑/封面 ID，队列不再显示缓存哈希。
 - 会话升级到版本 2，保存完整 Track 元数据；仍读取版本 1 的纯路径会话并迁移为本地曲目。损坏会话保留原文件并回退安全默认值。
 - 测试：`tests/test_queue.nim`（本地/远程身份与去重）、`tests/test_music_session.nim`（v2 往返、v1 迁移、损坏文件）。
-- 封面已通过 `getCoverArt` 后台下载、独立缓存并在当前播放区显示；仍待缓存淘汰 UI、Now Playing/媒体键、流式播放、真实 Subsonic 账号验收。
+- 封面已通过 `getCoverArt` 后台下载、独立缓存并在当前播放区显示；Now Playing/媒体键基础已接入；仍待缓存淘汰 UI、封面 artwork、流式播放、真实媒体键与 Subsonic 账号验收。
+
+## Now Playing / 媒体键（2026-11-09）
+
+- 新增 `core/nowplaying` 和 `platform/darwin/nowplaying`：懒加载 MediaPlayer.framework，接入 MPNowPlayingInfoCenter 与 MPRemoteCommandCenter。
+- 支持标题/歌手/专辑/时长/位置/播放状态，以及 play/pause/toggle/stop/next/previous/seek 命令。
+- Music 已接入切歌、播放/暂停、seek、上一首/下一首与停止；关窗/退出清除系统状态。
+- 未做：封面 artwork、真实媒体键/控制中心人工验收、Windows/Linux 媒体控制。

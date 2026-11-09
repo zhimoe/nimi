@@ -18,7 +18,7 @@
 | 里程碑 | 状态 | 已实现 | 未实现 |
 |---|---|---|---|
 | M3 | 🟡 切片 | Checkbox/Switch/Slider/Progress/Divider、Image(ImageIO)、文本换行、焦点/键盘、纹理四边形、NSTimer 帧驱动、Metal 专用 mask/LayerEffect | 通用 Metal scene 合成器;其余控件(List/Table/Tabs/Select…);完整动画/可访问性 |
-| M4 | 🟡 切片 | Clipboard、菜单/对话框、屏幕/主题、窗口控制/焦点、托盘、通知、全局快捷键、动态菜单 | 剪贴板图片/文件、通知权限/点击、托盘图标、快捷键冲突提示 |
+| M4 | 🟡 切片 | Clipboard、菜单/对话框、屏幕/主题、窗口控制/焦点、托盘、通知、全局快捷键、动态菜单、Now Playing/媒体键基础 | 剪贴板图片/文件、通知权限/点击、托盘图标、快捷键冲突提示、Now Playing artwork/真实媒体键验收 |
 | M5 | 🟡 切片 | `nimi://`/FileServer、资源复制、深链、Session、FSEvents、Cookie 查询、Document 控制器、protocol/watch/document 示例 | Cookie 写入/删除/并发、内容规则、单实例边界 |
 | M6 | 🟡 切片 | TextInput/TextArea(含内部滚动)、选择/剪贴板、Undo/Redo、ScrollView/滚动条、IME range、grapheme 编辑、固定行高虚拟列表 | 真实 IME 人工验收、可访问性、通用 Metal 合成、可变行高 |
 | M7 | 🟡 切片 | `.app`、DMG、ad-hoc/Developer ID 签名、entitlements、图标(icns)、notarize 钩子、macOS CI 构建/测试/artifact | 自动更新(Ed25519/delta)、release workflow、DMG 背景/布局、公证实际执行验证、Sparkle 风格更新窗口 |
