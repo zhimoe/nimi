@@ -10,7 +10,7 @@ Nimi 的目标是保留 MyGo 的架构与开发体验——系统 WebView + 类�
 > **M2 核心切片已跑通**(原生 NSView Surface + CoreGraphics/CoreText + 布局/Text/Button + 鼠标/键盘/焦点 + 多行换行 + `Tester`/离屏 PNG + `counter-native`)。
 > **M3 控件/Image/ScrollView/纹理四边形/NSTimer/Metal 效果原型、M4 macOS 桌面 API(菜单/对话框/剪贴板/屏幕/主题/窗口/托盘/通知/全局快捷键)、M5 FileServer/深链/Session/文件监视/Cookie/Document、M6 TextInput/TextArea(内部滚动/滚动条)/选择/剪贴板/Undo/ScrollView/滚动条/IME、M7 `.app`/DMG/签名/CI**已落地;`examples/desktop-native` 是桌面 API 验收,`examples/form-native` 是原生 GUI 验收,`examples/notes` 是 WebView-first 的完整笔记应用,`examples/protocol-native` 是自定义协议验收,`examples/shredder` 是 WebGL 碎纸效果/物理切片验收,`examples/shred-native` 是 CoreGraphics 纹理四边形/原生帧驱动验收,`examples/shred-metal` 是 Metal mask + LayerEffect 验收。其余差距见 [M3–M7 状态](docs/11-m3-m7-status.md)。
 > Windows/Linux 在 M8/M9。
-> 参考实现:MyGo 0.7.4(MIT License)。
+> 参考实现:MyGo v0.8.3(`5add3817`,MIT License);本地能力盘点快照 `f234638d`。差异与计划校准见 [MyGo 能力对照](docs/30-mygo-alignment.md)。
 
 ---
 
@@ -172,9 +172,9 @@ nimi/
 │   ├── ui/                # Context/Tester
 │   └── cli.nim            # init/generate/dev/build/doctor
 ├── tests/                 # IPC/loop/ui/render/desktop/fileserver/document/shred/metal
-├── examples/
+├── examples/             # 验收示例,清单与保留建议见 examples/README.md
 │   ├── hello/             # WebView + IPC 验收
-│   ├── native-smoke/      # 原生 Surface 验收
+│   ├── native-smoke/      # 原生 Surface 验收(可退役候选)
 │   ├── counter-native/    # 原生布局/控件/点击验收
 │   ├── widgets-native/    # M3 控件/Image/ScrollView验收
 │   ├── form-native/       # 原生 GUI 应用验收
@@ -187,6 +187,7 @@ nimi/
 │   ├── shredder/          # WebGL 碎纸效果 + Verlet 物理验收
 │   ├── shred-native/      # CoreGraphics 纹理四边形 + 帧驱动验收
 │   ├── shred-metal/       # Metal mask/LayerEffect 验收
+│   ├── music/             # 原生 UI + 音频 + 队列/会话
 │   └── notes/             # WebView-first 笔记应用验收
 └── spikes/                # 可行性原型(可运行)
     ├── objc_hello/
@@ -198,7 +199,7 @@ nimi/
     └── threads/
 ```
 
-公开仓库不包含 `mygo/`。本地开发时可把 MyGo 0.7.4 的只读副本放在 `mygo/`,用于对照架构与 API。
+公开仓库不包含 `mygo/`。本地开发时可把 MyGo v0.8.3 的只读副本放在 `mygo/`,用于对照架构与 API;当前仓库的能力盘点快照是 `f234638d`,见 [MyGo 能力对照](docs/30-mygo-alignment.md)。
 
 ---
 

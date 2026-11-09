@@ -112,7 +112,7 @@ nimi/
 │       │   ├── markdown.nim
 │       │   ├── chart.nim
 │       │   ├── access.nim          # AccessTree
-│       │   ├── widgets/            # 120 个构造器的分批实现
+│       │   ├── widgets/            # 123 个顶层构造器的分批实现
 │       │   └── tester.nim          # 无窗口测试器
 │       ├── scene/                  # display list、图集
 │       ├── render/

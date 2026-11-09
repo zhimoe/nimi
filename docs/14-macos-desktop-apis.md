@@ -1,6 +1,8 @@
 # macOS 桌面 API(M4 批次)
 
 > 日期:2026-11-05 · 对应 M4 剩余项
+>
+> 2026-11-09：MyGo v0.8.3 的桌面面已扩展到 Now Playing/媒体键、Power、Network/Proxy、Secrets、Downloads、权限、拖放、最近文档、Jump List、窗口状态、vibrancy、SetInputRegion 等。本文只记录 Nimi 已实现切片，差距与优先级见 [MyGo 能力对照](30-mygo-alignment.md)。
 
 ---
 
@@ -87,3 +89,19 @@ global shortcut: true
 5. 窗口状态保存/恢复、多窗口焦点记忆。
 6. 继续 M5/M6/M7:协议/文件监视、TextArea/IME、更新/公证(其中
    协议/文件监视/TextArea/IME 已在后续切片落地)。
+
+## 6. 与 MyGo v0.8.3 的后续差距
+
+按对 Nimi 当前目标的价值排序，尚未实现：
+
+1. Now Playing / 媒体键（音乐应用需要）。
+2. Keychain/Secrets（Subsonic 凭据）。
+3. Cookie 写入/删除、Session 隔离。
+4. 通知权限、点击回调、移除。
+5. 拖放（文件/文本/URL）、窗口输入区域。
+6. Power/App Nap、Network 状态与代理。
+7. 最近文档、Jump List、登录项、文件关联、窗口状态恢复。
+8. 托盘图标/模板图、剪贴板图片/文件、自定义格式。
+9. 自动化 socket（与 MyGo `MYGO_AUTOMATION` 兼容）。
+
+这些不是 1.0 全部必需；优先级见 [30](30-mygo-alignment.md) 与 [28](28-remediation-status.md)。

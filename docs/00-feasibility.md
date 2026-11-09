@@ -3,7 +3,7 @@
 > 2026-11-06 重评：本文包含目标设计，不能作为当前 API/线程安全/兼容性承诺。实现边界与后续验收以 [整改基线](28-remediation-status.md) 为准；历史工期不作为剩余工期。
 
 > 状态:草案 · 日期:2026-11-04 · 范围:macOS 优先,Windows/Linux 后续
-> 参考实现:`/Users/zhimoe/code/nimi/mygo`(MyGo 0.7.4,MIT License)
+> 参考实现:`/Users/zhimoe/code/nimi/mygo`(稳定基线 MyGo v0.8.3 `5add3817`;本地能力盘点快照 `f234638d`,MIT License)
 > 验证代码:`/Users/zhimoe/code/nimi/spikes/`(7 个可运行的 Nim 原型)
 
 ---
@@ -51,37 +51,44 @@ Go 和 Nim 无法做到源码级兼容。这里的 fork 是**架构与行为层�
 ### 2.1 代码规模
 
 ```text
-非测试 Go 代码:322,996 行 / 1,621 个文件
-测试 Go 代码:  139,005 行
+非测试 Go 代码:373,636 行 / 1,064 个文件
+测试 Go 代码:  167,402 行 / 752 个文件
 ```
+
+统计日期 2026-11-09，基于本地 `mygo/` HEAD `f234638d`；排除 `_test.go`、`testdata`、`.git`、`node_modules`、`dist`。自 v0.7.4 起增加 328 个提交，能力面明显扩大，详见 [MyGo 能力对照](30-mygo-alignment.md)。
 
 | 区域 | 非测试行数 | 说明 |
 |---|---:|---|
-| `internal/` | 138,245 | 平台后端、GPU、文本、场景、着色器、TS 生成、更新、E2E |
-| `ui/` | 89,710 | 原生 UI 工具栏、布局、绘制、控件、编辑器、测试器 |
-| `plugins/` | 31,883 | terminal、glass、updater、permissionflow、loading、automation、sqlite、game |
-| 根包 `mygo` | ~21,600 | 公开 API、生命周期、IPC、菜单、协议、文档、会话 |
-| `examples/` | 14,551 | 30+ 个示例,可作为移植验收语料 |
-| `cmd/mygo` | 12,662 | CLI:init/generate/dev/build/doctor/打包/签名/更新 |
-| `i18n/` | 7,966 | 语言匹配、CLDR、消息格式、目录 |
-| `audio/` | 2,330 | 播放器、混音、WAV/MP3/Vorbis、平台输出 |
+| `internal/` | 156,360 | 平台后端、GPU、文本、场景、着色器、TS 生成、更新、E2E |
+| `ui/` | 104,795 | 原生 UI 根包 67,985；editor、markdown、richtext、video、chart、shader |
+| `plugins/` | 32,274 | terminal、glass、updater、permissionflow、loading、automation、sqlite、game、sfsymbols 等 |
+| 根包 `mygo` | 22,102 | 公开 API、生命周期、IPC、菜单、协议、文档、会话 |
+| `examples/` | 16,248 | 38 个示例,可作为移植验收语料 |
+| `cmd/mygo` | 15,777 | CLI:init/generate/dev/build/doctor/native/打包/签名/更新 |
+| `i18n/` | 17,261 | 语言匹配、CLDR、消息格式、目录、代码生成 |
+| `audio/` | 4,889 | 播放器、混音、流式解码、WAV/MP3/Vorbis/FLAC/AAC/ALAC、平台输出 |
+| `native/` + `ffi/` | 3,460 | Swift/Rust/Zig 原生模块、无 cgo 的 C 库绑定 |
 
 `internal/` 的主要构成:
 
 | 子包 | 行数 | 作用 |
 |---|---:|---|
-| `gpu/` | 33,790 | Metal / D3D11 / GL / WebGL2 渲染器与实例格式 |
-| `windows/` | 20,457 | Win32 + WebView2 + COM |
-| `linux/` | 15,833 | GTK3 + WebKitGTK + dlopen |
-| `darwin/` | 14,493 | AppKit + WKWebView + ObjC runtime |
-| `text/` | 9,401 | 字体、shaping、断行、编辑、字形栅格化 |
-| `shader/` + `shaderir/` | 12,265 | Go 语法着色器编译器及其 IR/GLSL/HLSL/MSL/解释器 |
+| `gpu/` | 35,548 | Metal / D3D11 / GL / WebGL2 渲染器与实例格式 |
+| `windows/` | 22,809 | Win32 + WebView2 + COM |
+| `linux/` | 16,825 | GTK3 + WebKitGTK + dlopen |
+| `darwin/` | 15,975 | AppKit + WKWebView + ObjC runtime |
+| `text/` | 11,985 | 字体、shaping、断行、编辑、字形栅格化 |
+| `nativegen/` | 7,201 | Swift/Rust/Zig 原生模块生成与桥接 |
+| `shader/` + `shaderir/` | 11,327 | Go 语法着色器编译器及其 IR/GLSL/HLSL/MSL/解释器 |
+| `platform/` | 4,084 | 后端契约 |
 | `svg/` | 3,370 | SVG 解析与绘制 |
-| `platform/` | 3,103 | 后端契约 |
-| `raster/` | 3,006 | CPU 场景渲染器 |
-| `web/` | 2,358 | 浏览器 wasm + WebGL2 后端 |
-| `scene/` | 2,153 | display list、字形图集 |
-| `fake/` | 2,101 | 单元测试用内存后端 |
+| `raster/` | 3,042 | CPU 场景渲染器 |
+| `l10n/` | 2,986 | 语言/区域格式 |
+| `web/` | 2,500 | 浏览器 wasm + WebGL2 后端 |
+| `scene/` | 2,476 | display list、字形图集 |
+| `fake/` | 2,130 | 单元测试用内存后端 |
+
+`ui/` 子包:editor 16,690、markdown 8,359、richtext 6,635、video 2,545、chart 1,735、shader 846。
 
 ### 2.2 架构要点
 
@@ -184,7 +191,7 @@ MIT License,Copyright (c) 2026 MyGo contributors。允许 fork、修改、再发
 | API 形态 + 协议兼容的重实现 | ✅ 推荐。保留核心心智模型与前端协议,不追求 Go 源码兼容。 |
 | macOS 可用版本 | ✅ 现实目标:3–6 个月做到 WebView + 基础原生 UI + 打包。 |
 | Windows/Linux 后端 | ✅ 可行,但各自需要 4–8 个月,且交叉编译体验需重新设计。 |
-| 最大风险 | 原生 UI 的广度(120 个控件、文本编辑/IME、可访问性),不是底层未知。 |
+| 最大风险 | 原生 UI 的广度(当前 123 个顶层控件入口、文本编辑/IME、可访问性),不是底层未知。 |
 
 ### 4.2 推荐路线(结论)
 
@@ -284,7 +291,7 @@ MyGo 的核心卖点是"任意机器 `GOOS=... go build`"。Nim 的现实:
 
 | 风险 | 概率 | 影响 | 缓解 |
 |---|---|---|---|
-| 原生 UI 控件广度(120 个构造器) | 高 | 高 | 分三批;MVP 只做 10–15 个核心控件;以 `examples/counter-native`、`gallery` 子集验收 |
+| 原生 UI 控件广度(123 个顶层构造器) | 高 | 高 | 分三批;MVP 只做 10–15 个核心控件;以 `examples/counter-native`、`gallery` 子集验收 |
 | 文本编辑 / IME / 选区 / 双向文本 | 高 | 高 | 直接用 CoreText/NSTextInputClient;先单行/多行编辑,后富文本;IME 单独里程碑 |
 | 可访问性(NSAccessibility/ATK/UIA) | 高 | 中 | M3 后置;先保留 AccessTree 数据结构,后接原生桥 |
 | ObjC 内存管理 / 回调生命周期 | 中 | 高 | 封装 `ObjcRef`;autorelease pool;回调注册一次;用 Instruments/Zombies 测试 |
@@ -341,7 +348,7 @@ MyGo 的核心卖点是"任意机器 `GOOS=... go build`"。Nim 的现实:
 
 1. **不做 Go 源码兼容**;以协议 + API 形态兼容为目标。
 2. **macOS 优先**,Windows/Linux 只保留契约与桩,不在 M1–M7 投入。
-3. **原生 UI 分阶段**:先 10–15 个核心控件,不追求 120 个一次性对齐。
+3. **原生 UI 分阶段**:先 10–15 个核心控件,不追求 123 个一次性对齐。
 4. **复用 JS 资产与 MyGo 的协议/文档/示例**,把精力放在 Nim 独有的部分。
 5. **每个里程碑以可运行示例验收**,不做"全都写完再联调"。
 
@@ -365,7 +372,7 @@ MyGo 的核心卖点是"任意机器 `GOOS=... go build`"。Nim 的现实:
 
 | 主题 | MyGo 文件 |
 |---|---|
-| 架构总览 | `docs/architecture.md`(5,381 行) |
+| 架构总览 | `docs/architecture.md`(6,354 行) |
 | 线程模型 | `docs/architecture.md` §Threading;`loop.go` |
 | IPC 协议 | `docs/architecture.md` §IPC;`ipc.go`、`bridge.go`、`channel.go` |
 | 页面 bridge | `packages/bridge/src/*.ts`;`internal/bridge/bridge.js` |

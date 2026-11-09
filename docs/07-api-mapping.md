@@ -1,6 +1,8 @@
 # MyGo → Nimi API 映射
 
 > 2026-11-06 重评：本文包含目标设计，不能作为当前 API/线程安全/兼容性承诺。实现边界与后续验收以 [整改基线](28-remediation-status.md) 为准；历史工期不作为剩余工期。
+>
+> 2026-11-09：本映射以 MyGo 0.7.4 为基线。v0.8.3 之后新增的 Audio/Video、Now Playing、Power/Network/Secrets、Native Modules、Downloads/Permissions、Automation、WASM 浏览器等未逐项展开，见 [MyGo 能力对照](30-mygo-alignment.md)。
 
 > 状态:草案 · 日期:2026-11-04 · 关联:[架构](01-architecture.md)、[工具链](04-tooling-and-ipc.md)
 > 目标:给实现者和迁移者一张"Go API 在 Nim 里长什么样"的对照表。不是逐方法完整清单,而是命名/语义/常用面的映射。
@@ -464,7 +466,7 @@ Role 名称映射:`RoleUndo` → `MenuRole.Undo`,`RoleNew` → `MenuRole.New`,�
 
 ### 10.2 构造器命名
 
-Go `ui.Column(c)` → Nim `column(c)`;所有 120 个构造器首字母小写:
+Go `ui.Column(c)` → Nim `column(c)`;当前 123 个顶层构造器首字母小写:
 
 | Go | Nimi | Go | Nimi |
 |---|---|---|---|
@@ -493,7 +495,7 @@ Go `ui.Column(c)` → Nim `column(c)`;所有 120 个构造器首字母小写:
 
 ### 10.3 Element 方法
 
-Go `e.Fill()` → Nim `e.fill()`;271 个方法按 camelCase 映射:
+Go `e.Fill()` → Nim `e.fill()`;402 个方法按 camelCase 映射:
 
 | Go | Nimi |
 |---|---|

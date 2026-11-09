@@ -1,6 +1,8 @@
 # 实施路线图
 
 > 2026-11-06：当前执行顺序调整为 **正确性 → 异步核心 → 虚拟列表/缓存/音频 → macOS 集成 → 发布验收**，见 [整改与开发基线](28-remediation-status.md)。下列 M0–M10 保留为范围分解；旧工期不是剩余排期，切片落地不代表整项验收完成。
+>
+> 2026-11-09：已对照 MyGo v0.8.3/本地 `f234638d` 盘点能力。MyGo 当前远超 Nimi 已实现范围（编辑器/富文本/图表/视频、原生模块、完整音频引擎、自动化、三平台分发等）；这些进入 M6/M10/P2，不改变 1.0 的 macOS-first 范围。详见 [MyGo 能力对照](30-mygo-alignment.md)。
 
 > 状态:草案 · 日期:2026-11-04 · 关联:[可行性](00-feasibility.md)、[架构](01-architecture.md)、[macOS 后端](02-macos-backend.md)、[原生 UI](03-native-ui.md)
 > 估算口径:1 名资深工程师全职 + AI 辅助;复用 MyGo 的 JS/协议/模板/示例;不移植着色器编译器;系统文本引擎。工期为规划量级(±50%)。
@@ -417,10 +419,11 @@
 ## 12. M10:插件、i18n、音频、自动化、浏览器(持续)
 
 - 官方插件:fetch、websocket、sqlite、watch、updater、terminal、glass、game、loading、sfsymbols、permissionflow、automation。
-- i18n:CLDR 复数/日期/数字、消息目录、代码生成。
-- 音频:播放器/混音/WAV/MP3/Vorbis;CoreAudio/AudioQueue、WASAPI、Pulse/ALSA。
-- 自动化:兼容 MyGo 的 `MYGO_AUTOMATION` socket 协议。
-- 浏览器/wasm 后端(可选)。
+- i18n:CLDR 复数/日期/数字、消息目录、代码生成、pseudo locale。
+- 音频:MyGo 当前已有 Go 内混音、流式解码、WAV/MP3/Vorbis/FLAC/AAC/ALAC、变速/保持音高、Now Playing;Nimi 先以平台音频后端满足音乐应用,通用音频引擎作为 M10/P2。
+- 自动化:兼容 MyGo 的 `MYGO_AUTOMATION` socket 协议与 `mygo-automation` CLI 的窗口/元素/输入/菜单/截图/Eval/idle 面。
+- 原生模块:Swift/Rust/Zig 实现 Go 接口的无 cgo 路径,列为 M10/P2,不进入 1.0。
+- 浏览器/wasm 后端(可选);MyGo 已能把原生 UI 编译为 WebAssembly/WebGL2,作为长期参考。
 - Inspector/开发者工具。
 - 文档/网站。
 
@@ -477,8 +480,9 @@
 
 ## 15. 上游同步
 
-- 锁定参考版本 MyGo 0.7.4(commit `02f583c8`)。
-- 每季度对照 `docs/architecture.md` 和 `internal/platform` 变更,更新本设计。
+- 稳定基线锁定 MyGo v0.8.3(commit `5add3817`,2026-11-07)。
+- 本地 `mygo/` HEAD `f234638d`(2026-11-09)用于能力盘点和新特性跟踪;不要把它等同于 Nimi 已实现范围。
+- 每季度对照 `docs/architecture.md` 和 `internal/platform` 变更,更新本设计;当前差异见 [30](30-mygo-alignment.md)。
 - 协议/TS 生成变更优先同步;平台细节按需。
 - 保留差异清单(`01-architecture.md` §10),避免无意识分叉。
 

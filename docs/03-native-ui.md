@@ -3,8 +3,8 @@
 > 2026-11-06 重评：本文包含目标设计，不能作为当前 API/线程安全/兼容性承诺。实现边界与后续验收以 [整改基线](28-remediation-status.md) 为准；历史工期不作为剩余工期。
 
 > 状态:草案 · 日期:2026-11-04 · 关联:[架构](01-architecture.md)、[macOS 后端](02-macos-backend.md)、[路线图](05-roadmap.md)
-> 参考:MyGo `ui/` 根包 57.3k 行(非测试)、`ui/editor` 21k、`ui/richtext` 8.8k、`ui/markdown` 3.7k、`ui/chart` 2k
-> 公开面:120 个顶层入口、271 个 `Element` 方法、31 个 `Context` 方法
+> 参考:MyGo v0.8.3。`ui/` 根包 68.0k 行(非测试)、`ui/editor` 16.7k、`ui/richtext` 6.6k、`ui/markdown` 8.4k、`ui/chart` 1.7k、`ui/video` 2.5k、`ui/shader` 0.8k。
+> 公开面:旧快照为 120 个顶层入口;当前 MyGo 入口更多,需重新盘点。本文的控件清单是 Nimi 的目标子集,不是 MyGo 当前全量清单。完整差异见 [MyGo 能力对照](30-mygo-alignment.md)。
 
 ---
 
@@ -166,7 +166,7 @@ template children*(e: Element, body: untyped) =
 
 ### 3.5 Facade 生成
 
-MyGo 用 `internal/uigen` 解析 Go AST 生成 `api_gen.go`(7,450 行),为 120 个构造器和 271 个方法提供 checked wrapper。Nim 用宏更直接:
+MyGo 用 `internal/uigen` 解析 Go AST 生成 `api_gen.go`(8,888 行),为 123 个顶层构造器和 402 个方法提供 checked wrapper。Nim 用宏更直接:
 
 ```nim
 macro widget*(name: untyped, body: untyped): untyped =
@@ -484,7 +484,7 @@ type
 
 - `RichText(c, spans)` 只显示:把 spans 拼成文本 + 编码样式 key;绘制时逐 span 颜色/背景/下划线。
 - `ui/richtext` 可编辑富文本后置(P2);`ui/markdown`、`ui/editor` 后置。
-- `ui/editor`(21k)是代码编辑器,建立在公开 UI API 上,不是内核;Nim 第一版不做,保留接口。
+- `ui/editor`(16.7k)是代码编辑器,建立在公开 UI API 上,不是内核;Nim 第一版不做,保留接口。
 
 ---
 
@@ -556,7 +556,7 @@ type
 
 ## 9. 控件清单与优先级
 
-### 9.1 全量分类(MyGo 120 个公开入口)
+### 9.1 全量分类(MyGo 当前 123 个顶层入口 / 402 个方法)
 
 | 类别 | 控件 |
 |---|---|
