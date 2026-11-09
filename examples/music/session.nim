@@ -14,7 +14,7 @@ proc trackJson(track: Track): JsonNode =
   %*{"path": track.path, "title": track.title, "artist": track.artist,
      "album": track.album, "source": track.source,
      "remoteId": track.remoteId, "coverId": track.coverId,
-     "duration": track.duration}
+     "coverPath": track.coverPath, "duration": track.duration}
 
 proc parseTrack(node: JsonNode): Track =
   if node.kind == JString:
@@ -34,6 +34,7 @@ proc parseTrack(node: JsonNode): Track =
         source: if node.hasKey("source"): node["source"].getStr else: "local",
         remoteId: if node.hasKey("remoteId"): node["remoteId"].getStr else: "",
         coverId: if node.hasKey("coverId"): node["coverId"].getStr else: "",
+        coverPath: if node.hasKey("coverPath"): node["coverPath"].getStr else: "",
         duration: duration)
 
 proc loadSession*(path: string): MusicSession =

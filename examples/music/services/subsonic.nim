@@ -105,24 +105,40 @@ proc searchTask*(input: string, context: TaskContext): string {.gcsafe.} =
   let tracks = searchTracks(config, data["query"].getStr, context = context)
   result = $(%tracks)
 
-proc downloadTrack*(config: ServerConfig, id, cacheDir: string,
-                    cacheBudget: int64 = 1_073_741_824,
-                    context: TaskContext = TaskContext()): string {.gcsafe.} =
-  ## Download-before-play baseline. Cache identity includes server and account,
-  ## never credentials. Only successful transfers replace the cache entry.
-  if context.isCancelled(): raise newException(IOError, "Music download cancelled")
-  if id.len == 0: raise newException(ValueError, "Missing song ID")
-  let url = endpoint(config, "stream", [("id", id)])
+proc protocolError(prefix, kind: string): bool =
+  let trimmed = prefix.strip
+  if trimmed.startsWith("{"):
+    return true
+  if kind == "Cover":
+    # SVG covers are valid; an XML API error is not.
+    result = trimmed.startsWith("<?xml") or trimmed.startsWith("<subsonic") or
+      trimmed.startsWith("<error")
+  else:
+    result = trimmed.startsWith("<")
+
+proc downloadResource(config: ServerConfig, methodName, cacheTag, id,
+                      cacheDir, extension, kind: string,
+                      maxTimeSec, maxBytes: int, cacheBudget: int64,
+                      context: TaskContext): string {.gcsafe.} =
+  ## Download one resource atomically. Cache identity includes server/account
+  ## and the method tag, never credentials.
+  if context.isCancelled(): raise newException(IOError, kind & " download cancelled")
+  if id.len == 0: raise newException(ValueError, "Missing " & kind.toLowerAscii & " ID")
+  let url = endpoint(config, methodName, [("id", id)])
   createDir(cacheDir)
-  let key = $secureHash($(%*[config.address, config.username, id]))
-  let target = cacheDir / (key & ".audio")
+  let key =
+    if cacheTag.len > 0:
+      $secureHash($(%*[config.address, config.username, cacheTag, id]))
+    else:
+      $secureHash($(%*[config.address, config.username, id]))
+  let target = cacheDir / (key & extension)
   if fileExists(target) and getFileSize(target) > 0: return target
   let (file, temporary) = createTempFile(".download-", ".part", cacheDir)
   file.close()
   defer:
     if fileExists(temporary): removeFile(temporary)
   let process = startProcess("/usr/bin/curl", args = ["-q", "--silent", "--fail",
-    "--max-time", "60", "--max-filesize", "134217728", "--output", temporary,
+    "--max-time", $maxTimeSec, "--max-filesize", $maxBytes, "--output", temporary,
     "--write-out", "%{http_code}", "--config", "-"], options = {poStdErrToStdOut})
   defer: process.close()
   if '\n' in url or '\r' in url: raise newException(ValueError, "Invalid server URL")
@@ -132,29 +148,50 @@ proc downloadTrack*(config: ServerConfig, id, cacheDir: string,
   let httpStatus = process.outputStream.readAll().strip
   let code = process.waitForExit()
   if not completed or context.isCancelled():
-    raise newException(IOError, "Music download cancelled")
+    raise newException(IOError, kind & " download cancelled")
   if code != 0 or httpStatus != "200" or getFileSize(temporary) == 0:
-    raise newException(IOError, "Music download failed")
-  if getFileSize(temporary) > 134_217_728:
-    raise newException(IOError, "Music download exceeds 128 MiB")
-  # Protocol failures can be JSON/XML with HTTP 200; don't poison the cache.
+    raise newException(IOError, kind & " download failed")
+  if getFileSize(temporary) > maxBytes:
+    raise newException(IOError, kind & " download exceeds limit")
   let stream = open(temporary, fmRead)
   var prefix = newString(64)
   prefix.setLen(stream.readChars(prefix))
   stream.close()
-  let trimmed = prefix.strip
-  if trimmed.startsWith("{") or trimmed.startsWith("<"):
-    raise newException(IOError, "Music server returned an error instead of audio")
+  if protocolError(prefix, kind):
+    raise newException(IOError, "Music server returned an error instead of " &
+                       kind.toLowerAscii)
   var used = getFileSize(temporary)
-  for cached in walkFiles(cacheDir / "*.audio"):
+  for cached in walkFiles(cacheDir / ("*" & extension)):
     used += getFileSize(cached)
   if used > cacheBudget:
-    raise newException(IOError, "Audio cache is full; remove unused cached files before downloading")
+    raise newException(IOError, kind &
+      " cache is full; remove unused cached files before downloading")
   moveFile(temporary, target)
   result = target
+
+proc downloadTrack*(config: ServerConfig, id, cacheDir: string,
+                    cacheBudget: int64 = 1_073_741_824,
+                    context: TaskContext = TaskContext()): string {.gcsafe.} =
+  ## Download-before-play baseline. Only successful transfers replace the
+  ## cache entry; the cache key is unchanged from earlier releases.
+  result = downloadResource(config, "stream", "", id, cacheDir, ".audio", "Audio",
+    60, 134_217_728, cacheBudget, context)
+
+proc downloadCover*(config: ServerConfig, coverId, cacheDir: string,
+                    cacheBudget: int64 = 268_435_456,
+                    context: TaskContext = TaskContext()): string {.gcsafe.} =
+  ## Cover art is cached separately from audio and bounded to 8 MiB each.
+  result = downloadResource(config, "getCoverArt", "getCoverArt", coverId,
+    cacheDir, ".cover", "Cover", 30, 8_388_608, cacheBudget, context)
 
 proc downloadTask*(input: string, context: TaskContext): string {.gcsafe.} =
   let data = parseJson(input)
   result = downloadTrack(ServerConfig(address: data["address"].getStr,
     username: data["username"].getStr, password: data["password"].getStr),
     data["id"].getStr, data["cacheDir"].getStr, context = context)
+
+proc coverTask*(input: string, context: TaskContext): string {.gcsafe.} =
+  let data = parseJson(input)
+  result = downloadCover(ServerConfig(address: data["address"].getStr,
+    username: data["username"].getStr, password: data["password"].getStr),
+    data["coverId"].getStr, data["cacheDir"].getStr, context = context)

@@ -61,6 +61,12 @@ proc persist() =
       position: resumePosition, volume: volume)):
     stderr.writeLine("Unable to save music session: " & sessionPath)
 
+proc setCover(identity, path: string) =
+  for index in 0 ..< queue.tracks.len:
+    if queue.tracks[index].identity == identity:
+      queue.tracks[index].coverPath = path
+      return
+
 
 proc selectTrack(index: int, previous = false, autoplay = true) =
   downloads.cancel(downloadId)
@@ -110,6 +116,18 @@ proc playRemote(track: RemoteTrack) =
             selectTrack(index)
             break
         catalogStatus = "Downloaded " & downloaded.displayTitle()
+        if track.coverId.len > 0:
+          let coverId = downloads.submit($(%*{
+            "address": getEnv("NIMI_SUBSONIC_URL"),
+            "username": getEnv("NIMI_SUBSONIC_USER"),
+            "password": getEnv("NIMI_SUBSONIC_PASSWORD"),
+            "coverId": track.coverId,
+            "cacheDir": getCacheDir() / "nimi-music" / "covers"}), coverTask,
+            proc(result: TaskResult) =
+              if result.error.len == 0:
+                setCover(downloaded.identity, result.value)
+          )
+          if coverId == 0: catalogStatus = catalogStatus & " (cover queue busy)"
   )
   if downloadId == 0: catalogStatus = "Background queue is busy"
 
@@ -124,6 +142,17 @@ proc view(c: Context) =
   column(c).fill().padding(24, 24).gap(12).children(c, proc() =
     text(c, "Nimi Music", 28).bold()
     text(c, status, 13).wrap()
+    if queue.selected >= 0 and queue.selected < queue.tracks.len:
+      let current = queue.tracks[queue.selected]
+      row(c).gap(12).children(c, proc() =
+        if current.coverPath.len > 0:
+          image(c, current.coverPath, 64, 64)
+        column(c).gap(2).children(c, proc() =
+          text(c, current.displayTitle(), 16).bold()
+          let subtitle = current.displaySubtitle()
+          if subtitle.len > 0: text(c, subtitle, 12)
+        )
+      )
     row(c).gap(12).children(c, proc() =
       button(c, "Import…", importTracks, key = "import")
       button(c, "Now playing", proc() =

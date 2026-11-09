@@ -1,4 +1,5 @@
 """Run the adapter against an ephemeral local server; no external credentials."""
+import base64
 import hashlib
 import io
 import wave
@@ -23,7 +24,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if q.get('query') != ['中文']:
                 result['status'] = 'failed'
             else:
-                result['searchResult3'] = {'song': [{'id': 'song-1', 'title': '中文歌曲', 'duration': 123}]}
+                result['searchResult3'] = {'song': [{'id': 'song-1', 'title': '中文歌曲', 'duration': 123, 'coverArt': 'cover-1'}]}
         body = json.dumps({'subsonic-response': result}).encode()
         if valid and url.path.endswith('/stream.view') and q.get('id') == ['song-1']:
             with io.BytesIO() as buffer:
@@ -33,6 +34,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     wav.setframerate(8000)
                     wav.writeframes(bytes(16000))
                 body = buffer.getvalue()
+        if valid and url.path.endswith('/getCoverArt.view') and q.get('id') == ['cover-1']:
+            body = base64.b64decode(
+                'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=')
         self.send_response(200)
         self.send_header('Content-Length', str(len(body)))
         self.end_headers()

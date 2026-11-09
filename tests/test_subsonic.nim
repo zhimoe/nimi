@@ -49,6 +49,27 @@ suite "Subsonic adapter":
     check config.downloadTrack(tracks[0].id, directory) == path
     check getFileSize(path) == 16044
 
+  test "cover art downloads, caches, and respects its budget":
+    let directory = createTempDir("nimi-cover-", "")
+    defer: removeDir(directory)
+    let config = ServerConfig(address: getEnv("NIMI_TEST_SUBSONIC"),
+      username: "test", password: "secret")
+    let tracks = config.searchTracks("中文")
+    check tracks[0].coverId == "cover-1"
+    let cover = config.downloadCover(tracks[0].coverId, directory)
+    check fileExists(cover)
+    let bytes = readFile(cover)
+    check bytes.len > 8
+    check bytes.startsWith("\x89PNG")
+    check config.downloadCover(tracks[0].coverId, directory) == cover
+    let budgetDir = createTempDir("nimi-cover-budget-", "")
+    defer: removeDir(budgetDir)
+    expect IOError:
+      discard config.downloadCover(tracks[0].coverId, budgetDir, cacheBudget = 10)
+    var entries = 0
+    for entry in walkDir(budgetDir): inc entries
+    check entries == 0
+
   test "HTTP 200 protocol errors leave neither cache nor partial downloads":
     let directory = createTempDir("nimi-stream-fail-", "")
     defer: removeDir(directory)

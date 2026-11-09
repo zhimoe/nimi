@@ -11,7 +11,7 @@ suite "music session":
     q.add(localTrack("/music/中文.mp3"))
     q.add(Track(path: "/cache/remote.audio", title: "远方", artist: "歌手",
                 album: "专辑", source: "subsonic", remoteId: "id-1",
-                coverId: "cover-1", duration: 123.5))
+                coverId: "cover-1", coverPath: "/cache/cover.png", duration: 123.5))
     discard q.select(1)
     q.repeatMode = repeatAll
     q.shuffle = true
@@ -21,6 +21,7 @@ suite "music session":
     check restored.queue.tracks == q.tracks
     check restored.queue.tracks[0].displayTitle() == "中文"
     check restored.queue.tracks[1].coverId == "cover-1"
+    check restored.queue.tracks[1].coverPath == "/cache/cover.png"
     check restored.queue.selected == 1
     check restored.queue.repeatMode == repeatAll
     check restored.queue.shuffle

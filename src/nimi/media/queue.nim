@@ -11,6 +11,7 @@ type
       ## "local" or a remote service such as "subsonic".
     remoteId*: string
     coverId*: string
+    coverPath*: string
     duration*: float64
 
   RepeatMode* = enum repeatOff, repeatAll, repeatOne
