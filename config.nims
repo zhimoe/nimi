@@ -7,9 +7,10 @@
 # macOS 27 SDK compatibility fallback.
 #
 # The macOS 27.2 SDK .tbd files describe arm64e.x1-macos, which the ld shipped
-# with Xcode 17 does not understand. When the active SDK is 27+ and a 26.x SDK
-# exists, compile and link against that SDK instead. Set NIMI_MACOS_SDK to an
-# explicit path to override, or to `off` to disable this fallback.
+# with older Xcode versions does not understand. Prefer a newer Command Line
+# Tools toolchain when one is installed; otherwise, when the active SDK is 27+
+# and a 26.x SDK exists, compile and link against that SDK. Set NIMI_MACOS_SDK
+# to an explicit path to override, or to `off` to disable the SDK fallback.
 import std/[os, strutils]
 
 proc sdkMajor(path: string): int =
@@ -58,8 +59,54 @@ proc compatibleMacSdk(): string =
         bestMajor = major
   best
 
+proc ldVersion(path: string): int =
+  let (output, code) = gorgeEx(quoteShell(path) & " -v")
+  if code != 0:
+    return 0
+  let marker = output.find("ld-")
+  if marker < 0:
+    return 0
+  var index = marker + 3
+  var digits = ""
+  while index < output.len and output[index] in {'0'..'9'}:
+    digits.add output[index]
+    inc index
+  try:
+    result = parseInt(digits)
+  except ValueError:
+    result = 0
+
+proc newerCltToolchain(): string =
+  ## The Command Line Tools may be newer than the selected Xcode. Prefer the
+  ## newer linker instead of forcing an older SDK.
+  let clt = "/Library/Developer/CommandLineTools"
+  if not dirExists(clt):
+    return ""
+  let (xcodeLd, code) = gorgeEx("xcrun -f ld")
+  if code != 0:
+    return ""
+  if ldVersion(clt & "/usr/bin/ld") > ldVersion(xcodeLd.strip):
+    clt
+  else:
+    ""
+
 when hostOS == "macosx":
-  let sdk = compatibleMacSdk()
-  if sdk.len > 0:
-    switch("passC", "-isysroot " & sdk)
-    switch("passL", "-isysroot " & sdk)
+  var usingClt = false
+  if getEnv("DEVELOPER_DIR").len == 0 and getEnv("NIMI_MACOS_SDK").len == 0:
+    let clt = newerCltToolchain()
+    when defined(nimiSdkDebug):
+      echo "nimi sdk: clt=", clt, " xcodeLd=", gorgeEx("xcrun -f ld")[0].strip
+    if clt.len > 0:
+      putEnv("DEVELOPER_DIR", clt)
+      usingClt = true
+  elif getEnv("DEVELOPER_DIR") == "/Library/Developer/CommandLineTools" and
+      getEnv("NIMI_MACOS_SDK").len == 0:
+    # Nim evaluates config.nims again after putEnv; stay on the CLT toolchain.
+    usingClt = true
+  when defined(nimiSdkDebug):
+    echo "nimi sdk: usingClt=", usingClt, " DEVELOPER_DIR=", getEnv("DEVELOPER_DIR")
+  if not usingClt:
+    let sdk = compatibleMacSdk()
+    if sdk.len > 0:
+      switch("passC", "-isysroot " & sdk)
+      switch("passL", "-isysroot " & sdk)

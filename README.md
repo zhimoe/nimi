@@ -91,9 +91,10 @@ MyGo 非测试 Go 代码约 **32.3 万行**,测试约 **13.9 万行**。完整 1
 
 需要 Nim 2.4+、macOS 12+、Xcode Command Line Tools。
 
-> macOS 27.x SDK 与旧版 `ld`（如 Xcode 17 自带的 1167）不兼容时，`config.nims`
-> 会自动选择一个可用的 26.x SDK 并传给编译/链接。可用 `NIMI_MACOS_SDK=/path/to/MacOSX.sdk`
-> 覆盖，或 `NIMI_MACOS_SDK=off` 关闭该回退。
+> macOS 27.x SDK 与旧版 `ld` 不兼容时，`config.nims` 会优先切换到机器上更新的
+> Command Line Tools toolchain；没有更新 toolchain 时再回退到可用的 26.x SDK。
+> 可用 `NIMI_MACOS_SDK=/path/to/MacOSX.sdk` 指定 SDK，或 `NIMI_MACOS_SDK=off`
+> 关闭 SDK 回退。
 
 ```sh
 # 构建 CLI
