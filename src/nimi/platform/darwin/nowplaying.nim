@@ -28,6 +28,9 @@ var
   commandsRegistered = false
   descriptors: array[7, BlockDescriptor]
   blocks: array[7, BlockLiteral]
+  artworkDescriptor: BlockDescriptor
+  artworkBlock: BlockLiteral
+  artworkBytes: string
   mediaHandler: proc(cmd: PlatformMediaCommand, position: float64) {.closure.}
 
 proc dispatchCommand(cmd: PlatformMediaCommand, event: Id) =
@@ -49,6 +52,24 @@ defineHandler(stopHandler, pmcStop)
 defineHandler(nextHandler, pmcNext)
 defineHandler(previousHandler, pmcPrevious)
 defineHandler(seekHandler, pmcSeek)
+
+proc artworkHandler(blk: pointer, width, height: cdouble): Id {.cdecl.} =
+  if artworkBytes.len == 0:
+    return nil
+  let image = sendId1(send0(loadClass("NSImage"), sel("alloc")),
+                      sel("initWithData:"), nsData(artworkBytes))
+  if image != nil:
+    autorelease(image)
+  image
+
+proc ensureArtworkBlock() =
+  if artworkBlock.isa != nil:
+    return
+  artworkDescriptor = BlockDescriptor(reserved: 0,
+                                      size: uint(sizeof(BlockLiteral)))
+  artworkBlock = BlockLiteral(
+    isa: globalBlockIsa, flags: int32(1 shl 28), reserved: 0,
+    invoke: cast[pointer](artworkHandler), descriptor: addr artworkDescriptor)
 
 proc ensureMedia(): bool =
   if mediaTried:
@@ -115,6 +136,20 @@ proc applyNowPlaying(info: PlatformNowPlayingInfo) =
   put(dictionary, "MPMediaItemPropertyTitle", nsString(info.title))
   put(dictionary, "MPMediaItemPropertyArtist", nsString(info.artist))
   put(dictionary, "MPMediaItemPropertyAlbumTitle", nsString(info.album))
+  if info.artwork.len > 0:
+    artworkBytes = newString(info.artwork.len)
+    copyMem(addr artworkBytes[0], unsafeAddr info.artwork[0], info.artwork.len)
+    ensureArtworkBlock()
+    let artwork = cast[proc(a: Id, s: SEL, size: NSSize,
+                            handler: pointer): Id {.cdecl.}](msgSend)(
+      send0(loadClass("MPMediaItemArtwork"), sel("alloc")),
+      sel("initWithBoundsSize:requestHandler:"),
+      NSSize(w: 512, h: 512), addr artworkBlock)
+    if artwork != nil:
+      autorelease(artwork)
+      put(dictionary, "MPMediaItemPropertyArtwork", artwork)
+  else:
+    artworkBytes.setLen(0)
   if info.duration > 0:
     put(dictionary, "MPMediaItemPropertyPlaybackDuration",
         nsNumberDouble(info.duration))

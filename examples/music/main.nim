@@ -1,5 +1,5 @@
 ## Native music integration slice. Local queue first; service adapters follow.
-import std/[os, times, json]
+import std/[os, tables, times, json]
 import nimi
 import nimi/ui
 import nimi/audio
@@ -61,11 +61,21 @@ proc persist() =
       position: resumePosition, volume: volume)):
     stderr.writeLine("Unable to save music session: " & sessionPath)
 
-proc setCover(identity, path: string) =
-  for index in 0 ..< queue.tracks.len:
-    if queue.tracks[index].identity == identity:
-      queue.tracks[index].coverPath = path
-      return
+var artworkCache: Table[string, seq[byte]]
+
+proc artworkFor(path: string): seq[byte] =
+  if path.len == 0 or not fileExists(path):
+    return
+  if artworkCache.hasKey(path):
+    return artworkCache[path]
+  try:
+    let data = readFile(path)
+    if data.len > 0 and data.len <= 8 * 1024 * 1024:
+      result = newSeq[byte](data.len)
+      copyMem(addr result[0], unsafeAddr data[0], data.len)
+      artworkCache[path] = result
+  except CatchableError:
+    discard
 
 proc updateNowPlaying() =
   if player == nil or queue.selected < 0 or queue.selected >= queue.tracks.len:
@@ -74,10 +84,18 @@ proc updateNowPlaying() =
   let track = queue.tracks[queue.selected]
   setNowPlaying(NowPlayingInfo(
     title: track.displayTitle(), artist: track.artist, album: track.album,
+    artwork: artworkFor(track.coverPath),
     duration: player.duration, position: player.position,
     playing: player.playing,
     commands: {mcPlay, mcPause, mcTogglePlayPause, mcStop, mcNext,
                mcPrevious, mcSeek}))
+
+proc setCover(identity, path: string) =
+  for index in 0 ..< queue.tracks.len:
+    if queue.tracks[index].identity == identity:
+      queue.tracks[index].coverPath = path
+      updateNowPlaying()
+      return
 
 
 proc selectTrack(index: int, previous = false, autoplay = true) =

@@ -132,6 +132,7 @@ type
 
   PlatformNowPlayingInfo* = object
     title*, artist*, album*: string
+    artwork*: seq[byte]  # PNG/JPEG bytes; empty means no artwork
     duration*, position*: float64
     playing*: bool
     commands*: set[PlatformMediaCommand]

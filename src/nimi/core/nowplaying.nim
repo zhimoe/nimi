@@ -10,6 +10,7 @@ type
 
   NowPlayingInfo* = object
     title*, artist*, album*: string
+    artwork*: seq[byte]  # PNG/JPEG bytes; empty means no artwork
     duration*, position*: float64
     playing*: bool
     commands*: set[MediaCommand]
@@ -24,7 +25,7 @@ proc setNowPlaying*(info: NowPlayingInfo) =
     platformCommands.incl PlatformMediaCommand(ord(command))
   currentBackend.setNowPlaying(PlatformNowPlayingInfo(
     title: info.title, artist: info.artist, album: info.album,
-    duration: info.duration, position: info.position,
+    artwork: info.artwork, duration: info.duration, position: info.position,
     playing: info.playing, commands: platformCommands))
 
 proc clearNowPlaying*() =

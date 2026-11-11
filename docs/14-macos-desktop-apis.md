@@ -111,4 +111,4 @@ global shortcut: true
 - Darwin 后端懒加载 `MediaPlayer.framework`，使用 `MPNowPlayingInfoCenter` 显示状态、`MPRemoteCommandCenter` 接收媒体键/系统媒体控制。
 - 命令回调仍在主线程；`setNowPlaying`/`clearNowPlaying` 可在 `whenReady` 后调用。
 - Music 已接入：切歌、播放/暂停、seek、下一首/上一首和停止会更新系统状态；退出/关窗清除。
-- 未做：封面 artwork、真实媒体键人工验收、Windows/Linux 媒体控制。
+- 已接入封面 artwork（PNG/JPEG bytes → `MPMediaItemArtwork`）。未做：真实媒体键人工验收、Windows/Linux 媒体控制。

@@ -40,7 +40,7 @@ CG renderer 新增 clearImageCache、setImageCacheLimit、imageCacheStats。原�
 新增 `src/nimi/audio.nim`（显式导入，不扩大默认 facade）及 `examples/music`。
 macOS AVAudioPlayer 后端提供本地解码、播放/暂停、时长/进度、seek、音量与显式关闭。
 真实 WAV 测试覆盖成功路径、无效文件和关闭后的操作；网络流仍未实现；播放结束 delegate 已接入并实测。
-原生界面已经接入本地队列与播放控制。队列已支持自动下一首、单曲/列表循环、随机与历史返回；会话保存并恢复曲目元数据、位置、音量和模式。真实无声 WAV 的结束回调、回调内关闭，以及队列/会话逻辑均有测试。Now Playing/媒体键基础已接入；下一步补封面 artwork、远程服务 UI 对齐与缓存管理。
+原生界面已经接入本地队列与播放控制。队列已支持自动下一首、单曲/列表循环、随机与历史返回；会话保存并恢复曲目元数据、位置、音量和模式。真实无声 WAV 的结束回调、回调内关闭，以及队列/会话逻辑均有测试。Now Playing/媒体键与封面 artwork 已接入；下一步补远程服务 UI 对齐与缓存管理。
 
 ## 曲库虚拟化
 
@@ -96,11 +96,11 @@ Music 新增后台 Subsonic token 认证和 search3 曲库搜索。系统 curl �
 - 本地标题取文件名（去扩展名）；远程下载完成后保留搜索结果的标题/歌手/专辑/封面 ID，队列不再显示缓存哈希。
 - 会话升级到版本 2，保存完整 Track 元数据；仍读取版本 1 的纯路径会话并迁移为本地曲目。损坏会话保留原文件并回退安全默认值。
 - 测试：`tests/test_queue.nim`（本地/远程身份与去重）、`tests/test_music_session.nim`（v2 往返、v1 迁移、损坏文件）。
-- 封面已通过 `getCoverArt` 后台下载、独立缓存并在当前播放区显示；Now Playing/媒体键基础已接入；仍待缓存淘汰 UI、封面 artwork、流式播放、真实媒体键与 Subsonic 账号验收。
+- 封面已通过 `getCoverArt` 后台下载、独立缓存并在当前播放区显示；Now Playing/媒体键基础已接入；仍待缓存淘汰 UI、流式播放、真实媒体键与 Subsonic 账号验收。
 
 ## Now Playing / 媒体键（2026-11-09）
 
 - 新增 `core/nowplaying` 和 `platform/darwin/nowplaying`：懒加载 MediaPlayer.framework，接入 MPNowPlayingInfoCenter 与 MPRemoteCommandCenter。
 - 支持标题/歌手/专辑/时长/位置/播放状态，以及 play/pause/toggle/stop/next/previous/seek 命令。
 - Music 已接入切歌、播放/暂停、seek、上一首/下一首与停止；关窗/退出清除系统状态。
-- 未做：封面 artwork、真实媒体键/控制中心人工验收、Windows/Linux 媒体控制。
+- 已接入封面 artwork（`MPMediaItemArtwork`）。未做：真实媒体键/控制中心人工验收、Windows/Linux 媒体控制。
