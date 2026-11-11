@@ -3,3 +3,63 @@
 --mm:atomicArc
 --threads:on
 --path:"src"
+
+# macOS 27 SDK compatibility fallback.
+#
+# The macOS 27.2 SDK .tbd files describe arm64e.x1-macos, which the ld shipped
+# with Xcode 17 does not understand. When the active SDK is 27+ and a 26.x SDK
+# exists, compile and link against that SDK instead. Set NIMI_MACOS_SDK to an
+# explicit path to override, or to `off` to disable this fallback.
+import std/[os, strutils]
+
+proc sdkMajor(path: string): int =
+  let name = path.extractFilename
+  if not name.startsWith("MacOSX") or not name.endsWith(".sdk"):
+    return 0
+  let version = name[6 ..< name.len - 4]
+  let dot = version.find('.')
+  let major = if dot > 0: version[0 ..< dot] else: version
+  try:
+    result = parseInt(major)
+  except ValueError:
+    result = 0
+
+proc resolvedSdk(path: string): string =
+  let (target, code) = gorgeEx("readlink " & quoteShell(path))
+  if code == 0 and target.strip.len > 0: target.strip else: path
+
+proc compatibleMacSdk(): string =
+  let override = getEnv("NIMI_MACOS_SDK")
+  if override == "off":
+    return ""
+  if override.len > 0:
+    return override
+  let (activeRaw, activeCode) = gorgeEx("xcrun --show-sdk-path")
+  if activeCode != 0:
+    return ""
+  let active = resolvedSdk(activeRaw.strip)
+  if sdkMajor(active) < 27:
+    return ""
+
+  var best = ""
+  var bestMajor = 0
+  for directory in [
+      "/Library/Developer/CommandLineTools/SDKs",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs",
+      "/Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs"]:
+    if not dirExists(directory):
+      continue
+    for kind, path in walkDir(directory):
+      if kind notin {pcDir, pcLinkToDir} or not dirExists(path):
+        continue
+      let major = sdkMajor(path)
+      if major > 0 and major < 27 and major > bestMajor:
+        best = path
+        bestMajor = major
+  best
+
+when hostOS == "macosx":
+  let sdk = compatibleMacSdk()
+  if sdk.len > 0:
+    switch("passC", "-isysroot " & sdk)
+    switch("passL", "-isysroot " & sdk)
