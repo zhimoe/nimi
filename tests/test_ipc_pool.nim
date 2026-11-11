@@ -1,18 +1,26 @@
-import std/[json, monotimes, os, strutils, tables, times, unittest]
+import std/[atomics, json, monotimes, os, strutils, tables, times, unittest]
 
 import nimi/core/[ipc, ipcpool, window]
 import nimi/platform/contract
 
-proc poolEcho(args: string): string {.gcsafe.} =
+proc poolEcho(args: string, context: IpcCallContext): string {.gcsafe.} =
   let values = parseJson(args)
   $(%*("bg:" & values[0].getStr))
 
-proc poolFail(args: string): string {.gcsafe.} =
+proc poolFail(args: string, context: IpcCallContext): string {.gcsafe.} =
   raise newException(ValueError, "boom")
 
-proc poolSlow(args: string): string {.gcsafe.} =
+proc poolSlow(args: string, context: IpcCallContext): string {.gcsafe.} =
   sleep(80)
-  poolEcho(args)
+  poolEcho(args, context)
+
+var waitCancelled: Atomic[bool]
+
+proc poolWait(args: string, context: IpcCallContext): string {.gcsafe.} =
+  while not context.isCancelled():
+    sleep(5)
+  waitCancelled.store(true)
+  "cancelled"
 
 bindBackgroundService("PoolTest", [
   backgroundMethod("echo", poolEcho,
@@ -20,7 +28,13 @@ bindBackgroundService("PoolTest", [
   backgroundMethod("slow", poolSlow,
     params = [ParamDef(name: "text", typ: "string")], resultType = "string"),
   backgroundMethod("fail", poolFail,
-    params = [ParamDef(name: "text", typ: "string")], resultType = "string")
+    params = [ParamDef(name: "text", typ: "string")], resultType = "string"),
+  backgroundMethod("timeout", poolSlow,
+    params = [ParamDef(name: "text", typ: "string")], resultType = "string",
+    timeoutMs = 20),
+  backgroundMethod("wait", poolWait,
+    params = [ParamDef(name: "text", typ: "string")], resultType = "string",
+    timeoutMs = 0)
 ])
 
 proc waitFor(results: var seq[IpcResult], count: int, timeoutMs = 3000): bool =
@@ -103,4 +117,51 @@ suite "background IPC pool":
     check "_reject(9" in evals[0]
     check "boom" in evals[0]
     windows.del(502'u64)
+    shutdownIpcPool()
+
+  test "a deadline rejects the promise and drops the late result":
+    startIpcPool(workers = 1, maxInflight = 4)
+    setIpcCompletion(completeIpcCall)
+    var evals: seq[string]
+    let w = Window(id: 503, secret: "", token: "",
+                   native: NativeWindow(eval: proc(js: string) = evals.add js))
+    windows[503'u64] = w
+    let msg = $(%*{"t": "call", "id": 12,
+                   "method": "PoolTest.timeout", "args": ["slow"]})
+    w.handleMessage(msg)
+    let deadline = getMonoTime() + initDuration(seconds = 3)
+    while evals.len == 0 and getMonoTime() < deadline:
+      drainIpcPool()
+      sleep(1)
+    check evals.len == 1
+    check "_reject(12" in evals[0]
+    check "timed out" in evals[0]
+    sleep(120)
+    drainIpcPool()
+    check evals.len == 1
+    windows.del(503'u64)
+    shutdownIpcPool()
+
+  test "closing a window cancels its background work":
+    startIpcPool(workers = 1, maxInflight = 4)
+    setIpcCompletion(completeIpcCall)
+    waitCancelled.store(false)
+    var evals: seq[string]
+    let w = Window(id: 504, secret: "", token: "",
+                   native: NativeWindow(eval: proc(js: string) = evals.add js))
+    windows[504'u64] = w
+    let msg = $(%*{"t": "call", "id": 13,
+                   "method": "PoolTest.wait", "args": ["wait"]})
+    w.handleMessage(msg)
+    sleep(20)
+    fireClosed(w)
+    windows.del(504'u64)
+    let deadline = getMonoTime() + initDuration(seconds = 3)
+    while not waitCancelled.load() and getMonoTime() < deadline:
+      drainIpcPool()
+      sleep(1)
+    check waitCancelled.load()
+    sleep(30)
+    drainIpcPool()
+    check evals.len == 0
     shutdownIpcPool()

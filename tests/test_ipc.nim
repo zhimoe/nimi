@@ -53,7 +53,7 @@ suite "ipc":
     check "add(a: number, b: number): Promise<number>" in ts
     check "call(\"Greeter.greet\", name)" in ts
 
-proc backgroundEcho(args: string): string {.gcsafe.} =
+proc backgroundEcho(args: string, context: IpcCallContext): string {.gcsafe.} =
   let values = parseJson(args)
   $(%*("bg:" & values[0].getStr))
 
@@ -88,7 +88,7 @@ type
 
 proc ping(self: Mixed): string = "pong"
 
-proc mixedWork(args: string): string {.gcsafe.} = args
+proc mixedWork(args: string, context: IpcCallContext): string {.gcsafe.} = args
 
 suite "background ipc merging":
   test "sync and background methods share one TypeScript object":

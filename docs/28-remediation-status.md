@@ -16,7 +16,7 @@ CG renderer 新增 clearImageCache、setImageCacheLimit、imageCacheStats。原�
 ## 当前契约
 
 - 应用状态、控件树、服务注册与平台操作应在主线程使用；不能承诺所有公开 API 任意线程安全。后台结果通过 postMain 投递，捕获对象的所有权仍由调用者保证。
-- IPC 分为两条路径：`bindService` 方法仍在 UI 线程同步执行，适合短小状态操作；`bindBackgroundService` 方法进入有界工作池，以 JSON 字符串跨线程，结果通过主线程回投。后台调用暂无 per-call 超时/取消、流式 Channel 和批处理。详见 [异步 IPC](29-async-ipc.md)。
+- IPC 分为两条路径：`bindService` 方法仍在 UI 线程同步执行，适合短小状态操作；`bindBackgroundService` 方法进入有界工作池，以 JSON 字符串跨线程，结果通过主线程回投。后台调用已有 per-call 超时、窗口关闭取消和迟到结果丢弃；仍缺流式 Channel 和批处理。详见 [异步 IPC](29-async-ipc.md)。
 - TS 生成仅覆盖基础标量，其他类型为 unknown。window.mygo 别名不构成上游 runtime 或 wire protocol 的完整兼容保证。
 - 原生 UI 每帧建树、遍历布局；已有固定行高虚拟列表和换行行偏移；尚无可变行高虚拟化和布局缓存。CG 是通用默认渲染器，Metal 仅支持专用效果。
 - 单元和离屏测试不等于真实窗口、输入法、网络、音频与发布验收。
@@ -24,7 +24,7 @@ CG renderer 新增 clearImageCache、setImageCacheLimit、imageCacheStats。原�
 ## 后续开发顺序与验收
 
 1. 正确性：grapheme 编辑、IME UTF-16/range、保存失败恢复、窗口关闭回调失效。验收：中日韩/emoji 编辑、关闭期间任务完成、失败保存不丢原文件。代码与合成测试已完成；真实拼音/日文输入法人工验收仍待执行。
-2. 异步核心：明确主线程契约，任务标识/取消/关闭清理，再实现工作池；补错误返回与复杂类型生成。验收：慢请求期间 UI 可交互、旧结果不污染新页面。当前 TaskExecutor 支持协作取消、超时和有限等待关闭；后台 IPC 已有有界工作池，同步 `bindService` 仍按 UI 线程契约执行。
+2. 异步核心：明确主线程契约，任务标识/取消/关闭清理，再实现工作池；补错误返回与复杂类型生成。验收：慢请求期间 UI 可交互、旧结果不污染新页面。当前 TaskExecutor 支持协作取消、超时和有限等待关闭；后台 IPC 已有有界工作池、per-call 超时和窗口关闭取消，同步 `bindService` 仍按 UI 线程契约执行。
 3. 音乐应用基础：固定行高虚拟列表、有限容量封面缓存、音频后端原型。验收：一万行仅构建视口及 overscan；播放/暂停/seek/切歌/结束/关闭可重复验证。
 4. macOS 完善：Session Cookie、凭据存储、Now Playing（基础已接入，需真实媒体键验收）、通知与拖放。每项需要打包应用实测。
 5. 发布：真实签名公证、干净机器启动、升级回滚；再拓展通用 Metal 和其他平台。
@@ -76,7 +76,7 @@ Music 新增后台 Subsonic token 认证和 search3 曲库搜索。系统 curl �
 - 窗口 `closed` 为幂等操作：关闭后清空 close/closed/title/focus/frame 监听器，`onClosed` 立即执行，后续 `invalidate`/`eval`/`load*`/`emitPage` 被拒绝。
 - 自动测试：`tests/test_unicode.nim`（grapheme/UTF-16）、`tests/test_ime.nim`（合成组合/提交/替换/滚动）、`tests/test_tasks.nim`（取消/超时/有限关闭）、`tests/test_ui.nim`（grapheme 编辑/窗口关闭）。
 - 仍待人工验收：真实拼音、双拼、日文输入法的候选窗、选词提交、取消组合和重转换。合成事件通过不等于系统输入法通过。
-- 仍有限制：grapheme 表是实用子集而非完整 Unicode 属性库；TaskExecutor 仍为单 worker；后台 IPC 没有 per-call 超时/取消和流式返回，同步 `bindService` 仍在 UI 线程；关闭超时后 worker 内存按进程退出场景处理，不用于长期运行时的反复创建。
+- 仍有限制：grapheme 表是实用子集而非完整 Unicode 属性库；TaskExecutor 仍为单 worker；后台 IPC 已有超时/取消但不会强行终止阻塞 work，仍缺流式返回；同步 `bindService` 仍在 UI 线程；关闭超时后 worker 内存按进程退出场景处理，不用于长期运行时的反复创建。
 
 ## 异步 IPC 工作池（2026-11-07）
 
@@ -86,7 +86,8 @@ Music 新增后台 Subsonic token 认证和 search3 曲库搜索。系统 curl �
 - `App.run` 退出时 `shutdownIpcPool(200)` 有界等待并 join；超时按进程退出场景放弃 worker。
 - 同步 `bindService` 保持原语义：仍在 UI 线程执行，适合短小状态/控件操作。不能把所有闭包自动搬到线程池，原因见 [异步 IPC](29-async-ipc.md)。
 - 测试：`tests/test_ipc.nim`（注册/合并 TS/冲突）、`tests/test_ipc_pool.nim`（窗口 resolve/reject、错误、背压、关闭后拒绝提交）。
-- 仍缺：per-call 超时/取消、流式 Channel、批处理、复杂类型自动 TS 映射。
+- 已补：per-call 超时（默认 30s）、窗口关闭取消、watchdog 超时回调、迟到结果丢弃。
+- 仍缺：流式 Channel、批处理、复杂类型自动 TS 映射；超时/取消不抢占正在阻塞的 work。
 
 ## 音乐曲目元数据与会话 v2（2026-11-09）
 

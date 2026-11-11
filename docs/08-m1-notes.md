@@ -133,7 +133,7 @@ exit=0
 
 ## 5. 下一步(M1 剩余)
 
-1. 后台 IPC 的 per-call 超时/取消、流式返回；同步 `bindService` 保持 UI 线程契约。
+1. 后台 IPC 的流式返回；超时/窗口关取消已实现，同步 `bindService` 保持 UI 线程契约。
 2. Channel 页面侧消息 + TS 事件/Channel 描述符。
 3. `Eval` 返回值、导航事件、页面标题。
 4. trusted/untrusted 细分、消息大小限制。

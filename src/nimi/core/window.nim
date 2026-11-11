@@ -68,6 +68,7 @@ proc fireClosed*(w: Window) =
   if w.closed:
     return
   w.closed = true
+  cancelIpcWindow(w.id)
   let callbacks = w.closedListeners
   w.closedListeners.setLen(0)
   for fn in callbacks:
@@ -124,7 +125,8 @@ proc handleMessage*(w: Window, msg: string) =
       if node.hasKey("args"): node["args"] else: newJArray()
     if hasBackgroundMethod(target):
       let work = backgroundWork(target)
-      if not submitIpc(w.id, int64(callId), target, $args, work):
+      if not submitIpc(w.id, int64(callId), target, $args, work,
+                       backgroundTimeout(target)):
         w.native.eval("window.__nimi._reject(" & $callId & "," &
                       $(%*"IPC queue is full or worker pool is closed") & ")")
       return

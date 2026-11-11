@@ -76,17 +76,21 @@ Nim 的 `gcsafe` 只表示“不会做 GC 不安全的操作”，**不表示数
 import std/json
 import nimi
 
-proc searchWork(args: string): string {.gcsafe.} =
+proc searchWork(args: string, context: IpcCallContext): string {.gcsafe.} =
   ## 工作线程执行。只做线程安全的 I/O/计算。
   let query = parseJson(args)[0].getStr
-  let songs = searchLocalIndex(query)   # 必须自行保证线程安全
-  $(%*songs)
+  for page in 0 ..< pageCount(query):
+    if context.isCancelled():
+      raise newException(IOError, "search cancelled")
+    accumulate(searchPage(query, page))   # 必须自行保证线程安全
+  $(%*results())
 
 proc registerServices() =
   bindBackgroundService("Catalog", [
     backgroundMethod("search", searchWork,
       params = [ParamDef(name: "query", typ: "string")],
-      resultType: "string")
+      resultType: "string",
+      timeoutMs = 15_000)  # 0 表示不设超时
   ])
 ```
 
@@ -112,7 +116,7 @@ WKWebView JS
   → UI 线程 handleMessage
   → hasBackgroundMethod? 是
   → submitIpc(...)          ← 只做入队，不执行工作
-  → IPC worker 线程执行 work(args)
+  → IPC worker 线程执行 work(args, context)
   → Channel 发送 IpcResult
   → wakeMainThread()        ← dispatch_async 唤醒主线程
   → UI 线程 drainIpcPool()
@@ -146,6 +150,18 @@ app.whenReady(proc() =
 
 `startIpcPool` 必须在 UI 线程调用；重复调用不会重建已有池。
 
+### 超时与取消
+
+- `backgroundMethod` 的 `timeoutMs` 默认 30 秒；`0` 表示不设超时。
+- 超时由池中的 watchdog 线程触发：设置 `context` 的取消标志，向 UI 线程
+  投递 `IPC call timed out`，页面 Promise 立即 reject。
+- 窗口关闭时 `Window.fireClosed` 调用 `cancelIpcWindow`：该窗口所有在途调用
+  的取消标志被置位，watchdog 项被移除，迟到结果被丢弃。
+- 工作函数必须在安全点检查 `context.isCancelled()`。池不会抢占/杀死正在
+  阻塞的 work；超时只保证页面 Promise 结算和结果丢弃，不保证 work 立即结束。
+- 超时/取消后，worker 仍占用一个在途名额直到 work 返回；不要用它来规避
+  I/O 超时，work 内部仍应设置 curl `--max-time`、文件大小上限等。
+
 ### 错误
 
 - `work` 抛出的 `CatchableError` 会变成 `_reject(message)`。
@@ -176,16 +192,16 @@ shutdownLoop()
 - 多 worker 线程池；
 - 有界在途请求和立即拒绝；
 - 主线程结果投递和 Promise resolve/reject；
+- per-call 超时、窗口关闭取消、迟到结果丢弃；
 - 关闭时有界等待；
 - TypeScript 合并生成；
 - 测试 `tests/test_ipc.nim`（注册/TS）和 `tests/test_ipc_pool.nim`
-  （结果、错误、背压、窗口 resolve/reject）。
+  （结果、错误、背压、超时、窗口取消、窗口 resolve/reject）。
 
 尚有限制：
 
-- 后台调用没有 per-call 超时或强制取消；工作函数必须自己限制 I/O 时间
-  （例如 curl 的 `--max-time`、文件读取大小上限）。需要更细粒度取消时，
-  应使用应用自己的 `TaskExecutor`，或后续为后台 IPC 增加 `CallContext`。
+- 超时/取消不会强行终止正在阻塞的 work；work 必须自行检查取消并限制 I/O
+  时间（例如 curl 的 `--max-time`、文件读取大小上限）。
 - 没有 Channel/流式返回和批处理。
 - 后台 work 的复杂类型仍需要在 `backgroundMethod` 中手动声明
   `params`/`resultType`；TS 只保证基础标量。

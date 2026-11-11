@@ -30,7 +30,7 @@
 
 | 领域 | MyGo 当前能力 | Nimi 当前 | 计划/文档动作 |
 |---|---|---|---|
-| WebView / IPC | 绑定服务、事件、Channel（1 MiB 窗口/ack）、trusted/untrusted、preload、注入脚本顺序、Eval、页面导航/下载/权限、`WebViewAvailable`、GPU 进程 ID | 类型化 IPC、事件、后台工作池、secret/token；无 Channel、preload、trust 细分、下载/权限 | 保留 `docs/04` 的目标协议；M1 剩余项改为“Channel、preload/trust、页面下载/权限、Eval 返回值”；后台池见 `29` |
+| WebView / IPC | 绑定服务、事件、Channel（1 MiB 窗口/ack）、trusted/untrusted、preload、注入脚本顺序、Eval、页面导航/下载/权限、`WebViewAvailable`、GPU 进程 ID | 类型化 IPC、事件、后台工作池（超时/窗口取消）、secret/token；无 Channel、preload、trust 细分、下载/权限 | 保留 `docs/04` 的目标协议；M1 剩余项改为“Channel、preload/trust、页面下载/权限、Eval 返回值”；后台池见 `29` |
 | 原生 UI | ~100 组件：editor、richtext、markdown、chart、video、table/tree/outline/grid、split/sidebar/toolbar、calendar/date/time/color、combobox/autocomplete/token、find bar/diff viewer；无障碍、RTL、transitions/motion/transforms/shaders、Tester、WASM 浏览器 | 少量基础控件、TextInput/TextArea、ScrollView、固定行高虚拟列表、基础 IME | `docs/03` 的 120 入口是旧快照；M3 只承诺基础控件；编辑器/富文本/图表/视频/无障碍进入 M6/M10/P2，不挤进 M3 |
 | 音频 | Go 内混音；WAV/MP3/Vorbis/FLAC/AAC/ALAC（含 MP4 容器）；流式解码、seek、loop、变速/保持音高；Now Playing/媒体键；三平台输出 | AVAudioPlayer 本地文件、播放/暂停/seek/音量；Track 元数据/会话 v2/远程封面缓存/Now Playing 基础已完成；无流式、混音、格式矩阵 | 音乐应用下一步做封面 artwork、缓存管理/流式；通用音频引擎（混音、流式、格式注册）列为 M10/P2，不阻塞 1.0 |
 | 原生模块 | Swift/Rust/Zig 实现 Go 接口，无 cgo；`mygo native build/add/check/call/publish`；视图/回调/缓冲区/纹理 | 未规划 | 新增 M10/P2 条目；明确 1.0 不做，插件/动态库继续走现有路线 |

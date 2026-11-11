@@ -13,7 +13,7 @@
 ## proc's parameter types, the proc is called, and its result is encoded back.
 ## The same descriptors drive TypeScript generation (see ../tsgen.nim).
 
-import std/[json, macros, strutils, tables]
+import std/[atomics, json, macros, strutils, tables]
 
 type
   ParamDef* = object
@@ -30,15 +30,21 @@ type
     name*: string
     methods*: seq[MethodDef]
 
-  IpcWork* = proc(args: string): string {.nimcall, gcsafe.}
+  IpcCallContext* = object
+    control: ptr Atomic[bool]
+
+  IpcWork* = proc(args: string, context: IpcCallContext): string
+    {.nimcall, gcsafe.}
     ## Runs on a worker thread. The argument and result are JSON strings; the
     ## work must not touch UI state or non-thread-safe application globals.
+    ## Check context.isCancelled() at safe points in long operations.
 
   BackgroundMethod* = object
     name*: string
     params*: seq[ParamDef]
     resultType*: string
     work*: IpcWork
+    timeoutMs*: int
 
   BackgroundService* = object
     name*: string
@@ -59,12 +65,21 @@ proc bindServiceImpl*(s: ServiceDef) =
         "method already bound in the background pool: " & key)
   services.add s
 
+proc isCancelled*(context: IpcCallContext): bool {.inline.} =
+  context.control != nil and context.control[].load()
+
+proc newIpcCallContext*(control: ptr Atomic[bool]): IpcCallContext =
+  IpcCallContext(control: control)
+
 proc backgroundMethod*(name: string, work: IpcWork,
                        params: openArray[ParamDef] = [],
-                       resultType: string = "unknown"): BackgroundMethod =
-  ## Describe one method that runs in the IPC worker pool.
+                       resultType: string = "unknown",
+                       timeoutMs: int = 30_000): BackgroundMethod =
+  ## Describe one method that runs in the IPC worker pool. A positive timeout
+  ## rejects the page promise when the deadline passes; work should also check
+  ## its IpcCallContext to stop early.
   BackgroundMethod(name: name, params: @params, resultType: resultType,
-                   work: work)
+                   work: work, timeoutMs: timeoutMs)
 
 proc bindBackgroundService*(service: string,
                             methods: openArray[BackgroundMethod]) =
@@ -96,6 +111,9 @@ proc bindBackgroundService*(service: string,
     if bm.work == nil:
       raise newException(ValueError, "background method has no work: " &
                          service & "." & bm.name)
+    if bm.timeoutMs < 0:
+      raise newException(ValueError, "invalid background method timeout: " &
+                         service & "." & bm.name)
     let key = service & "." & bm.name
     if backgroundMethods.hasKey(key):
       raise newException(ValueError, "background method already bound: " & key)
@@ -110,6 +128,12 @@ proc backgroundWork*(methodName: string): IpcWork =
     backgroundMethods[methodName].work
   else:
     nil
+
+proc backgroundTimeout*(methodName: string): int =
+  if backgroundMethods.hasKey(methodName):
+    backgroundMethods[methodName].timeoutMs
+  else:
+    0
 
 proc argAt*(args: JsonNode, index: int): JsonNode =
   ## Index helper bound by the macro. Keeping it here means user modules do
