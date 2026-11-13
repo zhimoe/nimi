@@ -19,9 +19,10 @@ jobs:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Enlarge the Nim compiler stack
         run: |
-          # Nim 2.4.0's Windows compiler has a 1 MiB stack, which overflows
-          # while checking ui/context.nim. Patch the PE32+ SizeOfStackReserve
-          # field directly so CI does not depend on Visual Studio's editbin.
+          # Nim 2.4.0's Windows compiler ships with a 2 MiB stack, which
+          # overflows while checking ui/context.nim. Patch the PE32+
+          # SizeOfStackReserve field directly so CI does not depend on
+          # Visual Studio's editbin.
           $path = "$env:GITHUB_WORKSPACE\.nim_runtime\bin\nim.exe"
           $bytes = [System.IO.File]::ReadAllBytes($path)
           $pe = [BitConverter]::ToInt32($bytes, 0x3C)
