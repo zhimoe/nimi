@@ -1,6 +1,13 @@
 #!/bin/sh
 set -eu
 cd "$(dirname "$0")/.."
+nim c -r --hints:off --path:src -o:/tmp/nimi_test_windows_input tests/test_windows_input.nim
+nim c -r --hints:off --path:src -o:/tmp/nimi_test_windows_menu_plan tests/test_windows_menu_plan.nim
+nim c -r --hints:off --path:src -o:/tmp/nimi_test_menu_callbacks tests/test_menu_callbacks.nim
+nim c -r --hints:off --path:src -o:/tmp/nimi_test_platform_contract tests/test_platform_contract.nim
+nim c -r --hints:off --path:src -o:/tmp/nimi_test_environment tests/test_environment.nim
+nim c -r --hints:off --path:src -o:/tmp/nimi_test_environment_editor tests/test_environment_editor.nim
+nim c -r --hints:off --path:src -o:/tmp/nimi_test_environment_ui tests/test_environment_ui.nim
 nim c -r --hints:off --path:src -o:/tmp/nimi_test_ipc tests/test_ipc.nim
 nim c -r --hints:off --path:src -o:/tmp/nimi_test_ipc_pool tests/test_ipc_pool.nim
 nim c -r --hints:off --path:src -o:/tmp/nimi_test_loop tests/test_loop.nim

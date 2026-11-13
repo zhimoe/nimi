@@ -176,6 +176,7 @@ proc newWindow*(opts: WindowOptions): Window =
     surface.cut = proc() = content.cutSelection()
     surface.paste = proc() = content.paste()
     surface.selectAll = proc() = content.selectAll()
+    surface.cancelInput = proc(composition: bool) = content.cancelInput(composition)
     surface.undo = proc() = content.undo()
     surface.redo = proc() = content.redo()
     surface.insertText = proc(text: string, replacement: TextRange) =
@@ -184,6 +185,7 @@ proc newWindow*(opts: WindowOptions): Window =
       content.setMarkedText(text, selected, replacement)
     surface.unmarkText = proc() = content.unmarkText()
     surface.hasMarkedText = proc(): bool = content.hasMarkedText()
+    surface.textInputActive = proc(): bool = content.textInputActive()
     surface.markedRange = proc(): TextRange = content.markedRange()
     surface.selectedRange = proc(): TextRange = content.selectedRange()
     surface.attributedSubstring = proc(range: TextRange): string =

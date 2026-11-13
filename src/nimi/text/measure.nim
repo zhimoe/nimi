@@ -1,10 +1,9 @@
-## CoreText text measurement for layout. This is the macOS M2 implementation;
-## a platform-abstract text engine replaces it when Windows/Linux land.
-##
-## The renderer uses the same font names ("Helvetica"/"Helvetica-Bold"), so
-## layout and paint agree.
+## Shared layout with platform font measurement: CoreText on macOS, GDI on Windows.
+## Each platform renderer uses the same font and size as its measurement path.
 
-import std/[dynlib, strutils, tables, unicode]
+import std/[strutils, unicode]
+when not defined(windows):
+  import std/[dynlib, tables]
 
 type
   TextMetrics* = object
@@ -17,79 +16,87 @@ type
       ## adjacent (no separator byte), unlike lines split at newlines.
     width*, height*, lineHeight*, ascent*: float32
 
-  CFRef = pointer
+when defined(windows):
+  import ../platform/windows/graphics
+  proc measureText*(text: string, size: float32, bold: bool): TextMetrics =
+    let wide = newWideCString(text)
+    var m: array[5, cfloat]
+    gdiMeasure(wide, cint(wide.len), max(1'f32, size), cint(bold), addr m[0])
+    TextMetrics(width: m[0], height: m[1], ascent: m[2], descent: m[3], leading: m[4])
+else:
+  type CFRef = pointer
 
-let
-  cf = loadLib("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation")
-  ct = loadLib("/System/Library/Frameworks/CoreText.framework/CoreText")
+  let
+    cf = loadLib("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation")
+    ct = loadLib("/System/Library/Frameworks/CoreText.framework/CoreText")
 
-template fn(lib: LibHandle, name: string, T: untyped): untyped =
-  cast[T](symAddr(lib, name))
+  template fn(lib: LibHandle, name: string, T: untyped): untyped =
+    cast[T](symAddr(lib, name))
 
-let
-  CFStringCreateWithCString = fn(cf, "CFStringCreateWithCString",
-    proc(a: CFRef, s: cstring, e: uint32): CFRef {.cdecl.})
-  CFDictionaryCreateMutable = fn(cf, "CFDictionaryCreateMutable",
-    proc(a: CFRef, cap: int, k: pointer, v: pointer): CFRef {.cdecl.})
-  CFDictionaryAddValue = fn(cf, "CFDictionaryAddValue",
-    proc(d: CFRef, k, v: CFRef) {.cdecl.})
-  CFAttributedStringCreate = fn(cf, "CFAttributedStringCreate",
-    proc(a: CFRef, s: CFRef, attrs: CFRef): CFRef {.cdecl.})
-  CFRelease = fn(cf, "CFRelease", proc(x: CFRef) {.cdecl.})
+  let
+    CFStringCreateWithCString = fn(cf, "CFStringCreateWithCString",
+      proc(a: CFRef, s: cstring, e: uint32): CFRef {.cdecl.})
+    CFDictionaryCreateMutable = fn(cf, "CFDictionaryCreateMutable",
+      proc(a: CFRef, cap: int, k: pointer, v: pointer): CFRef {.cdecl.})
+    CFDictionaryAddValue = fn(cf, "CFDictionaryAddValue",
+      proc(d: CFRef, k, v: CFRef) {.cdecl.})
+    CFAttributedStringCreate = fn(cf, "CFAttributedStringCreate",
+      proc(a: CFRef, s: CFRef, attrs: CFRef): CFRef {.cdecl.})
+    CFRelease = fn(cf, "CFRelease", proc(x: CFRef) {.cdecl.})
 
-  CTFontCreateWithName = fn(ct, "CTFontCreateWithName",
-    proc(n: CFRef, size: float64, m: pointer): CFRef {.cdecl.})
-  CTLineCreateWithAttributedString = fn(ct, "CTLineCreateWithAttributedString",
-    proc(s: CFRef): CFRef {.cdecl.})
-  CTLineGetTypographicBounds = fn(ct, "CTLineGetTypographicBounds",
-    proc(l: CFRef, ascent, descent, leading: ptr float64): float64 {.cdecl.})
+    CTFontCreateWithName = fn(ct, "CTFontCreateWithName",
+      proc(n: CFRef, size: float64, m: pointer): CFRef {.cdecl.})
+    CTLineCreateWithAttributedString = fn(ct, "CTLineCreateWithAttributedString",
+      proc(s: CFRef): CFRef {.cdecl.})
+    CTLineGetTypographicBounds = fn(ct, "CTLineGetTypographicBounds",
+      proc(l: CFRef, ascent, descent, leading: ptr float64): float64 {.cdecl.})
 
-let
-  kCTFontAttributeName = cast[ptr CFRef](
-    symAddr(ct, "kCTFontAttributeName"))[]
-  kCFTypeDictionaryKeyCallBacks = cast[pointer](
-    symAddr(cf, "kCFTypeDictionaryKeyCallBacks"))
-  kCFTypeDictionaryValueCallBacks = cast[pointer](
-    symAddr(cf, "kCFTypeDictionaryValueCallBacks"))
+  let
+    kCTFontAttributeName = cast[ptr CFRef](
+      symAddr(ct, "kCTFontAttributeName"))[]
+    kCFTypeDictionaryKeyCallBacks = cast[pointer](
+      symAddr(cf, "kCFTypeDictionaryKeyCallBacks"))
+    kCFTypeDictionaryValueCallBacks = cast[pointer](
+      symAddr(cf, "kCFTypeDictionaryValueCallBacks"))
 
-var cache: Table[string, TextMetrics]
+  var cache: Table[string, TextMetrics]
 
-proc cfstr(s: string): CFRef =
-  CFStringCreateWithCString(nil, s.cstring, 0x08000100'u32)
+  proc cfstr(s: string): CFRef =
+    CFStringCreateWithCString(nil, s.cstring, 0x08000100'u32)
 
-proc measureText*(text: string, size: float32, bold: bool): TextMetrics =
-  ## Advance width and line metrics for one line.
-  let key = text & "\x00" & $size & "\x00" & $bold
-  if cache.hasKey(key):
-    return cache[key]
+  proc measureText*(text: string, size: float32, bold: bool): TextMetrics =
+    ## Advance width and line metrics for one line.
+    let key = text & "\x00" & $size & "\x00" & $bold
+    if cache.hasKey(key):
+      return cache[key]
 
-  let fontName = cfstr(if bold: "Helvetica-Bold" else: "Helvetica")
-  defer: CFRelease(fontName)
-  let font = CTFontCreateWithName(fontName, float64(max(size, 1.0'f32)), nil)
-  defer: CFRelease(font)
+    let fontName = cfstr(if bold: "Helvetica-Bold" else: "Helvetica")
+    defer: CFRelease(fontName)
+    let font = CTFontCreateWithName(fontName, float64(max(size, 1.0'f32)), nil)
+    defer: CFRelease(font)
 
-  let attrs = CFDictionaryCreateMutable(nil, 1,
-    kCFTypeDictionaryKeyCallBacks, kCFTypeDictionaryValueCallBacks)
-  defer: CFRelease(attrs)
-  CFDictionaryAddValue(attrs, kCTFontAttributeName, font)
+    let attrs = CFDictionaryCreateMutable(nil, 1,
+      kCFTypeDictionaryKeyCallBacks, kCFTypeDictionaryValueCallBacks)
+    defer: CFRelease(attrs)
+    CFDictionaryAddValue(attrs, kCTFontAttributeName, font)
 
-  let str = cfstr(text)
-  defer: CFRelease(str)
-  let attrStr = CFAttributedStringCreate(nil, str, attrs)
-  defer: CFRelease(attrStr)
-  let line = CTLineCreateWithAttributedString(attrStr)
-  defer: CFRelease(line)
+    let str = cfstr(text)
+    defer: CFRelease(str)
+    let attrStr = CFAttributedStringCreate(nil, str, attrs)
+    defer: CFRelease(attrStr)
+    let line = CTLineCreateWithAttributedString(attrStr)
+    defer: CFRelease(line)
 
-  var ascent, descent, leading: float64
-  let width = CTLineGetTypographicBounds(line, addr ascent, addr descent,
-                                        addr leading)
-  result = TextMetrics(
-    width: float32(width),
-    height: float32(ascent + descent + leading),
-    ascent: float32(ascent),
-    descent: float32(descent),
-    leading: float32(leading))
-  cache[key] = result
+    var ascent, descent, leading: float64
+    let width = CTLineGetTypographicBounds(line, addr ascent, addr descent,
+                                          addr leading)
+    result = TextMetrics(
+      width: float32(width),
+      height: float32(ascent + descent + leading),
+      ascent: float32(ascent),
+      descent: float32(descent),
+      leading: float32(leading))
+    cache[key] = result
 
 
 proc layoutText*(text: string, size: float32, bold: bool,

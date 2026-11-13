@@ -445,3 +445,75 @@ suite "window lifecycle":
     check closedCount == 2
     w.onClose(proc(e: var CloseEvent) = inc closeCount)
     check w.closeListeners.len == 0
+
+suite "single-line horizontal scrolling":
+  test "long values stay clipped and caret and hit testing follow the scroll":
+    var value = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+    let t = newTester(proc(c: Context) =
+      column(c).children(c, proc() =
+        textInput(c, value, (proc(s: string) = value = s), key = "long").width(180)
+      ), 240, 90)
+    discard t.render()
+    check t.click("long")
+    t.key("end")
+    check t.engine.inputOffsets["long"] > 0
+    let caret = t.engine.caretRect()
+    check caret.x > 0 and caret.x < 180
+    check t.engine.hits[0].scrollX > 0
+    t.clickAt(15, 15)
+    check t.engine.caretPos > 0
+    check t.engine.caretPos < value.len
+    t.key("home")
+    check t.engine.inputOffsets["long"] == 0
+    check t.engine.caretPos == 0
+    t.key("end")
+    let before = value.len
+    t.key("backspace")
+    check value.len == before - 1
+    var clipped = false
+    for op in t.scene.ops:
+      if op.kind == opClip and op.clipRect.w < 180: clipped = true
+    check clipped
+
+suite "nested scroll hit clipping":
+  test "fully clipped inner controls cannot receive clicks outside their viewport":
+    var clicks = 0
+    let t = newTester(proc(c: Context) =
+      scrollView(c, "outer", height = 50).width(240).children(c, proc() =
+        text(c, "spacer").height(100)
+        scrollView(c, "inner", height = 100).width(200).children(c, proc() =
+          button(c, "hidden", (proc() = inc clicks), key = "hidden")
+          text(c, "spacer").height(300)
+        )
+      ), 260, 200)
+    t.engine.scrollOffsets["inner"] = 100
+    discard t.render()
+    t.clickAt(10, 10)
+    check clicks == 0
+
+suite "input cancellation":
+  test "capture loss cancels pressed button without clicking":
+    var clicks = 0
+    let t = newTester(proc(c: Context) =
+      button(c, "Click", (proc() = inc clicks), key = "button"), 200, 100)
+    discard t.render()
+    t.engine.handleMouseDown(10, 10)
+    t.engine.cancelInput(false)
+    t.engine.handleMouseUp(10, 10)
+    check clicks == 0
+    check t.engine.pressedKey == ""
+
+  test "focus loss discards preedit and selection drag without altering saved text":
+    var value = "original"
+    let t = newTester(proc(c: Context) =
+      textInput(c, value, (proc(s: string) = value = s), key = "input"), 240, 100)
+    discard t.render()
+    check t.click("input")
+    t.imeSetMarkedText("中文")
+    check t.engine.markedText == "中文"
+    t.engine.selectingInput = "input"
+    t.engine.cancelInput(true)
+    check value == "original"
+    check t.engine.markedText == ""
+    check t.engine.selectingInput == ""
+    check t.engine.focusedKey == "input"

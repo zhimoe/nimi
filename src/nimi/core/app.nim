@@ -9,8 +9,10 @@ when defined(macosx):
   import ../platform/darwin/app as darwinApp
   import ../render/cg
   import ../scene/scene
-else:
-  discard
+elif defined(windows):
+  import ../platform/windows/app as windowsApp
+  import ../render/gdi
+  import ../scene/scene
 
 type
   QuitEvent* = object
@@ -55,8 +57,6 @@ proc onBeforeQuit*(a: App, fn: proc(e: var QuitEvent)) =
 proc onOpenURL*(a: App, fn: proc(url: string)) =
   a.openURLListeners.add fn
 
-var menuCallbacks: Table[uint32, proc()]
-
 proc toPlatform(k: MenuItemKind): PlatformMenuItemKind =
   case k
   of miNormal: pmiNormal
@@ -65,7 +65,7 @@ proc toPlatform(k: MenuItemKind): PlatformMenuItemKind =
   of miCheckbox: pmiCheckbox
 
 proc buildItems(items: seq[MenuItem],
-                nextId: var uint32): seq[PlatformMenuItem] =
+                nextId: var uint32, callbacks: var Table[uint32, proc()]): seq[PlatformMenuItem] =
   for item in items:
     var p = PlatformMenuItem(
       label: item.label,
@@ -75,30 +75,39 @@ proc buildItems(items: seq[MenuItem],
       checked: item.checked,
       enabled: item.enabled)
     if item.kind == miSubmenu:
-      p.submenu = buildItems(item.submenu, nextId)
+      p.submenu = buildItems(item.submenu, nextId, callbacks)
     elif item.onSelect != nil:
       inc nextId
       p.id = nextId
-      menuCallbacks[p.id] = item.onSelect
+      callbacks[p.id] = item.onSelect
     result.add p
 
 proc installMenu*(a: App) =
   if currentBackend == nil:
     return
+  when defined(windows):
+    if a.menu == nil:
+      currentBackend.setMenu(PlatformMenu(), MenuHandler())
+      return # Clearing a Windows menu must detach the previous native menus.
   let m = if a.menu != nil: a.menu else: defaultMenu(a.name)
   var nextId = 0'u32
-  menuCallbacks.clear()
-  let platform = PlatformMenu(items: buildItems(m.items, nextId))
+  var callbacks: Table[uint32, proc()]
+  let platform = PlatformMenu(items: buildItems(m.items, nextId, callbacks))
   let handler = MenuHandler(select: proc(id: uint32) =
-    let cb = menuCallbacks.getOrDefault(id)
+    let cb = callbacks.getOrDefault(id)
     if cb != nil:
       cb())
   currentBackend.setMenu(platform, handler)
 
 proc setMenu*(a: App, m: Menu) =
+  let previous = a.menu
   a.menu = m
-  if a.ready and currentBackend != nil:
-    onMain(proc() = installMenu(a))
+  try:
+    if a.ready and currentBackend != nil:
+      onMain(proc() = installMenu(a))
+  except:
+    a.menu = previous
+    raise
 
 proc refreshMenu*(a: App) =
   if a.ready and currentBackend != nil:
@@ -147,13 +156,21 @@ proc run*(a: App) =
       writeFile(generatePath, generateTypeScript())
     return
 
-  when defined(macosx):
+  when defined(macosx) or defined(windows):
+    if currentBackend != nil:
+      raise newException(BackendError, "An application backend is already active")
     defaultContentRenderer = proc(ctx: pointer, scene: Scene) =
       drawScene(ctx, scene)
-    let backend = darwinApp.newDarwinBackend()
+    when defined(macosx):
+      let backend = darwinApp.newDarwinBackend()
+    else:
+      let backend = windowsApp.newWindowsBackend()
     currentBackend = backend
     setLoopHooks(backend.signal, backend.isMainThread)
-    setWakeHook(darwinApp.wakeMain)
+    when defined(macosx):
+      setWakeHook(darwinApp.wakeMain)
+    else:
+      setWakeHook(windowsApp.wakeWindowsMain)
     allClosedHook = proc() =
       if not a.quitting:
         discard a.requestQuit()
@@ -175,12 +192,20 @@ proc run*(a: App) =
     handler.dispatch = proc() =
       drainMain()
       drainIpcPool()
-    backend.init(handler, AppOptions(name: a.name))
-    installMenu(a)
-    backend.run()
-    setIpcCompletion(nil)
-    shutdownIpcPool(200)
-    shutdownLoop()
+    try:
+      backend.init(handler, AppOptions(name: a.name))
+      installMenu(a)
+      backend.run()
+    finally:
+      try:
+        if backend.shutdown != nil: backend.shutdown()
+      finally:
+        setIpcCompletion(nil)
+        shutdownIpcPool(200)
+        shutdownLoop()
+        currentBackend = nil
+        allClosedHook = nil
+        a.ready = false
   else:
     raise newException(BackendError,
-      "nimi: M1 supports macOS only; the Windows/Linux backends land in M8/M9")
+      "nimi: this platform has no application backend")

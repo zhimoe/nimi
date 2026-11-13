@@ -50,7 +50,7 @@ type
     itemCount*, firstItem*: int
     itemHeight*: float32
     contentH*: float32
-    scrollY*: float32
+    scrollY*, scrollX*: float32
     imagePath*: string
     displayText*: string
       ## Input text with an active IME composition inserted at the caret.
@@ -80,6 +80,7 @@ type
     lineHeight*: float32
     padX*, padY*, fontSize*: float32
     clip*: Rect
+    scrollX*: float32
 
   EditSnapshot = object
     text: string
@@ -92,6 +93,7 @@ type
     contentH*: float32
 
   Engine* = ref object
+    inputOffsets*: Table[string, float32]
     scrollOffsets*: Table[string, float32]
     scrollRegions*: seq[ScrollRegion]
     lastMouseX*, lastMouseY*: float32
@@ -191,6 +193,15 @@ proc clearComposition(engine: Engine) =
   engine.markedKey = ""
   engine.markedSelectedStart = 0
   engine.markedSelectedLen = 0
+
+proc cancelInput*(engine: Engine, composition: bool = true) =
+  ## Losing capture must not synthesize a click or keep a drag alive. Losing
+  ## window focus also discards uncommitted IME text, but preserves the document.
+  engine.pressedKey = ""
+  engine.pressedDrag = nil
+  engine.selectingInput = ""
+  if composition: engine.clearComposition()
+  if engine.requestFrame != nil: engine.requestFrame()
 
 # --- constructors ----------------------------------------------------------
 
@@ -624,9 +635,9 @@ proc paintSelection(n: Node, c: Context,
                           h: n.lineHeight), selectionColor)
       ly += n.lineHeight
   else:
-    let x1 = n.x + n.padX +
+    let x1 = n.x + n.padX - n.scrollX +
       measureText(n.text[0 ..< result.start], n.fontSize, false).width
-    let x2 = n.x + n.padX +
+    let x2 = n.x + n.padX - n.scrollX +
       measureText(n.text[0 ..< result.finish], n.fontSize, false).width
     c.scene.rect(Rect(x: x1, y: n.y + 4, w: max(1.0'f32, x2 - x1),
                       h: n.h - 8), selectionColor)
@@ -794,6 +805,18 @@ proc paint(n: Node, c: Context) =
                           w: track.w, h: thumbH),
                      rgb(0.45, 0.45, 0.52, 0.5), 2)
     else:
+      c.scene.clip(Rect(x: n.x + 1, y: n.y + 1, w: max(1'f32, n.w - 2), h: max(1'f32, n.h - 2)))
+      if c.engine != nil and c.engine.focusedKey == n.key:
+        let pos = displayCaretFor(c.engine, n.key, n.text,
+          if c.engine.caretKey == n.key: c.engine.caretPos else: n.text.len)
+        let prefix = n.displayText[0 ..< min(pos, n.displayText.len)]
+        let caretWidth = measureText(prefix, n.fontSize, false).width
+        let visible = max(1'f32, n.w - 2 * n.padX - 2)
+        let maxOffset = max(0'f32, measureText(n.displayText, n.fontSize, false).width - visible)
+        n.scrollX = min(maxOffset, max(0'f32, c.engine.inputOffsets.getOrDefault(n.key, 0)))
+        if caretWidth < n.scrollX: n.scrollX = caretWidth
+        elif caretWidth > n.scrollX + visible: n.scrollX = caretWidth - visible
+        c.engine.inputOffsets[n.key] = n.scrollX
       let composing = c.engine != nil and markedActive(c.engine, n.key)
       if c.engine != nil and c.engine.focusedKey == n.key and not composing:
         discard paintSelection(n, c, c.engine)
@@ -807,7 +830,7 @@ proc paint(n: Node, c: Context) =
         let info =
           if c.engine != nil: displayTextFor(c.engine, n.key, n.text)
           else: (text: n.text, markedStart: 0, markedLen: 0)
-        paintInputLine(n, c, n.displayText, n.x + n.padX,
+        paintInputLine(n, c, n.displayText, n.x + n.padX - n.scrollX,
                        n.y + (n.h - m.height) / 2, 0,
                        info.markedStart, info.markedLen)
       if c.engine != nil and c.engine.focusedKey == n.key:
@@ -817,9 +840,10 @@ proc paint(n: Node, c: Context) =
           if pos > 0: n.displayText[0 ..< min(pos, n.displayText.len)]
           else: ""
         let pw = measureText(prefix, n.fontSize, false).width
-        let cx = n.x + n.padX + min(pw, max(0.0'f32, n.w - 2 * n.padX - 1))
+        let cx = n.x + n.padX + pw - n.scrollX
         c.scene.rect(Rect(x: cx, y: n.y + 6, w: 1.5'f32, h: n.h - 12),
                      defaultText)
+      c.scene.restoreClip()
   of nkImage:
     c.scene.image(n.imagePath, Rect(x: n.x, y: n.y, w: n.w, h: n.h))
   of nkScroll:
@@ -877,6 +901,7 @@ proc collectHits(n: Node, engine: Engine, clip: Rect) =
       padX: n.padX,
       padY: n.padY,
       fontSize: n.fontSize,
+      scrollX: n.scrollX,
       clip: currentClip)
   if n.kind == nkInput and n.multiline:
     let contentH = n.padY * 2 + n.lineHeight * float32(n.lines.len)
@@ -959,8 +984,8 @@ proc hitIndex(engine: Engine, x, y: float32): int =
   for i in countdown(engine.hits.len - 1, 0):
     let r = engine.hits[i].rect
     let c = engine.hits[i].clip
-    if c.w > 0 and c.h > 0 and
-        (x < c.x or x >= c.x + c.w or y < c.y or y >= c.y + c.h):
+    if c.w <= 0 or c.h <= 0 or
+        x < c.x or x >= c.x + c.w or y < c.y or y >= c.y + c.h:
       continue
     if x >= r.x and x < r.x + r.w and y >= r.y and y < r.y + r.h:
       return i
@@ -992,7 +1017,7 @@ proc hitText(hit: Hit): string =
   if hit.displayText.len > 0: hit.displayText else: hit.text
 
 proc caretIndex(hit: Hit, x: float32): int =
-  result = caretIndexLine(hitText(hit), x, hit.rect.x + hit.padX, hit.fontSize)
+  result = caretIndexLine(hitText(hit), x, hit.rect.x + hit.padX - hit.scrollX, hit.fontSize)
 
 proc caretIndexAt(hit: Hit, x, y: float32, scrollY: float32 = 0): int =
   if not hit.multiline or hit.lines.len == 0:
@@ -1211,6 +1236,9 @@ proc applyInput(engine: Engine, index: int, text: string,
   engine.ensureCaretVisible(index)
   requestFrame(engine)
 
+proc textInputActive*(engine: Engine): bool =
+  focusedInputIndex(engine) >= 0
+
 proc copySelection*(engine: Engine) =
   let index = focusedInputIndex(engine)
   if index < 0:
@@ -1222,7 +1250,7 @@ proc copySelection*(engine: Engine) =
 
 proc cutSelection*(engine: Engine) =
   let index = focusedInputIndex(engine)
-  if index < 0:
+  if index < 0 or engine.clipboardWrite == nil:
     return
   let hit = engine.hits[index]
   let sel = selectionRange(engine, hit.key, hit.text.len)
@@ -1241,8 +1269,9 @@ proc paste*(engine: Engine) =
   var text = engine.clipboardRead()
   if text.len == 0:
     return
+  text = text.replace("\r\n", "\n").replace("\r", "\n")
   if not hit.multiline:
-    text = text.replace("\r", " ").replace("\n", " ")
+    text = text.replace("\n", " ")
   let sel = selectionRange(engine, hit.key, hit.text.len)
   engine.snapshot(hit.key, hit.text, engine.caretPos, engine.selectionAnchor)
   let next = hit.text[0 ..< sel.start] & text & hit.text[sel.finish .. ^1]
@@ -1445,13 +1474,13 @@ proc caretRect*(engine: Engine): Rect =
     return Rect(x: x, y: y, w: 2, h: max(12, hit.lineHeight))
   let display = displayTextFor(engine, hit.key, text).text
   let prefix = if pos > 0: display[0 ..< min(pos, display.len)] else: ""
-  let x = hit.rect.x + hit.padX +
+  let x = hit.rect.x + hit.padX - hit.scrollX +
     measureText(prefix, hit.fontSize, false).width
   Rect(x: x, y: hit.rect.y + 6, w: 2, h: max(12, hit.rect.h - 12))
 
 proc editInput(engine: Engine, index: int, key: string, modifiers: uint32) =
   let hit = engine.hits[index]
-  let cmd = (modifiers and KeyCommand) != 0
+  let cmd = (modifiers and KeyShortcut) != 0
   let shift = (modifiers and KeyShift) != 0
   if cmd:
     case key.toLowerAscii
@@ -1475,7 +1504,9 @@ proc editInput(engine: Engine, index: int, key: string, modifiers: uint32) =
       engine.paste()
       return
     else:
-      discard
+      # Unbound control shortcuts must never become literal document text.
+      if key notin ["backspace", "delete", "left", "right", "home", "end", "up", "down"]:
+        return
 
   var text = hit.text
   let beforeText = text
@@ -1489,6 +1520,10 @@ proc editInput(engine: Engine, index: int, key: string, modifiers: uint32) =
   let (lineIdx, col) = caretLineCol(lines, hit.lineStarts, caret)
   var handled = true
   case key
+  of "insert", "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10",
+     "f11", "f12", "f13", "f14", "f15", "f16", "f17", "f18", "f19", "f20",
+     "f21", "f22", "f23", "f24":
+    return
   of "backspace":
     if hasSel:
       text = text[0 ..< sel.start] & text[sel.finish .. ^1]
@@ -1593,7 +1628,7 @@ proc handleKeyDown*(engine: Engine, key: string, modifiers: uint32 = 0) =
   if focused >= 0 and engine.hits[focused].input:
     editInput(engine, focused, key, modifiers)
     return
-  if (modifiers and KeyCommand) != 0:
+  if (modifiers and KeyShortcut) != 0:
     return
   if key in ["enter", "space"]:
     for hit in engine.hits:

@@ -1,0 +1,33 @@
+name: Windows framework
+on:
+  workflow_dispatch:
+  push:
+    paths: ['examples/environment/**', 'src/nimi/core/environment.nim', 'src/nimi/platform/**', 'tests/test_platform_contract.nim', 'tests/test_menu_callbacks.nim', 'tests/test_environment*.nim', 'tests/test_windows*.nim', 'tests/windows_input_fixture.c', 'src/nimi/core/app.nim', 'src/nimi/core/content.nim', 'src/nimi/core/window.nim', 'src/nimi/render/gdi.nim', 'src/nimi/text/**', 'src/nimi/ui/**', 'src/nimi/keys.nim', '.github/workflows/windows.yml']
+  pull_request:
+    paths: ['examples/environment/**', 'src/nimi/core/environment.nim', 'src/nimi/platform/**', 'tests/test_platform_contract.nim', 'tests/test_menu_callbacks.nim', 'tests/test_environment*.nim', 'tests/test_windows*.nim', 'tests/windows_input_fixture.c', 'src/nimi/core/app.nim', 'src/nimi/core/content.nim', 'src/nimi/core/window.nim', 'src/nimi/render/gdi.nim', 'src/nimi/text/**', 'src/nimi/ui/**', 'src/nimi/keys.nim', '.github/workflows/windows.yml']
+permissions:
+  contents: read
+jobs:
+  environment:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: jiro4989/setup-nim-action@v2.3.1
+        with:
+          nim-version: '2.4.0'
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - run: nim c -r --hints:off tests/test_windows_input.nim
+      - run: nim c -r --hints:off tests/test_windows_input_native.nim
+      - run: nim c -r --hints:off tests/test_windows_menu_plan.nim
+      - run: nim c -r --hints:off tests/test_menu_callbacks.nim
+      - run: nim c -r --hints:off tests/test_windows_menu.nim
+      - run: nim c -r --hints:off tests/test_platform_contract.nim
+      - run: nim c -r --hints:off tests/test_environment.nim
+      - run: nim c -r --hints:off tests/test_environment_windows.nim
+      - run: nim c -r --hints:off tests/test_windows_host.nim
+      - run: nim c -r --hints:off tests/test_windows_surface.nim
+      - run: nim c -r --hints:off tests/test_environment_editor.nim
+      - run: nim c -r --hints:off tests/test_environment_ui.nim
+      - run: nim c -r --hints:off tests/test_environment_app_windows.nim
+      - run: nim c --passL:-Wl,--subsystem,windows --hints:off -o:NimiEnvironment.exe examples/environment/main.nim

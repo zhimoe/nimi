@@ -31,7 +31,7 @@ type
 
   PlatformWindowOptions* = object
     title*: string
-    width*, height*: int
+    width*, height*: int # Client dimensions in logical pixels (Windows: 96-DPI DIPs).
     resizable*: bool
     html*: string
     url*: string
@@ -55,12 +55,14 @@ type
     cut*: proc() {.closure.}
     paste*: proc() {.closure.}
     selectAll*: proc() {.closure.}
+    cancelInput*: proc(composition: bool) {.closure.} # Cancel pointer capture; optionally discard IME preedit.
     undo*: proc() {.closure.}
     redo*: proc() {.closure.}
     insertText*: proc(text: string, replacement: TextRange) {.closure.}
     setMarkedText*: proc(text: string, selected, replacement: TextRange) {.closure.}
     unmarkText*: proc() {.closure.}
     hasMarkedText*: proc(): bool {.closure.}
+    textInputActive*: proc(): bool {.closure.} # Whether the focused control accepts text.
     markedRange*: proc(): TextRange {.closure.}
     selectedRange*: proc(): TextRange {.closure.}
     attributedSubstring*: proc(range: TextRange): string {.closure.}
@@ -179,6 +181,7 @@ type
     toggleFullScreen*: proc() {.closure.}
     isFullScreen*: proc(): bool {.closure.}
     isFocused*: proc(): bool {.closure.}
+    # setSize uses logical client pixels. Windows setPosition uses physical desktop coordinates.
     setSize*: proc(width, height: int) {.closure.}
     setPosition*: proc(x, y: int) {.closure.}
     setResizable*: proc(resizable: bool) {.closure.}
@@ -201,6 +204,7 @@ type
     init*: proc(h: AppHandler, opts: AppOptions) {.closure.}
     run*: proc() {.closure.}
     quit*: proc() {.closure.}
+    shutdown*: proc() {.closure.} # Idempotent release after init, even if run was never entered.
     signal*: proc() {.closure.}
     step*: proc() {.closure.}
     wake*: proc() {.closure.}
@@ -230,5 +234,7 @@ type
     clipboard*: Clipboard
 
   BackendError* = object of CatchableError
+  ClipboardError* = object of BackendError
+  UnsupportedBackendError* = object of BackendError
 
 var currentBackend*: Backend

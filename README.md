@@ -9,7 +9,7 @@ Nimi 的目标是保留 MyGo 的架构与开发体验——系统 WebView + 类�
 > 当前状态:**M1 核心已实现**(macOS WebView + typed IPC + TS 生成 + CLI + hello);
 > **M2 核心切片已跑通**(原生 NSView Surface + CoreGraphics/CoreText + 布局/Text/Button + 鼠标/键盘/焦点 + 多行换行 + `Tester`/离屏 PNG + `counter-native`)。
 > **M3 控件/Image/ScrollView/纹理四边形/NSTimer/Metal 效果原型、M4 macOS 桌面 API(菜单/对话框/剪贴板/屏幕/主题/窗口/托盘/通知/全局快捷键)、M5 FileServer/深链/Session/文件监视/Cookie/Document、M6 TextInput/TextArea(内部滚动/滚动条)/选择/剪贴板/Undo/ScrollView/滚动条/IME、M7 `.app`/DMG/签名/CI**已落地;`examples/desktop-native` 是桌面 API 验收,`examples/form-native` 是原生 GUI 验收,`examples/notes` 是 WebView-first 的完整笔记应用,`examples/protocol-native` 是自定义协议验收,`examples/shredder` 是 WebGL 碎纸效果/物理切片验收,`examples/shred-native` 是 CoreGraphics 纹理四边形/原生帧驱动验收,`examples/shred-metal` 是 Metal mask + LayerEffect 验收。其余差距见 [M3–M7 状态](docs/11-m3-m7-status.md)。
-> Windows/Linux 在 M8/M9。
+> Windows/Linux 在 M8/M9。Windows 原生 GUI 与环境变量工具首版已加入，已交叉编译，待 Windows 运行验收；最新回检、差距与逐步开发清单见 [Windows 环境变量工具](docs/31-windows-environment.md)。
 > 参考实现:MyGo v0.8.3(`5add3817`,MIT License);本地能力盘点快照 `f234638d`。差异与计划校准见 [MyGo 能力对照](docs/30-mygo-alignment.md)。
 
 ---
@@ -90,11 +90,6 @@ MyGo 非测试 Go 代码约 **32.3 万行**,测试约 **13.9 万行**。完整 1
 ## 快速开始(M1)
 
 需要 Nim 2.4+、macOS 12+、Xcode Command Line Tools。
-
-> macOS 27.x SDK 与旧版 `ld` 不兼容时，`config.nims` 会优先切换到机器上更新的
-> Command Line Tools toolchain；没有更新 toolchain 时再回退到可用的 26.x SDK。
-> 可用 `NIMI_MACOS_SDK=/path/to/MacOSX.sdk` 指定 SDK，或 `NIMI_MACOS_SDK=off`
-> 关闭 SDK 回退。
 
 ```sh
 # 构建 CLI
