@@ -17,6 +17,23 @@ jobs:
         with:
           nim-version: '2.4.0'
           repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Debug toolchain
+        run: |
+          Write-Output "PATH: $env:PATH"
+          Get-Command nim | Format-List
+          Get-Command gcc -ErrorAction SilentlyContinue | Format-List
+          Get-Command cl -ErrorAction SilentlyContinue | Format-List
+          nim --version
+          Set-Content hello.nim 'echo "hello"'
+          nim c -r --hints:off hello.nim
+          Write-Output "smoke exit: $LASTEXITCODE"
+      - name: Debug input test
+        run: |
+          nim c --hints:off --stackTrace:on --lineTrace:on tests/test_windows_input.nim
+          Write-Output "build exit: $LASTEXITCODE"
+          & .\tests\test_windows_input.exe 2>&1 | Tee-Object -FilePath input.log
+          Write-Output "run exit: $LASTEXITCODE"
+          Get-Content input.log
       - run: nim c -r --hints:off tests/test_windows_input.nim
       - run: nim c -r --hints:off tests/test_windows_input_native.nim
       - run: nim c -r --hints:off tests/test_windows_menu_plan.nim
@@ -31,6 +48,8 @@ jobs:
       - run: nim c -r --hints:off tests/test_environment_windows.nim
       - run: nim c -r --hints:off tests/test_windows_host.nim
       - run: nim c -r --hints:off tests/test_windows_surface.nim
+      - run: nim c -r --hints:off tests/test_windows_webview.nim
+      - run: nim c -r --hints:off tests/test_windows_webview_protocol.nim
       - run: nim c -r --hints:off tests/test_windows_desktop.nim
       - run: nim c -r --hints:off tests/test_windows_animation.nim
       - run: nim c -r --hints:off tests/test_windows_render.nim
