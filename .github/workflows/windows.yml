@@ -29,16 +29,24 @@ jobs:
           Write-Output "smoke exit: $LASTEXITCODE"
       - name: Debug input test
         run: |
-          Set-Content mini_graphics.nim 'import nimi/platform/windows/graphics'
-          nim check --hints:off mini_graphics.nim *> check_graphics.log
-          Write-Output "check graphics exit: $LASTEXITCODE"
-          Get-Content check_graphics.log -Tail 80
-          nim c --compileOnly --hints:off --verbosity:3 mini_graphics.nim *> compile_graphics.log
-          Write-Output "compile graphics exit: $LASTEXITCODE"
-          Get-Content compile_graphics.log -Tail 120
-          nim c --hints:off --verbosity:3 --listCmd mini_graphics.nim *> build_graphics.log
-          Write-Output "build graphics exit: $LASTEXITCODE"
-          Get-Content build_graphics.log -Tail 120
+          Set-Content mini_measure.nim 'import nimi/text/measure'
+          nim check --hints:off mini_measure.nim *> check_measure.log
+          Write-Output "check measure exit: $LASTEXITCODE"
+          Get-Content check_measure.log -Tail 60
+          nim c --hints:off --verbosity:3 mini_measure.nim *> build_measure.log
+          Write-Output "build measure exit: $LASTEXITCODE"
+          Get-Content build_measure.log -Tail 100
+          Set-Content mini_context.nim 'import nimi/ui/context'
+          nim check --hints:off mini_context.nim *> check_context.log
+          Write-Output "check context exit: $LASTEXITCODE"
+          Get-Content check_context.log -Tail 80
+          nim c --hints:off --verbosity:3 --listCmd mini_context.nim *> build_context.log
+          Write-Output "build context exit: $LASTEXITCODE"
+          Get-Content build_context.log -Tail 120
+          Set-Content mini_ui.nim 'import nimi/ui'
+          nim c --hints:off --verbosity:3 --listCmd mini_ui.nim *> build_ui.log
+          Write-Output "build ui exit: $LASTEXITCODE"
+          Get-Content build_ui.log -Tail 120
       - run: nim c -r --hints:off tests/test_windows_input.nim
       - run: nim c -r --hints:off tests/test_windows_input_native.nim
       - run: nim c -r --hints:off tests/test_windows_menu_plan.nim
