@@ -32,6 +32,8 @@ static void client_to_outer(HWND w, RECT *rect) {
 }
 static const wchar_t class_name[] = L"NimiWindow";
 #define NIMI_DISPATCH (WM_APP + 1)
+#define NIMI_FRAME (WM_APP + 3)
+#define NIMI_TIMER_ID 1
 
 static LRESULT CALLBACK nimi_proc(HWND window, UINT message, WPARAM wp, LPARAM lp) {
     if (window == dispatch_window) {
@@ -40,10 +42,17 @@ static LRESULT CALLBACK nimi_proc(HWND window, UINT message, WPARAM wp, LPARAM l
         switch (message) {
         case WM_NCDESTROY: {
             NimiFullscreen *saved=(NimiFullscreen *)RemovePropW(window,fullscreen_key);
-            free(saved); break;
+            free(saved); KillTimer(window,NIMI_TIMER_ID); break;
         }
         case WM_ERASEBKGND: return 1;
         case WM_SIZE: InvalidateRect(window,NULL,FALSE); break;
+        case WM_TIMER:
+            if (wp == NIMI_TIMER_ID) {
+                InvalidateRect(window,NULL,FALSE);
+                if (nimi_event) nimi_event(window,NIMI_FRAME,0,0);
+                return 0;
+            }
+            break;
         case WM_PAINT: {
             PAINTSTRUCT ps; HDC screen=BeginPaint(window,&ps); RECT r; GetClientRect(window,&r);
             if (r.right>0 && r.bottom>0) {
@@ -186,6 +195,16 @@ unsigned nimi_host_modifiers(void) {
            ((GetKeyState(VK_MENU)&0x8000)?4:0);
 }
 void nimi_host_invalidate(void *w) { InvalidateRect(w,NULL,FALSE); }
+
+int nimi_host_start_animation(void *w,int fps) {
+    if(!w || fps<=0) return 0;
+    UINT interval=(UINT)(1000.0/(double)fps+0.5);
+    if(interval<1) interval=1;
+    return SetTimer((HWND)w,NIMI_TIMER_ID,interval,NULL)!=0;
+}
+void nimi_host_stop_animation(void *w) {
+    if(w) KillTimer((HWND)w,NIMI_TIMER_ID);
+}
 
 int nimi_host_clipboard_read(wchar_t **copy) {
     *copy=NULL;

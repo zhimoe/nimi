@@ -1,7 +1,7 @@
 ## Win32 host with native scenes, menus, Unicode input and opt-in IMM32 composition.
 when not defined(windows):
   {.error: "Win32 host requires Windows".}
-import std/[os, strutils, tables, widestrs, unicode]
+import std/[monotimes, os, strutils, tables, widestrs, unicode]
 import ../[contract, unsupported]
 import ./dialogs
 import ./menu as winMenu
@@ -16,6 +16,8 @@ type Paint {.importc: "NimiPaint", header: hostHeader, bycopy.} = object
 proc hostScale(w: pointer): cfloat {.cdecl, importc: "nimi_host_scale", header: hostHeader.}
 proc hostModifiers(): cuint {.cdecl, importc: "nimi_host_modifiers", header: hostHeader.}
 proc hostInvalidate(w: pointer) {.cdecl, importc: "nimi_host_invalidate", header: hostHeader.}
+proc hostStartAnimation(w: pointer, fps: cint): cint {.cdecl, importc: "nimi_host_start_animation", header: hostHeader.}
+proc hostStopAnimation(w: pointer) {.cdecl, importc: "nimi_host_stop_animation", header: hostHeader.}
 type EventCallback = proc(window: pointer, message: cuint, wp: uint, lp: int): int {.cdecl.}
 proc hostInit(cb: EventCallback): cint {.cdecl, importc: "nimi_host_init", header: hostHeader.}
 proc hostRun(): cint {.cdecl, importc: "nimi_host_run", header: hostHeader.}
@@ -52,6 +54,8 @@ type WindowState = ref object
   handler: WindowHandler
   textInput: Utf16Input
   imeEnabled, imeActive, composing, syncingIme: bool
+  animating: bool
+  lastFrameTime: float64
   menuPlan: MenuPlan
   menuHandler: MenuHandler
 var windowStates: Table[pointer, WindowState]
@@ -60,6 +64,9 @@ var callbackError: string
 var initialized, running, shuttingDown: bool
 var currentMenuPlan: MenuPlan
 var currentMenuHandler: MenuHandler
+
+proc frameNow(): float64 =
+  getMonoTime().ticks.float64 / 1_000_000_000.0
 
 proc syncIme(state: WindowState) =
   if state.handle == nil or not state.imeEnabled or state.syncingIme: return
@@ -185,9 +192,20 @@ proc event(window: pointer, message: cuint, wp: uint, lp: int): int {.cdecl.} =
         return 1
     of 0x0111:
       menuCommand(state, uint16(wp and 0xffff))
+    of 0x8003: # NIMI_FRAME: the Win32 animation timer.
+      if state.animating:
+        let now = frameNow()
+        var dt = now - state.lastFrameTime
+        state.lastFrameTime = now
+        if dt < 0: dt = 0
+        elif dt > 0.25: dt = 0.25
+        if h.frame != nil:
+          h.frame(h.windowId, now, dt)
     of 0x0010:
       return int(h.shouldClose == nil or h.shouldClose(h.windowId))
     of 0x0002:
+      state.animating = false
+      hostStopAnimation(state.handle)
       state.handle = nil
       windowStates.del(window)
       state.handler = WindowHandler()
@@ -364,6 +382,17 @@ proc newWindowsBackend*(): Backend =
     result.requestFrame = proc() =
       requireLive(state)
       hostInvalidate(state.handle)
+    result.startAnimation = proc(fps: int) =
+      requireLive(state)
+      let rate = max(1, fps)
+      if hostStartAnimation(state.handle, cint(rate)) == 0:
+        raise newException(BackendError, "Cannot start the Windows animation timer")
+      state.animating = true
+      state.lastFrameTime = frameNow()
+    result.stopAnimation = proc() =
+      if state.handle != nil:
+        hostStopAnimation(state.handle)
+      state.animating = false
     result.setResizable = proc(enabled: bool) =
       requireLive(state)
       hostResizable(state.handle, cint(enabled))

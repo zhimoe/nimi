@@ -43,6 +43,21 @@ SurfaceHandler 增加 textInputActive，core 根据当前焦点是否接受文�
 
 实现依据：[Microsoft 的 WM_IME_COMPOSITION 消息契约](https://learn.microsoft.com/en-us/windows/win32/intl/wm-ime-composition)及 [IMM32 组合串读取流程](https://learn.microsoft.com/en-us/windows/win32/intl/processing-the-wm-ime-composition-message)。
 
+## 4. 渲染与帧驱动
+
+已实现：
+
+- `opImage` 通过 WIC 解码为 32bpp PBGRA，`AlphaBlend` 缩放绘制；按路径缓存，默认上限 128 项，提供与 CoreGraphics 对齐的 `clearImageCache` / `setImageCacheLimit` / `imageCacheStats`。缓存是条目上限，不是字节预算或 LRU。
+- `opPolygon` 使用 GDI path + `SelectClipPath`，不透明与半透明填充都走同一路径，DPI 世界变换在 path 构造与填充之间保持一致。
+- 动画：`NativeWindow.startAnimation` / `stopAnimation` 接入 Win32 `SetTimer`；帧消息中由 `getMonoTime()` 计算单调时间与 dt，异常长帧钳制到 250 ms。`SetTimer` 约 15.6 ms 分辨率，120 fps 会被系统节流。
+- 新增 `tests/test_windows_render.nim` 与 `tests/test_windows_animation.nim`，已加入 Windows CI 和交叉构建。
+
+待完善/验证：
+
+- `opImageQuad` 仍未实现；`opText` 的颜色 alpha 仍未应用。
+- WIC 解码、AlphaBlend 缩放、半透明多边形和真实帧节奏尚未在 Windows 实机验收；交叉编译不等于运行通过。
+- D3D11/DirectComposition 呈现循环尚未开始，目前是 GDI + `SetTimer`。
+
 ## 验证
 
 - `tests/test_platform_contract.nim`：检查所有默认接口非空，未支持操作的异常类型/名称，以及覆盖实现后的错误传播。本机执行通过。
@@ -55,4 +70,5 @@ SurfaceHandler 增加 textInputActive，core 根据当前焦点是否接受文�
 - 新目标保持进行中，完整输入仍需开发；实机通道不影响继续补齐源码和测试。
 - `tests/test_windows_input.nim`：7 项回归覆盖 UTF-16/AltGr/选区、无效快捷键、剪贴板失败保留正文和撤销历史、换行、连续 IME 子句。本机通过；共享 IME 6 项、UI 27 项和 desktop 7 项回归通过。
 - `tests/test_windows_input_native.nim`：发送原生窗口消息检查组合期间抑制、取消、Unicode/空格和失焦；剪贴板检查 Unicode、格式清除、非法文本、无终止符数据、另一线程占用。这些测试接入 Windows CI/交叉构建；尚未在 Windows 执行，不包含真实输入法结果串/候选 UI 验证。
-- 本轮最终 Windows 全套交叉构建通过（含新增输入测试和环境变量 demo）。平台契约、菜单回调和 demo UI 本机回归通过，`git diff --check` 通过。
+- `tests/test_windows_render.nim`：真实窗口绘制路径，覆盖 WIC 图像解码/缓存命中与半透明多边形；`tests/test_windows_animation.nim`：真实定时器帧计数、dt 范围、停止和关窗。两者已交叉编译并加入 Windows CI，尚未在 Windows 执行。
+- 本轮最终 Windows 全套交叉构建通过（含新增渲染/动画测试、输入测试和环境变量 demo）。平台契约、菜单回调和 demo UI 本机回归通过，`git diff --check` 通过。

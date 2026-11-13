@@ -7,6 +7,8 @@ typedef struct { void *dc; float width, height; } NimiPaint;
 float nimi_host_scale(void *window);
 unsigned nimi_host_modifiers(void);
 void nimi_host_invalidate(void *window);
+int nimi_host_start_animation(void *window, int fps);
+void nimi_host_stop_animation(void *window);
 int nimi_host_init(NimiEvent callback);
 int nimi_host_run(void);
 void nimi_host_step(void);

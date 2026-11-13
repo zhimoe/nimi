@@ -1,7 +1,17 @@
-## Windows CPU scene slice: rectangles, text and nested clipping.
+## Windows CPU scene slice: rectangles, text, images, polygons and clipping.
 import ../scene/scene
 import ../platform/windows/graphics
 import ../platform/contract
+
+proc clearImageCache*() =
+  ## Render-thread only; mirrors the CoreGraphics cache controls.
+  graphics.clearImageCache()
+
+proc setImageCacheLimit*(entries: int) =
+  graphics.setImageCacheLimit(entries)
+
+proc imageCacheStats*(): tuple[images, crops: int] =
+  graphics.imageCacheStats()
 
 proc component(v: float32): cuint = cuint(max(0'f32, min(1'f32, v)) * 255)
 proc color(c: Color): cuint = component(c.r) or (component(c.g) shl 8) or (component(c.b) shl 16)
@@ -28,5 +38,19 @@ proc drawScene*(dc: pointer, scene: Scene) =
       if clips > 0:
         gdiRestore(dc)
         dec clips
-    else:
-      raise newException(BackendError, "Windows renderer does not yet support " & $op.kind)
+    of opImage:
+      let image = loadImage(op.imagePath)
+      if image != nil:
+        let r = op.imageRect
+        discard gdiImageDraw(dc, image, cint(r.x), cint(r.y),
+          cint(r.w), cint(r.h), 0, 0, gdiImageWidth(image),
+          gdiImageHeight(image))
+    of opImageQuad:
+      raise newException(BackendError, "Windows renderer does not yet support image quads")
+    of opPolygon:
+      if op.points.len >= 3:
+        var points = newSeq[NimiPoint](op.points.len)
+        for i, point in op.points:
+          points[i] = NimiPoint(x: cint(point.x), y: cint(point.y))
+        gdiPolygon(dc, addr points[0], cint(points.len), color(op.color),
+                   component(op.color.a))

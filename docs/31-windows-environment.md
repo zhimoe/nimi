@@ -4,7 +4,7 @@
 >
 > 当前框架阶段：原生 GUI 最小实现，尚非完整 Windows 后端。已接入 core 生命周期、Win32 窗口/派发、GDI 基础绘制、基础输入和文本剪贴板。仍缺完整后端能力声明与不支持错误处理、DPI 尺寸契约、完整 IME、文件对话框/菜单、图像/多边形/动画、WebView2、桌面集成及 Windows CLI 分发。
 >
-> 后续优先级：① 统一未实现 API 的错误边界，补窗口/DPI/生命周期契约；② 文件打开/保存对话框与菜单；③ IME 组合/候选窗、键盘和焦点完整性；④ 补 scene 图像/多边形、动画计时与渲染测试；⑤ 接入 Windows CLI 构建/资源/manifest；⑥ WebView2、协议与 IPC；⑦ 托盘/通知/快捷键/主题/屏幕/监视等桌面能力。环境变量 demo 用于验证前五项，不再把业务备份等细节作为主线。Windows 运行验证贯穿各阶段。
+> 后续优先级：① 统一未实现 API 的错误边界，补窗口/DPI/生命周期契约；② 文件打开/保存对话框与菜单；③ IME 组合/候选窗、键盘和焦点完整性；④ 补 scene 图像/多边形、动画计时与渲染测试（2026-11-13 已完成源码与交叉编译，待 Windows 运行）；⑤ 接入 Windows CLI 构建/资源/manifest；⑥ WebView2、协议与 IPC；⑦ 托盘/通知/快捷键/主题/屏幕/监视等桌面能力。环境变量 demo 用于验证前五项，不再把业务备份等细节作为主线。Windows 运行验证贯穿各阶段。
 
 回检日期：2026-11-11。对照本地 MyGo `f234638d`，不是在线最新版。
 
@@ -16,7 +16,7 @@
 |---|---|---|
 | 应用/窗口 | core 生命周期、Backend 契约、Darwin 后端 | Win32 host 首版已有消息循环、窗口销毁、调度、DPI 消息处理；已接入 core 和基础 GDI 绘制，运行未验收 |
 | WebView/IPC | macOS WKWebView、类型化 IPC、后台池 | WebView2 初始化、导航、消息桥、资源协议、安全限制 |
-| 原生 UI | scene、布局、输入、基础控件、虚拟列表；CG/CoreText 渲染 | GDI 文本/基础绘制、键鼠/Unicode 与文本剪贴板已有首版；IME 组合/候选窗、完整渲染待补 |
+| 原生 UI | scene、布局、输入、基础控件、虚拟列表；CG/CoreText 渲染 | GDI 文本/rect/clip、WIC 图像（含缓存）与半透明多边形、键鼠/Unicode、文本剪贴板、IME 组合/候选窗首版已有；图像四边形、文字 alpha、D3D11 待补 |
 | 桌面集成 | Darwin 菜单、对话框、托盘等 | Windows 实现及逐项能力声明，不能调用空回调 |
 | 业务示例 | Notes、Music 等 macOS 示例 | 环境变量 GUI 已实现并交叉编译；尚缺运行及交互验收 |
 | 分发 | macOS CI、app/DMG | exe、图标/manifest、安装/签名、Windows CI 与运行验收 |
@@ -28,7 +28,7 @@ MyGo 已有 Windows 平台实现及窗口、WebView、菜单等 E2E 测试。Nim
 1. **环境变量领域模型**：作用域、原始值/类型、PATH 无损拆分合并、保存前冲突检查。已实现 `core/environment.nim`，3 项本地测试通过。
 2. **Windows 持久化**：HKCU Environment / HKLM Session Manager Environment，Unicode 注册表读写、枚举、删除、WM_SETTINGCHANGE。首版已实现 `platform/windows/environment.nim`；Windows 目标静态检查及 Zig 交叉编译通过，运行尚待 Windows 集成测试。系统写入按当前权限返回错误。
 3. **Windows 窗口纵向切片**：实现 Backend init/run/quit/signal/newWindow，尺寸、关闭和 DPI；建立可运行最小示例。已加入 `platform/windows/app.nim` 与薄 C host，以及 `tests/test_windows_host.nim`；Windows x64 交叉编译通过。现已接入 core 启动路径、scene surface、GDI 文本测量与基础绘制；明确拒绝尚未实现的 WebView。`test_windows_surface.nim` 覆盖 core 到真实 paint 的链路，尚待 Windows 执行。
-4. **GUI 所需渲染/交互**：优先让列表、文本输入、按钮、选择、滚动、键盘焦点、中文输入可用；复用现有 UI 状态机，接 Windows 绘制和输入桥。已实现基本键鼠、滚轮、UTF-16 输入、Ctrl 快捷键、文本剪贴板与 OK/Cancel 确认框；IME 组合和候选窗定位尚未实现。GDI 支持 rect/text/clip，图像及多边形暂不支持，文字 alpha 暂未应用。WebView2 仍未实现。
+4. **GUI 所需渲染/交互**：优先让列表、文本输入、按钮、选择、滚动、键盘焦点、中文输入可用；复用现有 UI 状态机，接 Windows 绘制和输入桥。已实现基本键鼠、滚轮、UTF-16 输入、Ctrl 快捷键、文本剪贴板与 OK/Cancel 确认框；IME 组合和候选窗定位已有首版。GDI 支持 rect/text/clip、WIC 图像（128 项缓存）和半透明多边形，并接入 `SetTimer` 帧驱动与单调时钟 dt；图像四边形和文字 alpha 仍未实现。WebView2 仍未实现。
 5. **环境变量编辑器**：`examples/environment/`，用户/系统切换，变量列表、新增/编辑/删除确认，PATH 分项增删排序，保留展开类型，刷新、未保存提示、错误反馈。首版已实现上述界面，系统权限不足作为错误显示；不自动提升整应用权限。Windows x64 GUI 子系统 exe 已成功交叉编译。
 6. **可恢复编辑**：写入前导出原始名称/作用域/类型/值，提供显式恢复；恢复同样检查外部变更。已实现逐次 JSON 恢复记录、显式恢复与冲突检查；保存失败保留编辑内容，广播失败提示“已保存，通知超时”。控制器测试验证保存/恢复/删除/冲突与权限失败后保留草稿。
 7. **交付验收**：Windows 10/11 编译运行、中文/PATH/空值/删除/冲突/权限失败、重启后读回，GUI 实测与截图，发布 exe 和使用说明。正常用户变量操作不需要管理员权限。
@@ -42,7 +42,7 @@ MyGo 已有 Windows 平台实现及窗口、WebView、菜单等 E2E 测试。Nim
 - `.github/workflows/windows.yml`：已配置 Windows 测试，未触发远端工作流，不能当作已通过证据。
 - 保存前比较不构成注册表事务，比较与写入之间仍可能出现并发竞态。
 - 不调用 `setx`，不展开 `%VAR%`，不对 PATH 自动去重/去空项；已运行进程不会因为广播自动重建自身环境。
-- 当前主机 macOS 无 MinGW/Wine，但可用 Zig 0.17.1。`./scripts/windows-cross-build.sh` 已成功将领域测试、注册表集成测试、Win32 host 测试编译为 Windows x64 PE 可执行文件，产物位于 `dist/windows-tests/`。这证明编译/链接通过，不等于运行通过。
+- 当前主机 macOS 无 MinGW/Wine，但可用 Zig 0.17.1。`./scripts/windows-cross-build.sh` 已成功将领域测试、注册表集成测试、Win32 host/surface/render/animation 测试编译为 Windows x64 PE 可执行文件，产物位于 `dist/windows-tests/`。这证明编译/链接通过，不等于运行通过。
 - Win32 host 测试覆盖 ready、消息派发、关闭拦截、幂等 destroy 和 terminated；已加入 Windows CI，尚未在 Windows 执行。当前 DPI 消息会采用系统建议矩形，逻辑尺寸换算/缩放绘制仍需随渲染接入实现。
 - 环境变量 GUI 位于 `examples/environment/`；使用与构建说明见该目录 README。应用 exe 已生成至 `dist/windows-tests/NimiEnvironment.exe`，实机交互验收尚未完成。目标保持进行中。
 - 本轮 macOS 完整回归通过；新增控制器测试单独执行通过。Windows host/surface/registry/controller 及 GUI 编译通过，但尚无 Windows 执行结果，不能据此声称运行可用。
@@ -78,3 +78,11 @@ MyGo 已有 Windows 平台实现及窗口、WebView、菜单等 E2E 测试。Nim
 
 
 当前验收边界：PATH 草稿保护、作用域失败回滚、嵌套滚动的完全裁剪命中修复均已通过本机测试。UI 测试与工具交叉构建已更新。Windows 运行通道仍不可用，独立分支 CI 推送确认尚未收到；没有把编译成功或 macOS 预览当作 Windows 验收完成。此前音频播放测试失败记录仍有效，尚未宣称全量回归恢复通过。
+
+## GDI 图像/多边形与帧驱动（2026-11-13）
+
+- `platform/windows/graphics.c` 新增 WIC 图像解码：PNG/JPEG/BMP/GIF 等经 `IWICFormatConverter` 统一为 32bpp PBGRA，`AlphaBlend` 绘制；`render/gdi` 提供 128 项路径缓存及 `clearImageCache` / `setImageCacheLimit` / `imageCacheStats`，与 macOS CoreGraphics 的同名接口对齐。当前是条目上限，不是字节预算或 LRU。
+- 新增 `opPolygon`：用 GDI path + `SelectClipPath` 处理 DPI 世界变换，支持不透明与半透明填充。
+- 新增 Win32 动画定时器：`SetTimer` 触发帧消息，Nim 侧用 `getMonoTime()` 计算单调时间与 dt，并钳制异常长帧；`startAnimation` / `stopAnimation` 已接入平台契约。`SetTimer` 分辨率约 15.6 ms，120 fps 实际会被系统节流，后续可换高精度定时器或 D3D11 呈现循环。
+- 新增测试：`tests/test_windows_render.nim`（真实窗口绘制 + WIC 缓存命中 + 半透明多边形）与 `tests/test_windows_animation.nim`（帧计数、dt 范围、停止与关窗）。两者已加入 Windows CI 和交叉构建，**尚未在 Windows 运行**。
+- 仍未实现：`opImageQuad`、文字 alpha、D3D11 后端；这些不影响当前环境变量 demo 和基础原生 UI。
