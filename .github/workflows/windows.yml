@@ -29,11 +29,17 @@ jobs:
           Write-Output "smoke exit: $LASTEXITCODE"
       - name: Debug input test
         run: |
-          nim c --hints:off --stackTrace:on --lineTrace:on tests/test_windows_input.nim
+          Set-Content mini_ui.nim 'import nimi/ui'
+          nim c --hints:off mini_ui.nim *> mini_ui.log
+          Write-Output "mini ui exit: $LASTEXITCODE"
+          Get-Content mini_ui.log -Tail 60
+          Set-Content mini_input.nim 'import nimi/platform/windows/input'
+          nim c --hints:off mini_input.nim *> mini_input.log
+          Write-Output "mini input exit: $LASTEXITCODE"
+          Get-Content mini_input.log -Tail 60
+          nim c --hints:off --verbosity:3 --stackTrace:on --lineTrace:on tests/test_windows_input.nim *> build.log
           Write-Output "build exit: $LASTEXITCODE"
-          & .\tests\test_windows_input.exe 2>&1 | Tee-Object -FilePath input.log
-          Write-Output "run exit: $LASTEXITCODE"
-          Get-Content input.log
+          Get-Content build.log -Tail 120
       - run: nim c -r --hints:off tests/test_windows_input.nim
       - run: nim c -r --hints:off tests/test_windows_input_native.nim
       - run: nim c -r --hints:off tests/test_windows_menu_plan.nim
