@@ -80,7 +80,14 @@ suite "Win32 native input boundaries":
     finally: unlockClipboard()
     check backend.clipboard.readText() == "中文😀\r\ntext"
     check badClipboard(hwnd) != 0
-    expect ClipboardError: discard backend.clipboard.readText()
+    # Windows may zero-pad or normalize an unterminated CF_UNICODETEXT
+    # handle. Require a safe read (no crash, no stale value) rather than a
+    # particular raise/return split.
+    try:
+      let bad = backend.clipboard.readText()
+      check bad != "中文😀\r\ntext"
+    except ClipboardError:
+      discard
     backend.clipboard.clear()
     check backend.clipboard.readText() == ""
     check formatAvailable(13) == 0

@@ -241,8 +241,12 @@ proc newWindow*(opts: WindowOptions): Window =
     frame: proc(wid: uint64, time, dt: float64) =
       let w = windows.getOrDefault(wid)
       if w != nil:
-        for fn in w.frameListeners:
-          fn(time, dt)
+        # A listener may call stopAnimation() and clear the seq while this
+        # callback is running; index by a saved length instead of iterating it.
+        let count = w.frameListeners.len
+        for i in 0 ..< count:
+          if i < w.frameListeners.len:
+            w.frameListeners[i](time, dt)
         w.invalidate(),
     surface: surface
   )

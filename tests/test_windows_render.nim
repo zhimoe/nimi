@@ -26,10 +26,12 @@ content.renderer = proc(dc: pointer, scene: Scene) =
   inc paints
   # WIC must have decoded the image during this paint, not merely skipped it.
   doAssert imageCacheStats().images == 1
-  # ShowWindow can paint synchronously before newWindow returns; close on a
-  # later paint so the window handle has been assigned.
-  if paints >= 2:
-    discard postMain(proc() = window.close())
+  # ShowWindow can paint synchronously before newWindow returns; the posted
+  # closure runs on the main loop after the window has been assigned.
+  if paints == 1:
+    discard postMain(proc() =
+      if window != nil:
+        window.close())
 app.whenReady(proc() =
   window = newWindow(WindowOptions(title: "Nimi GDI image and polygon",
                                   width: 320, height: 200, content: content))

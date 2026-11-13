@@ -10,7 +10,11 @@
 static NimiEvent nimi_event;
 static HWND dispatch_window;
 static DWORD main_thread;
-typedef struct { WINDOWPLACEMENT placement; LONG_PTR style; } NimiFullscreen;
+typedef struct {
+    WINDOWPLACEMENT placement;
+    LONG_PTR style;
+    int client_width, client_height;
+} NimiFullscreen;
 static const wchar_t fullscreen_key[] = L"NimiFullscreen";
 static UINT window_dpi(HWND w) {
     typedef UINT (WINAPI *GetDpi)(HWND);
@@ -337,10 +341,12 @@ int nimi_host_fullscreen(void *w,int toggle) {
     NimiFullscreen *saved=(NimiFullscreen *)GetPropW(w,fullscreen_key);
     if(!toggle) return saved!=NULL;
     if(saved) {
+        int width=saved->client_width, height=saved->client_height;
         RemovePropW(w,fullscreen_key);
         SetWindowLongPtrW(w,GWL_STYLE,saved->style);
         SetWindowPlacement(w,&saved->placement);
         SetWindowPos(w,NULL,0,0,0,0,SWP_NOMOVE|SWP_NOSIZE|SWP_NOZORDER|SWP_FRAMECHANGED);
+        if(width>0 && height>0) nimi_host_size(w,width,height);
         free(saved); return 0;
     }
     saved=calloc(1,sizeof(*saved));
@@ -348,6 +354,13 @@ int nimi_host_fullscreen(void *w,int toggle) {
     saved->placement.length=sizeof(saved->placement);
     if(!GetWindowPlacement(w,&saved->placement)) {free(saved); return -1;}
     saved->style=GetWindowLongPtrW(w,GWL_STYLE);
+    {
+        RECT client; GetClientRect(w,&client);
+        float scale=nimi_host_scale(w);
+        if(scale<=0) scale=1.0f;
+        saved->client_width=(int)((client.right-client.left)/scale+0.5f);
+        saved->client_height=(int)((client.bottom-client.top)/scale+0.5f);
+    }
     MONITORINFO m={sizeof(m)};
     if(!GetMonitorInfoW(MonitorFromWindow(w,MONITOR_DEFAULTTONEAREST),&m) ||
        !SetPropW(w,fullscreen_key,saved)) {free(saved); return -1;}
