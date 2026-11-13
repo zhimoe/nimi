@@ -55,7 +55,7 @@ SurfaceHandler 增加 textInputActive，core 根据当前焦点是否接受文�
 待完善/验证：
 
 - `opImageQuad` 仍未实现；`opText` 的颜色 alpha 仍未应用。
-- WIC 解码、AlphaBlend 缩放、半透明多边形和真实帧节奏尚未在 Windows 实机验收；交叉编译不等于运行通过。
+- WIC 解码、AlphaBlend 缩放、半透明多边形和帧节奏已在 Windows CI 执行通过；视觉质量与真实帧节奏仍待人工验收。
 - D3D11/DirectComposition 呈现循环尚未开始，目前是 GDI + `SetTimer`。
 
 ## 5. CLI 与分发
@@ -86,7 +86,7 @@ SurfaceHandler 增加 textInputActive，core 根据当前焦点是否接受文�
 
 - 混合 DPI 多显示器的坐标换算是近似值，需要实机校准。
 - 托盘、气泡/Toast 通知、文件监视、Cookie、NowPlaying/媒体键仍未实现。
-- 以上 API 均未在 Windows 实机执行。
+- 以上 API 已在 Windows CI 执行通过；真实键鼠与窗口管理器交互仍待人工验收。
 
 ## 7. WebView2、IPC 与协议
 
@@ -101,21 +101,21 @@ SurfaceHandler 增加 textInputActive，core 根据当前焦点是否接受文�
 
 待完善/验证：
 
-- WebView2 Runtime 缺失、loader 版本不匹配、DPI/IME、真实页面交互和协议资源均未在 Windows 实机验收。
+- WebView2 Runtime 缺失/Loader 版本、DPI/IME、真实页面交互和视觉仍待人工验收；IPC 与 `nimi://` 协议自动化已通过。
 - `file://` baseURL、非 `app` 主机的自定义协议、cookie/会话隔离与下载尚未实现。
 - Nim 2.4.0 Windows 编译器需要 8 MiB 栈才能检查 `ui/context.nim`；CI 通过修改编译器 PE 头规避，长期应拆分模块。
 
 ## 验证
 
 - `tests/test_platform_contract.nim`：检查所有默认接口非空，未支持操作的异常类型/名称，以及覆盖实现后的错误传播。本机执行通过。
-- `tests/test_windows_host.nim`：新增 DIP 客户区尺寸、动态样式、全屏恢复、ready 异常清理、重新初始化和重复实例隔离检查。已交叉编译，未在 Windows 运行。
+- `tests/test_windows_host.nim`：新增 DIP 客户区尺寸、动态样式、全屏恢复、ready 异常清理、重新初始化和重复实例隔离检查。已在 Windows CI 执行通过。
 - Windows 全套交叉构建（含环境变量 demo 和端到端测试）通过；文件对话框 C/COM 代码已完成编译和链接。
 - Windows 文件对话框的交互结果、DPI 和窗口状态仍需实际运行验证；不能把交叉编译当作这几项验收完成。
 - `tests/test_windows_menu_plan.nim` 的命令映射、父菜单禁用、快捷键校验测试，本机通过；`tests/test_menu_callbacks.nim` 的菜单版本回调隔离与失败恢复测试，本机通过。
 - `tests/test_windows_menu.nim` 验证实际 HMENU/HACCEL 资源、快捷键路由、角色、两窗口替换和客户区尺寸。已交叉编译，尚未执行；其中快捷键通过测试钩子读取原生加速键表再发送命令，不等同于物理键盘验证。
-- 本机菜单规划、菜单回调生命周期、desktop、UI 和共享 IME 测试通过；Windows 菜单/取消事件的实际事件链尚未运行验收。
+- 本机菜单规划、菜单回调生命周期、desktop、UI 和共享 IME 测试通过；Windows 菜单/取消事件的实际事件链已在 `windows-latest` CI 执行通过。
 - 新目标保持进行中，完整输入仍需开发；实机通道不影响继续补齐源码和测试。
 - `tests/test_windows_input.nim`：7 项回归覆盖 UTF-16/AltGr/选区、无效快捷键、剪贴板失败保留正文和撤销历史、换行、连续 IME 子句。本机通过；共享 IME 6 项、UI 27 项和 desktop 7 项回归通过。
-- `tests/test_windows_input_native.nim`：发送原生窗口消息检查组合期间抑制、取消、Unicode/空格和失焦；剪贴板检查 Unicode、格式清除、非法文本、无终止符数据、另一线程占用。这些测试接入 Windows CI/交叉构建；尚未在 Windows 执行，不包含真实输入法结果串/候选 UI 验证。
-- `tests/test_windows_render.nim`：真实窗口绘制路径，覆盖 WIC 图像解码/缓存命中与半透明多边形；`tests/test_windows_animation.nim`：真实定时器帧计数、dt 范围、停止和关窗；`tests/test_windows_desktop.nim`：显示器/工作区/scale、主屏、光标、主题和全局快捷键注册/注销。`tests/test_windows_webview.nim` / `test_windows_webview_protocol.nim`：WebView2 IPC 往返与 `nimi://` 文件服务。以上均已交叉编译并加入 Windows CI，尚未在 Windows 执行。
+- `tests/test_windows_input_native.nim`：发送原生窗口消息检查组合期间抑制、取消、Unicode/空格和失焦；剪贴板检查 Unicode、格式清除、非法文本、无终止符数据、另一线程占用。已于 2026-11-13 在 `windows-latest` 执行通过；不包含真实输入法结果串/候选 UI 验证。
+- `tests/test_windows_render.nim`：真实窗口绘制路径，覆盖 WIC 图像解码/缓存命中与半透明多边形；`tests/test_windows_animation.nim`：真实定时器帧计数、dt 范围、停止和关窗；`tests/test_windows_desktop.nim`：显示器/工作区/scale、主屏、光标、主题和全局快捷键注册/注销。`tests/test_windows_webview.nim` / `test_windows_webview_protocol.nim`：WebView2 IPC 往返与 `nimi://` 文件服务。以上均已加入 Windows CI，并于 2026-11-13 在 `windows-latest` 执行通过（run 43396708087）。
 - 本轮最终 Windows 全套交叉构建通过（含新增渲染/动画测试、输入测试和环境变量 demo）。平台契约、菜单回调和 demo UI 本机回归通过，`git diff --check` 通过。

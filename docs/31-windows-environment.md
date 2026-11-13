@@ -1,10 +1,10 @@
 # Windows GUI 开发回检与环境变量工具
 
-> 2026-11-12 范围校正：主目标是补齐 **Nimi Windows 框架能力**；环境变量管理器只是驱动开发和验收的 demo，不作为独立产品持续扩展。Windows 实际运行暂不可验证，不妨碍继续实现框架缺项。下方历史记录中的“受阻”仅适用于运行验收，不能代表整个框架开发无法推进。
+> 2026-11-12 范围校正：主目标是补齐 **Nimi Windows 框架能力**；环境变量管理器只是驱动开发和验收的 demo，不作为独立产品持续扩展。Windows 自动化运行已由 `windows-latest` CI 覆盖（2026-11-13 首次全绿）；交互式人工验收仍需实机。下方历史记录中的“受阻”仅适用于人工运行验收，不能代表整个框架开发无法推进。
 >
 > 当前框架阶段：原生 GUI、WebView2 与 Win32 桌面 API 首版已接通，尚非完整 Windows 后端。已接入 core 生命周期、Win32 窗口/派发、GDI rect/text/clip/图像/多边形、动画帧驱动、基础输入、IME 组合/候选窗、菜单/文件对话框/剪贴板、WebView2 + IPC + `nimi://` 协议、显示/主题/光标/全局快捷键、环境变量注册表工具，以及 `nimi build` 的 exe/资源/manifest/WebView2Loader。仍缺托盘/通知/文件监视/Cookie/NowPlaying、图像四边形/文字 alpha/D3D11，以及 Windows 实机运行验收。
 >
-> 后续优先级：① 统一未实现 API 的错误边界，补窗口/DPI/生命周期契约；② 文件打开/保存对话框与菜单；③ IME 组合/候选窗、键盘和焦点完整性；④ 补 scene 图像/多边形、动画计时与渲染测试（2026-11-13 已完成源码与交叉编译，待 Windows 运行）；⑤ 接入 Windows CLI 构建/资源/manifest（2026-11-13 已完成源码与 CI 配置，待 Windows 运行）；⑥ WebView2、协议与 IPC（2026-11-13 已完成源码与交叉编译，待 Windows 运行）；⑦ 托盘/通知/监视等桌面能力（屏幕/光标/主题/全局快捷键已于 2026-11-13 实现，待 Windows 运行）。环境变量 demo 用于验证前五项，不再把业务备份等细节作为主线。Windows 运行验证贯穿各阶段。
+> 后续优先级：① 统一未实现 API 的错误边界，补窗口/DPI/生命周期契约；② 文件打开/保存对话框与菜单；③ IME 组合/候选窗、键盘和焦点完整性；④ 补 scene 图像/多边形、动画计时与渲染测试（2026-11-13 已完成源码并在 Windows CI 执行通过）；⑤ 接入 Windows CLI 构建/资源/manifest（2026-11-13 已完成源码并在 Windows CI 执行 `nimi build examples/hello`）；⑥ WebView2、协议与 IPC（2026-11-13 已完成源码，WebView2 IPC 与 `nimi://` 协议测试在 Windows CI 通过）；⑦ 托盘/通知/监视等桌面能力（屏幕/光标/主题/全局快捷键已于 2026-11-13 实现并通过 Windows CI；托盘/通知/监视仍待补）。环境变量 demo 用于验证前五项，不再把业务备份等细节作为主线。Windows 运行验证贯穿各阶段。
 
 回检日期：2026-11-11。对照本地 MyGo `f234638d`，不是在线最新版。
 
@@ -38,14 +38,14 @@ MyGo 已有 Windows 平台实现及窗口、WebView、菜单等 E2E 测试。Nim
 - `nim c -r --hints:off tests/test_environment.nim`：已通过。
 - `./scripts/test.sh`：本次完整执行成功（退出码 0，包含新增环境变量测试）。现有 Subsonic 测试仍有 md5/sha1 弃用警告。
 - `nim check --os:windows --cpu:amd64 src/nimi/platform/windows/environment.nim`：已通过，仅语义检查。
-- `tests/test_environment_windows.nim`：Windows 集成测试，使用唯一临时 HKCU 变量并清理，覆盖 Unicode、展开类型、空值、枚举、大小写查找、删除。已静态检查，尚未运行。
+- `tests/test_environment_windows.nim`：Windows 集成测试，使用唯一临时 HKCU 变量并清理，覆盖 Unicode、展开类型、空值、枚举、大小写查找、删除。已在 Windows CI 执行通过（run 43396708087）。
 - `.github/workflows/windows.yml`：已配置 Windows 测试，未触发远端工作流，不能当作已通过证据。
 - 保存前比较不构成注册表事务，比较与写入之间仍可能出现并发竞态。
 - 不调用 `setx`，不展开 `%VAR%`，不对 PATH 自动去重/去空项；已运行进程不会因为广播自动重建自身环境。
 - 当前主机 macOS 无 MinGW/Wine，但可用 Zig 0.17.1。`./scripts/windows-cross-build.sh` 已成功将领域测试、注册表集成测试、Win32 host/surface/render/animation 测试编译为 Windows x64 PE 可执行文件，产物位于 `dist/windows-tests/`。这证明编译/链接通过，不等于运行通过。
-- Win32 host 测试覆盖 ready、消息派发、关闭拦截、幂等 destroy 和 terminated；已加入 Windows CI，尚未在 Windows 执行。当前 DPI 消息会采用系统建议矩形，逻辑尺寸换算/缩放绘制仍需随渲染接入实现。
+- Win32 host 测试覆盖 ready、消息派发、关闭拦截、幂等 destroy 和 terminated；已在 Windows CI 执行通过。当前 DPI 消息会采用系统建议矩形，逻辑尺寸换算/缩放绘制仍需随渲染接入实现。
 - 环境变量 GUI 位于 `examples/environment/`；使用与构建说明见该目录 README。应用 exe 已生成至 `dist/windows-tests/NimiEnvironment.exe`，实机交互验收尚未完成。目标保持进行中。
-- 本轮 macOS 完整回归通过；新增控制器测试单独执行通过。Windows host/surface/registry/controller 及 GUI 编译通过，但尚无 Windows 执行结果，不能据此声称运行可用。
+- 本轮 macOS 完整回归通过；新增控制器测试单独执行通过。Windows 自动化测试已于 2026-11-13 在 `windows-latest` 全绿；交互式人工验收仍未完成，不能据此声称所有视觉/输入行为均已验收。
 
 构建注记：Nim 2.4.0 的 `--app:gui` 遇到运行库 `MessageBoxA` 声明顺序错误，因此使用显式链接器 `--passL:-Wl,--subsystem,windows`。已直接检查产物 PE header 的 Subsystem = 2，确认应用为 GUI 子系统；测试程序仍使用 console 子系统。
 
@@ -120,3 +120,11 @@ MyGo 已有 Windows 平台实现及窗口、WebView、菜单等 E2E 测试。Nim
 - Nim 2.4.0 的 Windows 编译器二进制默认只有 2 MiB 栈，`nim check src/nimi/ui/context.nim` 会以 `0xC00000FD`（STATUS_STACK_OVERFLOW）崩溃；macOS 上 2 MiB 可过，1 MiB 会复现。
 - `.github/workflows/windows.yml` 在测试前直接修改 `.nim_runtime/bin/nim.exe` 的 PE32+ `SizeOfStackReserve` 到 8 MiB，不依赖 Visual Studio 的 `editbin`。这是 CI 侧缓解，长期仍应拆分 `ui/context.nim` 或等待编译器修复。
 - Windows CI 现在用 PowerShell 循环跑全部 Windows 测试并在最后汇总失败项，避免第一个失败就遮住后续结果。
+
+## 首次 Windows 自动化验收（2026-11-13）
+
+- GitHub Actions `windows-latest`，run [43396708087](https://github.com/zhimoe/nimi/actions/runs/43396708087)，**success**，耗时 3m48s。
+- 19 个 Windows 测试全部通过：输入/IME、原生剪贴板、菜单规划与回调、平台契约、环境变量领域与 HKCU 注册表、Win32 host 生命周期/DIP 客户区/全屏恢复、GDI surface、**WebView2 IPC 往返**、**`nimi://` 自定义协议**、显示器/主题/快捷键、动画帧、GDI 图像/多边形、CLI ICO/manifest、环境变量编辑器/UI/真实 GUI 绘制。
+- `nimi 0.1.0` 构建成功；`nimi build examples/hello` 产出 `dist/windows-amd64/hello-nimi.exe`，并复制 `WebView2Loader.dll`。
+- 本轮修出的真实 Windows 问题：帧回调内 `stopAnimation` 导致 seq 迭代崩溃；全屏恢复丢失客户区尺寸；Windows 会规范化无终止符的剪贴板文本；渲染测试等待不存在的第二次 paint。
+- 仍需人工/交互验收：真实键鼠与微软拼音/日文 IME、候选窗、混合 DPI 多显示器、WebView2 视觉/输入/下载、托盘/通知/监视、安装器与代码签名。

@@ -1,6 +1,6 @@
 # Nimi Environment Manager
 
-Windows 环境变量编辑工具，使用 Nimi 的 Win32 后端、原生 UI、GDI 渲染和注册表存储。首版已交叉编译；尚未通过 Windows 实机运行验收。
+Windows 环境变量编辑工具，使用 Nimi 的 Win32 后端、原生 UI、GDI 渲染和注册表存储。首版已通过 Windows CI 自动化测试；交互式人工验收仍待完成。
 
 Windows 上安装 Nim 2.4 后，在仓库根目录构建：
 
@@ -24,4 +24,4 @@ macOS 上安装 Nim 和 Zig 后运行 `./scripts/windows-cross-build.sh`。程�
 
 当前限制：GDI 基础渲染，已支持 WIC 图像与半透明多边形，但无图像四边形、文字 alpha、完整字体 shaping 或无障碍；中文/emoji 的 UTF-16 输入桥已实现，但 IME 组合与候选窗位置、高 DPI、多显示器、真实键鼠操作均需 Windows 验收。尚无签名和安装器。
 
-测试：`tests/test_environment*.nim` 覆盖业务与注册表，`tests/test_windows_host.nim` / `tests/test_windows_surface.nim` 覆盖窗口生命周期及原生绘制链。Windows CI 已配置但尚未取得运行结果。共享视图还通过本机 UI 测试验证 PATH 操作、未保存确认和窄窗口滚动；这不代替 Windows/GDI 实机测试。
+测试：`tests/test_environment*.nim` 覆盖业务与注册表，`tests/test_windows_host.nim` / `tests/test_windows_surface.nim` 覆盖窗口生命周期及原生绘制链。Windows CI 已于 2026-11-13 执行通过。共享视图还通过本机 UI 测试验证 PATH 操作、未保存确认和窄窗口滚动；这不代替人工交互验收。
