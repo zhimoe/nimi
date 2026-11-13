@@ -9,10 +9,18 @@ import ./[input, ime]
 
 const hostHeader = (currentSourcePath.parentDir / "host.h").replace('\\', '/')
 {.compile: "host.c".}
-{.passL: "-luser32 -lgdi32".}
-type Paint {.importc: "NimiPaint", header: hostHeader, bycopy.} = object
-  dc: pointer
-  width, height: cfloat
+{.passL: "-luser32 -lgdi32 -ladvapi32".}
+type
+  Paint {.importc: "NimiPaint", header: hostHeader, bycopy.} = object
+    dc: pointer
+    width, height: cfloat
+  NimiDisplay {.importc: "NimiDisplay", header: hostHeader, bycopy.} = object
+    id: array[128, char]
+    name: array[128, char]
+    x, y, width, height: cint
+    workX, workY, workWidth, workHeight: cint
+    dpi: cint
+    primary: cint
 proc hostScale(w: pointer): cfloat {.cdecl, importc: "nimi_host_scale", header: hostHeader.}
 proc hostModifiers(): cuint {.cdecl, importc: "nimi_host_modifiers", header: hostHeader.}
 proc hostInvalidate(w: pointer) {.cdecl, importc: "nimi_host_invalidate", header: hostHeader.}
@@ -48,6 +56,12 @@ proc hostClipboardWrite(text: WideCString): cint {.cdecl, importc: "nimi_host_cl
 proc hostClipboardClear(): cint {.cdecl, importc: "nimi_host_clipboard_clear", header: hostHeader.}
 proc hostInputError() {.cdecl, importc: "nimi_host_input_error", header: hostHeader.}
 proc hostMessage(title, text: WideCString, confirm: cint): cint {.cdecl, importc: "nimi_host_message", header: hostHeader.}
+proc hostDisplays(items: ptr NimiDisplay, capacity: cint): cint {.cdecl, importc: "nimi_host_displays", header: hostHeader.}
+proc hostCursor(x, y: ptr cfloat): cint {.cdecl, importc: "nimi_host_cursor", header: hostHeader.}
+proc hostAppsDark(): cint {.cdecl, importc: "nimi_host_apps_dark", header: hostHeader.}
+proc hostAccent(): cuint {.cdecl, importc: "nimi_host_accent", header: hostHeader.}
+proc hostRegisterHotkey(id: cint, modifiers, key: cuint): cint {.cdecl, importc: "nimi_host_register_hotkey", header: hostHeader.}
+proc hostUnregisterHotkey(id: cint): cint {.cdecl, importc: "nimi_host_unregister_hotkey", header: hostHeader.}
 
 type WindowState = ref object
   handle: pointer
@@ -64,6 +78,18 @@ var callbackError: string
 var initialized, running, shuttingDown: bool
 var currentMenuPlan: MenuPlan
 var currentMenuHandler: MenuHandler
+var displayHandler: proc() {.closure.}
+var themeHandler: proc() {.closure.}
+var hotkeyCallbacks: Table[int, proc() {.closure.}]
+var hotkeyIds: Table[string, int]
+var nextHotkeyId = 100
+
+proc fixedString(value: array[128, char]): string =
+  result = newStringOfCap(64)
+  for ch in value:
+    if ch == '\0':
+      break
+    result.add ch
 
 proc frameNow(): float64 =
   getMonoTime().ticks.float64 / 1_000_000_000.0
@@ -125,6 +151,11 @@ proc event(window: pointer, message: cuint, wp: uint, lp: int): int {.cdecl.} =
   try:
     if message == 0x8001:
       if appHandler.dispatch != nil: appHandler.dispatch()
+      return 0
+    if message == 0x8004: # NIMI_HOTKEY from the dispatch window.
+      let fn = hotkeyCallbacks.getOrDefault(int(wp))
+      if fn != nil:
+        fn()
       return 0
     let state = windowStates.getOrDefault(window)
     if state == nil: return 0
@@ -192,6 +223,19 @@ proc event(window: pointer, message: cuint, wp: uint, lp: int): int {.cdecl.} =
         return 1
     of 0x0111:
       menuCommand(state, uint16(wp and 0xffff))
+    of 0x001A: # WM_SETTINGCHANGE
+      if lp != 0:
+        let setting = $cast[WideCString](lp)
+        if setting == "ImmersiveColorSet":
+          if themeHandler != nil: themeHandler()
+        elif setting == "WindowMetrics":
+          if displayHandler != nil: displayHandler()
+          if themeHandler != nil: themeHandler()
+    of 0x007E, 0x02E0, 0x031A: # WM_DISPLAYCHANGE / WM_DPICHANGED / WM_THEMECHANGED
+      if message == 0x031A:
+        if themeHandler != nil: themeHandler()
+      elif displayHandler != nil:
+        displayHandler()
     of 0x8003: # NIMI_FRAME: the Win32 animation timer.
       if state.animating:
         let now = frameNow()
@@ -255,6 +299,12 @@ proc shutdownWindows() =
     appHandler = AppHandler()
     currentMenuHandler = MenuHandler()
     currentMenuPlan = MenuPlan()
+    for id in hotkeyCallbacks.keys:
+      discard hostUnregisterHotkey(cint(id))
+    hotkeyCallbacks.clear()
+    hotkeyIds.clear()
+    displayHandler = nil
+    themeHandler = nil
     hostShutdown()
     initialized = false
     running = false
@@ -265,6 +315,9 @@ proc newWindowsBackend*(): Backend =
   proc requireClipboard() =
     if not ownsHost or not initialized or hostMainThread() == 0:
       raise newException(ClipboardError, "Clipboard requires the initialized owning thread")
+  proc requireDesktop() =
+    if not ownsHost or not initialized or hostMainThread() == 0:
+      raise newException(BackendError, "Desktop API requires the initialized owning thread")
   result = newUnsupportedBackend("windows")
   result.clipboard = newUnsupportedClipboard("windows")
   result.clipboard.readText = proc(): string =
@@ -333,6 +386,80 @@ proc newWindowsBackend*(): Backend =
   result.wake = proc() = hostSignal()
   result.step = proc() = hostStep()
   result.isMainThread = proc(): bool = hostMainThread() != 0
+  result.screens = proc(): seq[PlatformDisplay] =
+    requireDesktop()
+    var items: array[16, NimiDisplay]
+    let count = hostDisplays(addr items[0], cint(items.len))
+    for i in 0 ..< int(count):
+      let d = items[i]
+      result.add PlatformDisplay(
+        id: fixedString(d.id),
+        name: fixedString(d.name),
+        x: float32(d.x), y: float32(d.y),
+        width: float32(d.width), height: float32(d.height),
+        workX: float32(d.workX), workY: float32(d.workY),
+        workWidth: float32(d.workWidth), workHeight: float32(d.workHeight),
+        scale: float32(d.dpi) / 96.0,
+        primary: d.primary != 0)
+  result.cursorPosition = proc(): PlatformPoint =
+    requireDesktop()
+    var x, y: cfloat
+    if hostCursor(addr x, addr y) == 0:
+      raise newException(BackendError, "Cannot read the cursor position")
+    PlatformPoint(x: float32(x), y: float32(y))
+  result.themeInfo = proc(): PlatformTheme =
+    requireDesktop()
+    let accent = hostAccent()
+    result.dark = hostAppsDark() == 1
+    if accent == 0:
+      result.accentR = 0.0
+      result.accentG = 0.48
+      result.accentB = 1.0
+    else:
+      result.accentR = float32(accent and 0xff) / 255.0
+      result.accentG = float32((accent shr 8) and 0xff) / 255.0
+      result.accentB = float32((accent shr 16) and 0xff) / 255.0
+  result.onDisplayChanged = proc(cb: proc()) =
+    displayHandler = cb
+  result.onThemeChanged = proc(cb: proc()) =
+    themeHandler = cb
+  result.registerShortcut = proc(accel: string, fn: proc()): bool =
+    if not ownsHost or not initialized or hostMainThread() == 0 or fn == nil:
+      return false
+    if hotkeyIds.hasKey(accel) or nextHotkeyId > 0xBFFF:
+      return false
+    var shortcut: MenuShortcut
+    try:
+      shortcut = parseShortcut(accel)
+    except CatchableError:
+      return false
+    var modifiers = 0'u32
+    if (shortcut.flags and 8) != 0: modifiers = modifiers or 2  # MOD_CONTROL
+    if (shortcut.flags and 4) != 0: modifiers = modifiers or 4  # MOD_SHIFT
+    if (shortcut.flags and 16) != 0: modifiers = modifiers or 1 # MOD_ALT
+    let id = nextHotkeyId
+    inc nextHotkeyId
+    if hostRegisterHotkey(cint(id), cuint(modifiers), cuint(shortcut.key)) == 0:
+      return false
+    hotkeyCallbacks[id] = fn
+    hotkeyIds[accel] = id
+    result = true
+  result.unregisterShortcut = proc(accel: string): bool =
+    let id = hotkeyIds.getOrDefault(accel, 0)
+    if id == 0:
+      return false
+    discard hostUnregisterHotkey(cint(id))
+    hotkeyCallbacks.del(id)
+    hotkeyIds.del(accel)
+    result = true
+  result.unregisterAllShortcuts = proc() =
+    var ids: seq[int]
+    for id in hotkeyCallbacks.keys:
+      ids.add id
+    for id in ids:
+      discard hostUnregisterHotkey(cint(id))
+      hotkeyCallbacks.del(id)
+    hotkeyIds.clear()
   result.setMenu = proc(menu: PlatformMenu, handler: MenuHandler) =
     if not ownsHost or not initialized or hostMainThread() == 0:
       raise newException(BackendError, "Install menus on the initialized owning thread")

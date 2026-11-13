@@ -31,6 +31,7 @@ jobs:
       - run: nim c -r --hints:off tests/test_environment_windows.nim
       - run: nim c -r --hints:off tests/test_windows_host.nim
       - run: nim c -r --hints:off tests/test_windows_surface.nim
+      - run: nim c -r --hints:off tests/test_windows_desktop.nim
       - run: nim c -r --hints:off tests/test_windows_animation.nim
       - run: nim c -r --hints:off tests/test_windows_render.nim
       - run: nim c -r --hints:off tests/test_environment_editor.nim

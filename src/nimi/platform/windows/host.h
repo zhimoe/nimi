@@ -4,6 +4,14 @@
 #include <wchar.h>
 typedef intptr_t (*NimiEvent)(void *, unsigned, uintptr_t, intptr_t);
 typedef struct { void *dc; float width, height; } NimiPaint;
+typedef struct {
+    char id[128];
+    char name[128];
+    int x, y, width, height;
+    int workX, workY, workWidth, workHeight;
+    int dpi;
+    int primary;
+} NimiDisplay;
 float nimi_host_scale(void *window);
 unsigned nimi_host_modifiers(void);
 void nimi_host_invalidate(void *window);
@@ -37,4 +45,10 @@ int nimi_host_clipboard_write(const wchar_t *text);
 int nimi_host_clipboard_clear(void);
 void nimi_host_input_error(void);
 int nimi_host_message(const wchar_t *title,const wchar_t *text,int confirm);
+int nimi_host_displays(NimiDisplay *items, int capacity);
+int nimi_host_cursor(float *x, float *y);
+int nimi_host_apps_dark(void);
+unsigned nimi_host_accent(void);
+int nimi_host_register_hotkey(int id, unsigned modifiers, unsigned key);
+int nimi_host_unregister_hotkey(int id);
 #endif

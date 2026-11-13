@@ -72,6 +72,22 @@ SurfaceHandler 增加 textInputActive，core 根据当前焦点是否接受文�
 - 未生成安装器、未签名、未做自动更新；`resources/` 的运行时定位约定尚未写入模板。
 - Windows CI 已加入 `nimi.exe` 构建、`nimi version` 和 `nimi build examples/hello`，但尚未取得远端执行结果。
 
+## 6. 显示、主题与全局快捷键
+
+已实现：
+
+- 显示器枚举：`EnumDisplayMonitors`/`GetMonitorInfoW`，逻辑坐标相对主屏，`GetDpiForMonitor` 动态加载并回退 96 DPI。
+- 光标位置转主屏逻辑坐标。
+- 主题：`AppsUseLightTheme` + DWM `AccentColor`；`WM_SETTINGCHANGE`、`WM_THEMECHANGED` 触发主题回调，`WM_DISPLAYCHANGE`/`WM_DPICHANGED`/`WindowMetrics` 触发显示回调。
+- 全局快捷键：复用 accelerator 解析，`RegisterHotKey` 注册在 message-only 窗口，`WM_HOTKEY` 经 `NIMI_HOTKEY` 回主线程，退出时注销。
+- `tests/test_windows_desktop.nim` 已加入交叉构建和 Windows CI。
+
+待完善/验证：
+
+- 混合 DPI 多显示器的坐标换算是近似值，需要实机校准。
+- 托盘、气泡/Toast 通知、文件监视、Cookie、NowPlaying/媒体键仍未实现。
+- 以上 API 均未在 Windows 实机执行。
+
 ## 验证
 
 - `tests/test_platform_contract.nim`：检查所有默认接口非空，未支持操作的异常类型/名称，以及覆盖实现后的错误传播。本机执行通过。
@@ -84,5 +100,5 @@ SurfaceHandler 增加 textInputActive，core 根据当前焦点是否接受文�
 - 新目标保持进行中，完整输入仍需开发；实机通道不影响继续补齐源码和测试。
 - `tests/test_windows_input.nim`：7 项回归覆盖 UTF-16/AltGr/选区、无效快捷键、剪贴板失败保留正文和撤销历史、换行、连续 IME 子句。本机通过；共享 IME 6 项、UI 27 项和 desktop 7 项回归通过。
 - `tests/test_windows_input_native.nim`：发送原生窗口消息检查组合期间抑制、取消、Unicode/空格和失焦；剪贴板检查 Unicode、格式清除、非法文本、无终止符数据、另一线程占用。这些测试接入 Windows CI/交叉构建；尚未在 Windows 执行，不包含真实输入法结果串/候选 UI 验证。
-- `tests/test_windows_render.nim`：真实窗口绘制路径，覆盖 WIC 图像解码/缓存命中与半透明多边形；`tests/test_windows_animation.nim`：真实定时器帧计数、dt 范围、停止和关窗。两者已交叉编译并加入 Windows CI，尚未在 Windows 执行。
+- `tests/test_windows_render.nim`：真实窗口绘制路径，覆盖 WIC 图像解码/缓存命中与半透明多边形；`tests/test_windows_animation.nim`：真实定时器帧计数、dt 范围、停止和关窗；`tests/test_windows_desktop.nim`：显示器/工作区/scale、主屏、光标、主题和全局快捷键注册/注销。三者已交叉编译并加入 Windows CI，尚未在 Windows 执行。
 - 本轮最终 Windows 全套交叉构建通过（含新增渲染/动画测试、输入测试和环境变量 demo）。平台契约、菜单回调和 demo UI 本机回归通过，`git diff --check` 通过。

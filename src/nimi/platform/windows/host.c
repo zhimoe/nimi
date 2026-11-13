@@ -33,11 +33,63 @@ static void client_to_outer(HWND w, RECT *rect) {
 static const wchar_t class_name[] = L"NimiWindow";
 #define NIMI_DISPATCH (WM_APP + 1)
 #define NIMI_FRAME (WM_APP + 3)
+#define NIMI_HOTKEY (WM_APP + 4)
 #define NIMI_TIMER_ID 1
+
+typedef struct { HMONITOR monitor; MONITORINFOEXW info; } NimiMonitor;
+typedef struct { NimiMonitor items[16]; int count; } NimiMonitorList;
+
+typedef HRESULT (WINAPI *NimiGetDpiForMonitor)(HMONITOR, int, UINT *, UINT *);
+
+static UINT monitor_dpi(HMONITOR monitor) {
+    static NimiGetDpiForMonitor get_dpi;
+    static int loaded;
+    if (!loaded) {
+        HMODULE shcore = LoadLibraryW(L"shcore.dll");
+        if (shcore) get_dpi = (NimiGetDpiForMonitor)GetProcAddress(shcore, "GetDpiForMonitor");
+        loaded = 1;
+    }
+    if (get_dpi) {
+        UINT x = 96, y = 96;
+        if (SUCCEEDED(get_dpi(monitor, 0, &x, &y))) return x;
+    }
+    return 96;
+}
+
+static BOOL CALLBACK nimi_enum_monitor(HMONITOR monitor, HDC dc, LPRECT rect, LPARAM data) {
+    NimiMonitorList *list = (NimiMonitorList *)data;
+    if (list->count >= (int)(sizeof(list->items) / sizeof(list->items[0]))) return FALSE;
+    NimiMonitor *item = &list->items[list->count];
+    item->monitor = monitor;
+    item->info.cbSize = sizeof(item->info);
+    if (!GetMonitorInfoW(monitor, (MONITORINFO *)&item->info)) return TRUE;
+    list->count++;
+    return TRUE;
+}
+
+static int enumerate_monitors(NimiMonitorList *list) {
+    list->count = 0;
+    EnumDisplayMonitors(NULL, NULL, nimi_enum_monitor, (LPARAM)list);
+    return list->count;
+}
+
+static int primary_monitor(RECT *rect, UINT *dpi) {
+    NimiMonitorList list;
+    if (enumerate_monitors(&list) == 0) return 0;
+    int primary = 0;
+    for (int i = 0; i < list.count; i++) {
+        if (list.items[i].info.dwFlags & MONITORINFOF_PRIMARY) { primary = i; break; }
+    }
+    *rect = list.items[primary].info.rcMonitor;
+    *dpi = monitor_dpi(list.items[primary].monitor);
+    if (!*dpi) *dpi = 96;
+    return 1;
+}
 
 static LRESULT CALLBACK nimi_proc(HWND window, UINT message, WPARAM wp, LPARAM lp) {
     if (window == dispatch_window) {
         if (message == NIMI_DISPATCH) { nimi_event(NULL, NIMI_DISPATCH, 0, 0); return 0; }
+        if (message == WM_HOTKEY) { nimi_event(NULL, NIMI_HOTKEY, wp, lp); return 0; }
     } else if (nimi_event) {
         switch (message) {
         case WM_NCDESTROY: {
@@ -107,10 +159,13 @@ static LRESULT CALLBACK nimi_proc(HWND window, UINT message, WPARAM wp, LPARAM l
             nimi_event(window,message,wp,lp); break;
         case WM_SETFOCUS: case WM_KILLFOCUS:
             nimi_event(window, message, wp, lp); break;
+        case WM_SETTINGCHANGE: case WM_DISPLAYCHANGE: case WM_THEMECHANGED:
+            nimi_event(window, message, wp, lp); break;
         case WM_DPICHANGED: {
             RECT *r = (RECT *)lp;
             SetWindowPos(window, NULL, r->left, r->top, r->right-r->left,
                          r->bottom-r->top, SWP_NOZORDER | SWP_NOACTIVATE);
+            nimi_event(window, message, wp, lp);
             return 0;
         }
         }
@@ -301,3 +356,81 @@ int nimi_host_fullscreen(void *w,int toggle) {
     return 1;
 }
 void nimi_host_zoom(void *w) { ShowWindow(w,IsZoomed(w)?SW_RESTORE:SW_MAXIMIZE); }
+
+int nimi_host_displays(NimiDisplay *items,int capacity) {
+    if(!items || capacity<=0) return 0;
+    NimiMonitorList list;
+    int count=enumerate_monitors(&list);
+    if(!count) return 0;
+    int primary=0;
+    for(int i=0;i<count;i++) {
+        if(list.items[i].info.dwFlags & MONITORINFOF_PRIMARY) { primary=i; break; }
+    }
+    RECT base=list.items[primary].info.rcMonitor;
+    UINT baseDpi=monitor_dpi(list.items[primary].monitor);
+    if(!baseDpi) baseDpi=96;
+    int n=count<capacity?count:capacity;
+    for(int i=0;i<n;i++) {
+        MONITORINFOEXW *info=&list.items[i].info;
+        UINT dpi=monitor_dpi(list.items[i].monitor);
+        if(!dpi) dpi=96;
+        NimiDisplay *d=&items[i];
+        memset(d,0,sizeof(*d));
+        d->x=MulDiv(info->rcMonitor.left-base.left,96,(int)baseDpi);
+        d->y=MulDiv(info->rcMonitor.top-base.top,96,(int)baseDpi);
+        d->width=MulDiv(info->rcMonitor.right-info->rcMonitor.left,96,(int)dpi);
+        d->height=MulDiv(info->rcMonitor.bottom-info->rcMonitor.top,96,(int)dpi);
+        d->workX=MulDiv(info->rcWork.left-base.left,96,(int)baseDpi);
+        d->workY=MulDiv(info->rcWork.top-base.top,96,(int)baseDpi);
+        d->workWidth=MulDiv(info->rcWork.right-info->rcWork.left,96,(int)dpi);
+        d->workHeight=MulDiv(info->rcWork.bottom-info->rcWork.top,96,(int)dpi);
+        d->dpi=(int)dpi;
+        d->primary=(i==primary)?1:0;
+        WideCharToMultiByte(CP_UTF8,0,info->szDevice,-1,d->id,sizeof(d->id),NULL,NULL);
+        const wchar_t *name=info->szDevice;
+        if(wcsncmp(name,L"\\\\.\\",4)==0) name+=4;
+        WideCharToMultiByte(CP_UTF8,0,name,-1,d->name,sizeof(d->name),NULL,NULL);
+    }
+    return n;
+}
+
+int nimi_host_cursor(float *x,float *y) {
+    if(!x || !y) return 0;
+    POINT p;
+    if(!GetCursorPos(&p)) return 0;
+    RECT base; UINT dpi;
+    if(primary_monitor(&base,&dpi)) {
+        *x=(float)MulDiv(p.x-base.left,96,(int)dpi);
+        *y=(float)MulDiv(p.y-base.top,96,(int)dpi);
+    } else {
+        *x=(float)p.x; *y=(float)p.y;
+    }
+    return 1;
+}
+
+int nimi_host_apps_dark(void) {
+    DWORD value=1, size=sizeof(value);
+    LONG status=RegGetValueW(HKEY_CURRENT_USER,
+        L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+        L"AppsUseLightTheme",RRF_RT_REG_DWORD,NULL,&value,&size);
+    if(status!=ERROR_SUCCESS) return 0;
+    return value==0?1:0;
+}
+
+unsigned nimi_host_accent(void) {
+    DWORD value=0, size=sizeof(value);
+    LONG status=RegGetValueW(HKEY_CURRENT_USER,L"Software\\Microsoft\\Windows\\DWM",
+        L"AccentColor",RRF_RT_REG_DWORD,NULL,&value,&size);
+    if(status!=ERROR_SUCCESS) return 0;
+    return value & 0x00ffffffu;
+}
+
+int nimi_host_register_hotkey(int id,unsigned modifiers,unsigned key) {
+    if(!dispatch_window || !nimi_host_main_thread()) return 0;
+    return RegisterHotKey(dispatch_window,(int)id,(UINT)modifiers,(UINT)key)!=0;
+}
+
+int nimi_host_unregister_hotkey(int id) {
+    if(!dispatch_window) return 0;
+    return UnregisterHotKey(dispatch_window,(int)id)!=0;
+}

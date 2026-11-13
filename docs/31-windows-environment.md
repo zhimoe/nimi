@@ -4,7 +4,7 @@
 >
 > 当前框架阶段：原生 GUI 最小实现，尚非完整 Windows 后端。已接入 core 生命周期、Win32 窗口/派发、GDI 基础绘制、基础输入和文本剪贴板。仍缺完整后端能力声明与不支持错误处理、DPI 尺寸契约、完整 IME、文件对话框/菜单、图像/多边形/动画、WebView2、桌面集成及 Windows CLI 分发。
 >
-> 后续优先级：① 统一未实现 API 的错误边界，补窗口/DPI/生命周期契约；② 文件打开/保存对话框与菜单；③ IME 组合/候选窗、键盘和焦点完整性；④ 补 scene 图像/多边形、动画计时与渲染测试（2026-11-13 已完成源码与交叉编译，待 Windows 运行）；⑤ 接入 Windows CLI 构建/资源/manifest（2026-11-13 已完成源码与 CI 配置，待 Windows 运行）；⑥ WebView2、协议与 IPC；⑦ 托盘/通知/快捷键/主题/屏幕/监视等桌面能力。环境变量 demo 用于验证前五项，不再把业务备份等细节作为主线。Windows 运行验证贯穿各阶段。
+> 后续优先级：① 统一未实现 API 的错误边界，补窗口/DPI/生命周期契约；② 文件打开/保存对话框与菜单；③ IME 组合/候选窗、键盘和焦点完整性；④ 补 scene 图像/多边形、动画计时与渲染测试（2026-11-13 已完成源码与交叉编译，待 Windows 运行）；⑤ 接入 Windows CLI 构建/资源/manifest（2026-11-13 已完成源码与 CI 配置，待 Windows 运行）；⑥ WebView2、协议与 IPC；⑦ 托盘/通知/监视等桌面能力（屏幕/光标/主题/全局快捷键已于 2026-11-13 实现，待 Windows 运行）。环境变量 demo 用于验证前五项，不再把业务备份等细节作为主线。Windows 运行验证贯穿各阶段。
 
 回检日期：2026-11-11。对照本地 MyGo `f234638d`，不是在线最新版。
 
@@ -95,3 +95,12 @@ MyGo 已有 Windows 平台实现及窗口、WebView、菜单等 E2E 测试。Nim
 - 链接使用 `--passL:-Wl,--subsystem,windows` 选择 GUI 子系统，继续规避 Nim 2.4.0 `--app:gui` 的 `MessageBoxA` 声明顺序问题。
 - 新增 `tests/test_cli_windows.nim` 覆盖 ICO 结构、非法/超大 PNG 拒绝和 manifest 内容；本机通过并加入交叉构建。Windows CI 现在会构建 `nimi.exe`、运行 `nimi version`、并执行 `nimi build examples/hello`，首次获得真实 Windows 打包路径的执行结果。
 - 限制：当前是 MinGW 风格链接参数；未适配 MSVC `rc.exe`/`link.exe`，未生成安装器、代码签名或自动更新。`resources/` 的运行时定位约定仍需写进应用模板。
+
+## 屏幕、光标、主题与全局快捷键（2026-11-13）
+
+- `screens()` / `primaryDisplay()`：`EnumDisplayMonitors` + `GetMonitorInfoW`，每个显示器返回逻辑坐标（相对主屏左上角，按主屏 DPI 换算）、工作区、`scale` 与主屏标记；`GetDpiForMonitor` 从 `shcore.dll` 动态加载，缺失时回退 96 DPI。
+- `cursorPosition()`：`GetCursorPos` 转为主屏逻辑坐标。
+- `themeInfo()`：读取 `AppsUseLightTheme` 与 DWM `AccentColor`（ABGR），缺失时回退浅色/系统蓝；`onThemeChanged` 由 `WM_SETTINGCHANGE("ImmersiveColorSet")` 与 `WM_THEMECHANGED` 触发，`onDisplayChanged` 由 `WM_DISPLAYCHANGE`、`WM_DPICHANGED` 与 `WM_SETTINGCHANGE("WindowMetrics")` 触发。
+- `registerGlobalShortcut` / `unregisterGlobalShortcut` / `unregisterAllGlobalShortcuts`：复用菜单的 accelerator 解析，映射到 `RegisterHotKey`；热键注册在 host 的 message-only 窗口上，`WM_HOTKEY` 经 `NIMI_HOTKEY` 回到主线程。退出时统一注销。
+- 新增 `tests/test_windows_desktop.nim`：显示器/工作区/scale、主屏、光标、主题通道范围、全局快捷键注册与注销；已交叉编译并加入 Windows CI，**尚未在 Windows 运行**。
+- 混合 DPI 多显示器的坐标换算采用“主屏 DPI 定位、各自 DPI 计算尺寸”的近似方案，仍需实机校准。托盘、通知、文件监视、Cookie/NowPlaying 与 WebView2 仍未实现。
