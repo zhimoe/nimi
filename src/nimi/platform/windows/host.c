@@ -97,7 +97,10 @@ static LRESULT CALLBACK nimi_proc(HWND window, UINT message, WPARAM wp, LPARAM l
             free(saved); KillTimer(window,NIMI_TIMER_ID); break;
         }
         case WM_ERASEBKGND: return 1;
-        case WM_SIZE: InvalidateRect(window,NULL,FALSE); break;
+        case WM_SIZE:
+            InvalidateRect(window,NULL,FALSE);
+            nimi_event(window,message,wp,lp);
+            break;
         case WM_TIMER:
             if (wp == NIMI_TIMER_ID) {
                 InvalidateRect(window,NULL,FALSE);

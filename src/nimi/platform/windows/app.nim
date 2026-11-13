@@ -5,6 +5,7 @@ import std/[monotimes, os, strutils, tables, widestrs, unicode]
 import ../[contract, unsupported]
 import ./dialogs
 import ./menu as winMenu
+import ./webview2
 import ./[input, ime]
 
 const hostHeader = (currentSourcePath.parentDir / "host.h").replace('\\', '/')
@@ -66,6 +67,7 @@ proc hostUnregisterHotkey(id: cint): cint {.cdecl, importc: "nimi_host_unregiste
 type WindowState = ref object
   handle: pointer
   handler: WindowHandler
+  webview: WebView2
   textInput: Utf16Input
   imeEnabled, imeActive, composing, syncingIme: bool
   animating: bool
@@ -245,11 +247,19 @@ proc event(window: pointer, message: cuint, wp: uint, lp: int): int {.cdecl.} =
         elif dt > 0.25: dt = 0.25
         if h.frame != nil:
           h.frame(h.windowId, now, dt)
+    of 0x0005: # WM_SIZE: keep the WebView2 controller on the client area.
+      if state.webview != nil:
+        let width = int(lp and 0xffff)
+        let height = int((lp shr 16) and 0xffff)
+        state.webview.resize(width, height, float32(hostScale(window)))
     of 0x0010:
       return int(h.shouldClose == nil or h.shouldClose(h.windowId))
     of 0x0002:
       state.animating = false
       hostStopAnimation(state.handle)
+      if state.webview != nil:
+        state.webview.close()
+        state.webview = nil
       state.handle = nil
       windowStates.del(window)
       state.handler = WindowHandler()
@@ -257,6 +267,7 @@ proc event(window: pointer, message: cuint, wp: uint, lp: int): int {.cdecl.} =
       state.menuPlan = MenuPlan()
       if h.closed != nil: h.closed(h.windowId)
     of 0x0007:
+      if state.webview != nil: state.webview.focus()
       if h.focused != nil: h.focused(h.windowId)
     of 0x0215, 0x001f:
       if surface.cancelInput != nil: surface.cancelInput(false)
@@ -486,19 +497,27 @@ proc newWindowsBackend*(): Backend =
   result.newWindow = proc(opts: PlatformWindowOptions, handler: WindowHandler): NativeWindow =
     if not ownsHost or not initialized or shuttingDown or hostMainThread() == 0:
       raise newException(BackendError, "Create windows on the main thread")
-    if opts.html.len > 0 or opts.url.len > 0:
-      raise newException(UnsupportedBackendError, "Windows WebView is not implemented yet")
+    let usesWebView = not opts.content and
+      (opts.html.len > 0 or opts.url.len > 0 or opts.scheme.len > 0)
     let handle = hostWindow(newWideCString(opts.title), cint(max(1, opts.width)),
                             cint(max(1, opts.height)), cint(opts.resizable))
     if handle == nil: raise newException(BackendError, "CreateWindowExW failed")
-    let state = WindowState(handle: handle, handler: handler, imeEnabled: opts.ime,
+    let state = WindowState(handle: handle, handler: handler,
+                            imeEnabled: opts.ime and not usesWebView,
                             imeActive: true)
     windowStates[handle] = state
     try:
+      if usesWebView:
+        state.webview = newWebView2(handle, handler.windowId, handler,
+          opts.scheme, opts.fileRoot, opts.secret, opts.token, opts.ephemeral)
       winMenu.installMenu(handle, currentMenuPlan)
       state.menuPlan = currentMenuPlan
       state.menuHandler = currentMenuHandler
     except:
+      if state.webview != nil:
+        state.webview.close()
+        state.webview = nil
+      windowStates.del(handle)
       hostDestroy(handle)
       raise
     result = newUnsupportedNativeWindow("windows")
@@ -543,6 +562,9 @@ proc newWindowsBackend*(): Backend =
     result.destroy = proc() =
       if state.handle != nil:
         requireLive(state)
+        if state.webview != nil:
+          state.webview.close()
+          state.webview = nil
         hostDestroy(state.handle)
     result.setTitle = proc(title: string) =
       requireLive(state)
@@ -561,6 +583,8 @@ proc newWindowsBackend*(): Backend =
     result.focus = proc() =
       requireLive(state)
       hostFocus(state.handle)
+      if state.webview != nil:
+        state.webview.focus()
     result.isFocused = proc(): bool =
       requireLive(state)
       hostFocused(state.handle) != 0
@@ -579,6 +603,20 @@ proc newWindowsBackend*(): Backend =
 
     hostShow(handle, 5)
     syncIme(state)
+    if state.webview != nil:
+      let webview = state.webview
+      result.loadHTML = proc(html: string, baseURL: string) =
+        webview.loadHTML(html, baseURL)
+      result.loadURL = proc(url: string) =
+        webview.loadURL(url)
+      result.eval = proc(js: string) =
+        webview.eval(js)
+      result.requestFrame = proc() = discard
+      webview.focus()
+      if opts.html.len > 0:
+        webview.loadHTML(opts.html, "")
+      elif opts.url.len > 0:
+        webview.loadURL(opts.url)
 
 proc clientSizeDip*(id: uint64): PlatformPoint =
   for state in windowStates.values:

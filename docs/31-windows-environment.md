@@ -2,9 +2,9 @@
 
 > 2026-11-12 范围校正：主目标是补齐 **Nimi Windows 框架能力**；环境变量管理器只是驱动开发和验收的 demo，不作为独立产品持续扩展。Windows 实际运行暂不可验证，不妨碍继续实现框架缺项。下方历史记录中的“受阻”仅适用于运行验收，不能代表整个框架开发无法推进。
 >
-> 当前框架阶段：原生 GUI 与 Win32 桌面 API 首版已接通，尚非完整 Windows 后端。已接入 core 生命周期、Win32 窗口/派发、GDI rect/text/clip/图像/多边形、动画帧驱动、基础输入、IME 组合/候选窗、菜单/文件对话框/剪贴板、显示/主题/光标/全局快捷键、环境变量注册表工具，以及 `nimi build` 的 exe/资源/manifest。仍缺 WebView2/IPC/协议、托盘/通知/文件监视/Cookie/NowPlaying、图像四边形/文字 alpha/D3D11，以及 Windows 实机运行验收。
+> 当前框架阶段：原生 GUI、WebView2 与 Win32 桌面 API 首版已接通，尚非完整 Windows 后端。已接入 core 生命周期、Win32 窗口/派发、GDI rect/text/clip/图像/多边形、动画帧驱动、基础输入、IME 组合/候选窗、菜单/文件对话框/剪贴板、WebView2 + IPC + `nimi://` 协议、显示/主题/光标/全局快捷键、环境变量注册表工具，以及 `nimi build` 的 exe/资源/manifest/WebView2Loader。仍缺托盘/通知/文件监视/Cookie/NowPlaying、图像四边形/文字 alpha/D3D11，以及 Windows 实机运行验收。
 >
-> 后续优先级：① 统一未实现 API 的错误边界，补窗口/DPI/生命周期契约；② 文件打开/保存对话框与菜单；③ IME 组合/候选窗、键盘和焦点完整性；④ 补 scene 图像/多边形、动画计时与渲染测试（2026-11-13 已完成源码与交叉编译，待 Windows 运行）；⑤ 接入 Windows CLI 构建/资源/manifest（2026-11-13 已完成源码与 CI 配置，待 Windows 运行）；⑥ WebView2、协议与 IPC；⑦ 托盘/通知/监视等桌面能力（屏幕/光标/主题/全局快捷键已于 2026-11-13 实现，待 Windows 运行）。环境变量 demo 用于验证前五项，不再把业务备份等细节作为主线。Windows 运行验证贯穿各阶段。
+> 后续优先级：① 统一未实现 API 的错误边界，补窗口/DPI/生命周期契约；② 文件打开/保存对话框与菜单；③ IME 组合/候选窗、键盘和焦点完整性；④ 补 scene 图像/多边形、动画计时与渲染测试（2026-11-13 已完成源码与交叉编译，待 Windows 运行）；⑤ 接入 Windows CLI 构建/资源/manifest（2026-11-13 已完成源码与 CI 配置，待 Windows 运行）；⑥ WebView2、协议与 IPC（2026-11-13 已完成源码与交叉编译，待 Windows 运行）；⑦ 托盘/通知/监视等桌面能力（屏幕/光标/主题/全局快捷键已于 2026-11-13 实现，待 Windows 运行）。环境变量 demo 用于验证前五项，不再把业务备份等细节作为主线。Windows 运行验证贯穿各阶段。
 
 回检日期：2026-11-11。对照本地 MyGo `f234638d`，不是在线最新版。
 
@@ -104,3 +104,19 @@ MyGo 已有 Windows 平台实现及窗口、WebView、菜单等 E2E 测试。Nim
 - `registerGlobalShortcut` / `unregisterGlobalShortcut` / `unregisterAllGlobalShortcuts`：复用菜单的 accelerator 解析，映射到 `RegisterHotKey`；热键注册在 host 的 message-only 窗口上，`WM_HOTKEY` 经 `NIMI_HOTKEY` 回到主线程。退出时统一注销。
 - 新增 `tests/test_windows_desktop.nim`：显示器/工作区/scale、主屏、光标、主题通道范围、全局快捷键注册与注销；已交叉编译并加入 Windows CI，**尚未在 Windows 运行**。
 - 混合 DPI 多显示器的坐标换算采用“主屏 DPI 定位、各自 DPI 计算尺寸”的近似方案，仍需实机校准。托盘、通知、文件监视、Cookie/NowPlaying 与 WebView2 仍未实现。
+
+## WebView2、IPC 与 `nimi://` 协议（2026-11-13）
+
+- Vendor 了 WebView2 SDK `1.0.4314.35` 的 `WebView2.h`、x64/arm64 `WebView2Loader.dll` 及 Microsoft `LICENSE.txt` / `NOTICE.txt`，位于 `src/nimi/platform/windows/webview2/sdk/`。MinGW 缺少的 `EventToken.h` 用最小本地兼容头补齐。
+- `webview2.c` 动态加载 `WebView2Loader.dll`（先找 exe 目录，再回退到源码树路径，便于 `nim c -r` 开发），同步检查 WebView2 Runtime 是否存在，然后异步创建 environment/controller。加载、导航与 `eval` 在 controller 就绪前排队。
+- 页面桥接保持与 macOS 相同的 `window.__nimi` / `window.nimi` 协议；注入的 shim 把 `window.webkit.messageHandlers.nimi.postMessage` 转发到 `chrome.webview.postMessage`，`WebMessageReceived` 再回到 core 的 `WindowHandler.message`。Nim→页面的 resolve/reject 仍走 `ExecuteScript`。
+- `nimi://app/...` 通过 `ICoreWebView2_3::SetVirtualHostNameToFolderMapping` 映射到 FileServer 根目录，内部重写为 `https://app.local/...`；`loadHTML` 使用 `NavigateToString`，非空 baseURL 会注入 `<base>` 标签。
+- `nimi build` 会把对应架构的 `WebView2Loader.dll` 复制到 exe 同目录。`ephemeral` 会话使用临时用户数据目录，关闭后尽力删除。
+- 新增 `tests/test_windows_webview.nim`（inline HTML → `Greeter.greet` → `Shell.report` 的完整 IPC 往返）与 `tests/test_windows_webview_protocol.nim`（`nimi://app/index.html` 自定义协议）；已加入交叉构建与 Windows CI，**尚未在 Windows 运行**。
+- 已知限制：baseURL 为 `file://` 时相对资源可能被 WebView2 的 origin 策略阻止；自定义协议目前固定映射 `app` 主机；WebView2 Runtime 缺失时窗口创建失败并给出错误；loader/运行时版本兼容性、DPI、IME 与真实页面交互仍需实机验收。
+
+## Windows CI 编译器栈（2026-11-13）
+
+- Nim 2.4.0 的 Windows 编译器二进制默认只有 2 MiB 栈，`nim check src/nimi/ui/context.nim` 会以 `0xC00000FD`（STATUS_STACK_OVERFLOW）崩溃；macOS 上 2 MiB 可过，1 MiB 会复现。
+- `.github/workflows/windows.yml` 在测试前直接修改 `.nim_runtime/bin/nim.exe` 的 PE32+ `SizeOfStackReserve` 到 8 MiB，不依赖 Visual Studio 的 `editbin`。这是 CI 侧缓解，长期仍应拆分 `ui/context.nim` 或等待编译器修复。
+- Windows CI 现在用 PowerShell 循环跑全部 Windows 测试并在最后汇总失败项，避免第一个失败就遮住后续结果。

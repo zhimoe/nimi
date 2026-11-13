@@ -371,6 +371,12 @@ proc runBuildWindows(dir: string) =
   let resourcesDir = outRoot / "resources"
   createDir(resourcesDir)
   copyResources(cfg, resourcesDir)
+  let loader = libraryPath() / "nimi" / "platform" / "windows" / "webview2" /
+    "sdk" / (if arch == "arm64": "arm64" else: "x64") / "WebView2Loader.dll"
+  if fileExists(loader):
+    copyFile(loader, outRoot / "WebView2Loader.dll")
+  else:
+    echo "warning: WebView2Loader.dll not found at " & loader
   let exeName = if cfg.slug.len > 0: cfg.slug else: "app"
   let exe = outRoot / (exeName & ".exe")
   let resources = buildWindowsResources(cfg)

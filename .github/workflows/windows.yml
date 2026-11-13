@@ -36,26 +36,53 @@ jobs:
         run: |
           Set-Content mini_context.nim 'import nimi/ui/context'
           nim check --hints:off mini_context.nim
-      - run: nim c -r --hints:off tests/test_windows_input.nim
-      - run: nim c -r --hints:off tests/test_windows_input_native.nim
-      - run: nim c -r --hints:off tests/test_windows_menu_plan.nim
-      - run: nim c -r --hints:off tests/test_menu_callbacks.nim
-      - run: nim c -r --hints:off tests/test_windows_menu.nim
-      - run: nim c -r --hints:off tests/test_platform_contract.nim
-      - run: nim c -r --hints:off tests/test_cli_windows.nim
-      - run: nim c --hints:off -o:nimi.exe src/nimi/cli.nim
-      - run: .\nimi.exe version
-      - run: .\nimi.exe build examples/hello
-      - run: nim c -r --hints:off tests/test_environment.nim
-      - run: nim c -r --hints:off tests/test_environment_windows.nim
-      - run: nim c -r --hints:off tests/test_windows_host.nim
-      - run: nim c -r --hints:off tests/test_windows_surface.nim
-      - run: nim c -r --hints:off tests/test_windows_webview.nim
-      - run: nim c -r --hints:off tests/test_windows_webview_protocol.nim
-      - run: nim c -r --hints:off tests/test_windows_desktop.nim
-      - run: nim c -r --hints:off tests/test_windows_animation.nim
-      - run: nim c -r --hints:off tests/test_windows_render.nim
-      - run: nim c -r --hints:off tests/test_environment_editor.nim
-      - run: nim c -r --hints:off tests/test_environment_ui.nim
-      - run: nim c -r --hints:off tests/test_environment_app_windows.nim
-      - run: nim c --passL:-Wl,--subsystem,windows --hints:off -o:NimiEnvironment.exe examples/environment/main.nim
+      - name: Run Windows tests
+        run: |
+          $tests = @(
+            "test_windows_input",
+            "test_windows_input_native",
+            "test_windows_menu_plan",
+            "test_menu_callbacks",
+            "test_windows_menu",
+            "test_platform_contract",
+            "test_cli_windows",
+            "test_environment",
+            "test_environment_windows",
+            "test_windows_host",
+            "test_windows_surface",
+            "test_windows_webview",
+            "test_windows_webview_protocol",
+            "test_windows_desktop",
+            "test_windows_animation",
+            "test_windows_render",
+            "test_environment_editor",
+            "test_environment_ui",
+            "test_environment_app_windows"
+          )
+          $failed = @()
+          foreach ($test in $tests) {
+            Write-Output "=== $test ==="
+            nim c -r --hints:off "tests/$test.nim"
+            if ($LASTEXITCODE -ne 0) { $failed += $test }
+          }
+          if ($failed.Count -gt 0) {
+            Write-Output "FAILED TESTS: $($failed -join ', ')"
+            exit 1
+          }
+      - name: Build CLI and demo
+        run: |
+          $failed = @()
+          nim c --hints:off -o:nimi.exe src/nimi/cli.nim
+          if ($LASTEXITCODE -ne 0) { $failed += "cli" }
+          if (Test-Path .\nimi.exe) {
+            .\nimi.exe version
+            if ($LASTEXITCODE -ne 0) { $failed += "nimi version" }
+            .\nimi.exe build examples/hello
+            if ($LASTEXITCODE -ne 0) { $failed += "nimi build examples/hello" }
+          }
+          nim c --passL:-Wl,--subsystem,windows --hints:off -o:NimiEnvironment.exe examples/environment/main.nim
+          if ($LASTEXITCODE -ne 0) { $failed += "environment gui" }
+          if ($failed.Count -gt 0) {
+            Write-Output "FAILED BUILDS: $($failed -join ', ')"
+            exit 1
+          }
