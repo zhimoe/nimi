@@ -29,17 +29,16 @@ jobs:
           Write-Output "smoke exit: $LASTEXITCODE"
       - name: Debug input test
         run: |
-          Set-Content mini_ui.nim 'import nimi/ui'
-          nim c --hints:off mini_ui.nim *> mini_ui.log
-          Write-Output "mini ui exit: $LASTEXITCODE"
-          Get-Content mini_ui.log -Tail 60
-          Set-Content mini_input.nim 'import nimi/platform/windows/input'
-          nim c --hints:off mini_input.nim *> mini_input.log
-          Write-Output "mini input exit: $LASTEXITCODE"
-          Get-Content mini_input.log -Tail 60
-          nim c --hints:off --verbosity:3 --stackTrace:on --lineTrace:on tests/test_windows_input.nim *> build.log
-          Write-Output "build exit: $LASTEXITCODE"
-          Get-Content build.log -Tail 120
+          Set-Content mini_graphics.nim 'import nimi/platform/windows/graphics'
+          nim check --hints:off mini_graphics.nim *> check_graphics.log
+          Write-Output "check graphics exit: $LASTEXITCODE"
+          Get-Content check_graphics.log -Tail 80
+          nim c --compileOnly --hints:off --verbosity:3 mini_graphics.nim *> compile_graphics.log
+          Write-Output "compile graphics exit: $LASTEXITCODE"
+          Get-Content compile_graphics.log -Tail 120
+          nim c --hints:off --verbosity:3 --listCmd mini_graphics.nim *> build_graphics.log
+          Write-Output "build graphics exit: $LASTEXITCODE"
+          Get-Content build_graphics.log -Tail 120
       - run: nim c -r --hints:off tests/test_windows_input.nim
       - run: nim c -r --hints:off tests/test_windows_input_native.nim
       - run: nim c -r --hints:off tests/test_windows_menu_plan.nim
