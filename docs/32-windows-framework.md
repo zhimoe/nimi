@@ -58,6 +58,20 @@ SurfaceHandler 增加 textInputActive，core 根据当前焦点是否接受文�
 - WIC 解码、AlphaBlend 缩放、半透明多边形和真实帧节奏尚未在 Windows 实机验收；交叉编译不等于运行通过。
 - D3D11/DirectComposition 呈现循环尚未开始，目前是 GDI + `SetTimer`。
 
+## 5. CLI 与分发
+
+已实现：
+
+- `nimi build` 在 Windows 主机上编译 `dist/windows-<arch>/<slug>.exe`，复制 `resources` 到同目录，并用 `--passL:-Wl,--subsystem,windows` 选择 GUI 子系统。
+- `windows.icon`（缺省回退 `icon`）支持 `.ico` 或 ≤256×256 PNG；PNG 由纯 Nim 包装为 ICO。`windres` 可用时把图标和 manifest 编译为 COFF 资源并链接。
+- manifest 声明 `asInvoker`、`PerMonitorV2`、`longPathAware` 和 Windows 10/11 兼容性。
+
+待完善/验证：
+
+- 未适配 MSVC 的 `rc.exe`/`link.exe`；`windres` 缺失时只警告并跳过图标/manifest。
+- 未生成安装器、未签名、未做自动更新；`resources/` 的运行时定位约定尚未写入模板。
+- Windows CI 已加入 `nimi.exe` 构建、`nimi version` 和 `nimi build examples/hello`，但尚未取得远端执行结果。
+
 ## 验证
 
 - `tests/test_platform_contract.nim`：检查所有默认接口非空，未支持操作的异常类型/名称，以及覆盖实现后的错误传播。本机执行通过。

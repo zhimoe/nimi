@@ -30,6 +30,7 @@ type
     outDir: string
     projectDir: string
     icon: string
+    windowsIcon: string
     signingIdentity: string
     dmgTitle: string
     notarize: bool
@@ -88,6 +89,8 @@ proc loadConfig(dir: string): Config =
     else:
       default
   result.icon = strField(node, "icon", "resources/icon.png")
+  let windows = node{"windows"}
+  result.windowsIcon = strField(windows, "icon", result.icon)
   result.signingIdentity = strField(macos, "signingIdentity", "-")
   result.dmgTitle = strField(macos, "dmgTitle", result.name)
   result.notarize = macos != nil and macos.kind == JObject and
@@ -209,7 +212,176 @@ proc makeDmg(cfg: Config, appPath, outRoot: string): string =
       " " & quoteShell(dmg))
   result = dmg
 
-proc runBuild(dir: string) =
+proc copyResources(cfg: Config, dstDir: string) =
+  for res in cfg.resources:
+    let src = if isAbsolute(res): res else: cfg.projectDir / res
+    let dst = dstDir / lastPathPart(src)
+    if dirExists(src):
+      if dirExists(dst):
+        removeDir(dst)
+      copyDir(src, dst)
+    elif fileExists(src):
+      copyFile(src, dst)
+
+proc appendU16Le(s: var string, value: int) =
+  s.add char(value and 0xff)
+  s.add char((value shr 8) and 0xff)
+
+proc appendU32Le(s: var string, value: int) =
+  s.add char(value and 0xff)
+  s.add char((value shr 8) and 0xff)
+  s.add char((value shr 16) and 0xff)
+  s.add char((value shr 24) and 0xff)
+
+proc pngDimensions(png: string): tuple[width, height: int] =
+  const signature = "\x89PNG\r\n\x1a\n"
+  if png.len < 24 or png[0 ..< 8] != signature or png[12 ..< 16] != "IHDR":
+    return (0, 0)
+  proc be(at: int): int =
+    (ord(png[at]) shl 24) or (ord(png[at + 1]) shl 16) or
+      (ord(png[at + 2]) shl 8) or ord(png[at + 3])
+  (be(16), be(20))
+
+proc pngToIco*(png: string): string =
+  ## Wrap a PNG in a single-entry ICO. Windows Vista+ accepts PNG payloads;
+  ## ICO directory dimensions are 0..255, where 0 means 256.
+  let (width, height) = pngDimensions(png)
+  if width <= 0 or height <= 0:
+    raise fail("icon is not a PNG with a valid IHDR")
+  if width > 256 or height > 256:
+    raise fail("PNG icons must be at most 256x256; use an .ico for larger sizes")
+  result = newStringOfCap(22 + png.len)
+  result.appendU16Le(0) # reserved
+  result.appendU16Le(1) # icon
+  result.appendU16Le(1) # one entry
+  result.add char(if width == 256: 0 else: width)
+  result.add char(if height == 256: 0 else: height)
+  result.add '\0' # palette entries
+  result.add '\0' # reserved
+  result.appendU16Le(1) # color planes
+  result.appendU16Le(32) # bits per pixel
+  result.appendU32Le(png.len)
+  result.appendU32Le(22) # payload offset
+  result.add png
+
+proc xmlEscape(value: string): string =
+  result = value.replace("&", "&amp;")
+  result = result.replace("<", "&lt;")
+  result = result.replace(">", "&gt;")
+  result = result.replace("\"", "&quot;")
+
+proc winVersion(version: string): string =
+  var parts = version.strip.split('.')
+  while parts.len < 4:
+    parts.add "0"
+  parts.setLen(4)
+  for i in 0 ..< parts.len:
+    var numeric = parts[i].len > 0
+    for ch in parts[i]:
+      if ch notin {'0'..'9'}:
+        numeric = false
+    if not numeric:
+      parts[i] = "0"
+  result = parts.join(".")
+
+proc windowsManifest*(name, identifier, version: string): string =
+  ## Per-monitor DPI, long paths, and ordinary-user execution. The host also
+  ## sets DPI awareness programmatically; the manifest makes it explicit.
+  result = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <assemblyIdentity type="win32" name="__IDENTIFIER__" version="__VERSION__" processorArchitecture="*"/>
+  <description>__NAME__</description>
+  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
+    <security>
+      <requestedPrivileges>
+        <requestedExecutionLevel level="asInvoker" uiAccess="false"/>
+      </requestedPrivileges>
+    </security>
+  </trustInfo>
+  <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
+    <application>
+      <supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}"/>
+    </application>
+  </compatibility>
+  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings>
+      <dpiAware xmlns="http://schemas.microsoft.com/SMI/2005/WindowsSettings">true/pm</dpiAware>
+      <dpiAwareness xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">PerMonitorV2</dpiAwareness>
+      <longPathAware xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">true</longPathAware>
+    </windowsSettings>
+  </application>
+</assembly>
+"""
+  result = result.replace("__IDENTIFIER__", xmlEscape(identifier))
+  result = result.replace("__VERSION__", xmlEscape(winVersion(version)))
+  result = result.replace("__NAME__", xmlEscape(name))
+
+proc quoteRc(path: string): string =
+  "\"" & path.replace('\\', '/').replace("\"", "\\\"") & "\""
+
+proc buildWindowsResources(cfg: Config): string =
+  ## Compile an .ico and an embedded manifest into a COFF resource object.
+  ## Returns extra linker arguments, or "" when windres is unavailable.
+  let workDir = cfg.projectDir / ".nimi"
+  createDir(workDir)
+  let manifestPath = workDir / "app.manifest"
+  writeFile(manifestPath, windowsManifest(cfg.name, cfg.identifier, cfg.version))
+  var iconPath = ""
+  let iconSource =
+    if isAbsolute(cfg.windowsIcon): cfg.windowsIcon
+    else: cfg.projectDir / cfg.windowsIcon
+  if fileExists(iconSource):
+    let lower = iconSource.toLowerAscii
+    if lower.endsWith(".ico"):
+      iconPath = iconSource
+    elif lower.endsWith(".png"):
+      try:
+        let icoPath = workDir / "app.ico"
+        writeFile(icoPath, pngToIco(readFile(iconSource)))
+        iconPath = icoPath
+      except CatchableError as e:
+        echo "icon: " & e.msg & "; building without an icon"
+    else:
+      echo "icon: unsupported format, skipping: " & iconSource
+  let windres = findExe("windres")
+  if windres.len == 0:
+    echo "resources: windres not found; building without icon/manifest"
+    return ""
+  let rcPath = workDir / "app.rc"
+  var rc = ""
+  if iconPath.len > 0:
+    rc.add "1 ICON " & quoteRc(iconPath) & "\n"
+  rc.add "1 24 " & quoteRc(manifestPath) & "\n"
+  writeFile(rcPath, rc)
+  let resPath = workDir / "app.res"
+  discard runChecked(quoteShell(windres) & " -O coff -i " & quoteShell(rcPath) &
+    " -o " & quoteShell(resPath))
+  result = " --passL:" & quoteShell(resPath)
+
+proc runBuildWindows(dir: string) =
+  let cfg = loadConfig(dir)
+  let mainPath = cfg.projectDir / cfg.main
+  if not fileExists(mainPath):
+    raise fail("main not found: " & mainPath)
+  const arch =
+    when defined(arm64): "arm64"
+    else: "amd64"
+  let outRoot = cfg.projectDir / cfg.outDir / ("windows-" & arch)
+  createDir(outRoot)
+  let resourcesDir = outRoot / "resources"
+  createDir(resourcesDir)
+  copyResources(cfg, resourcesDir)
+  let exeName = if cfg.slug.len > 0: cfg.slug else: "app"
+  let exe = outRoot / (exeName & ".exe")
+  let resources = buildWindowsResources(cfg)
+  echo "Building " & cfg.name & "…"
+  discard runChecked("nim c -d:release --hints:off --mm:atomicArc --threads:on " &
+    "--path:" & quoteShell(libraryPath()) &
+    " --passL:-Wl,--subsystem,windows" & resources &
+    " --out:" & quoteShell(exe) & " " & quoteShell(mainPath))
+  echo "Built " & exe
+
+proc runBuildMacos(dir: string) =
   let cfg = loadConfig(dir)
   let mainPath = cfg.projectDir / cfg.main
   if not fileExists(mainPath):
@@ -224,15 +396,7 @@ proc runBuild(dir: string) =
   let resourcesDir = appPath / "Contents" / "Resources"
   createDir(macosDir)
   createDir(resourcesDir)
-  for res in cfg.resources:
-    let src = cfg.projectDir / res
-    let dst = resourcesDir / lastPathPart(src)
-    if dirExists(src):
-      if dirExists(dst):
-        removeDir(dst)
-      copyDir(src, dst)
-    elif fileExists(src):
-      copyFile(src, dst)
+  copyResources(cfg, resourcesDir)
 
   echo "Building " & cfg.name & "…"
   let exe = macosDir / cfg.name
@@ -288,6 +452,14 @@ proc runBuild(dir: string) =
       discard runChecked("xcrun stapler staple " & quoteShell(dmg))
       discard runChecked("xcrun stapler staple " & quoteShell(appPath))
       echo "Notarized and stapled."
+
+proc runBuild(dir: string) =
+  when defined(windows):
+    runBuildWindows(dir)
+  elif defined(macosx):
+    runBuildMacos(dir)
+  else:
+    raise fail("nimi build supports macOS and Windows")
 
 proc sourceSignature(cfg: Config): string =
   var parts: seq[string]

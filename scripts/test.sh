@@ -5,6 +5,7 @@ nim c -r --hints:off --path:src -o:/tmp/nimi_test_windows_input tests/test_windo
 nim c -r --hints:off --path:src -o:/tmp/nimi_test_windows_menu_plan tests/test_windows_menu_plan.nim
 nim c -r --hints:off --path:src -o:/tmp/nimi_test_menu_callbacks tests/test_menu_callbacks.nim
 nim c -r --hints:off --path:src -o:/tmp/nimi_test_platform_contract tests/test_platform_contract.nim
+nim c -r --hints:off --path:src -o:/tmp/nimi_test_cli_windows tests/test_cli_windows.nim
 nim c -r --hints:off --path:src -o:/tmp/nimi_test_environment tests/test_environment.nim
 nim c -r --hints:off --path:src -o:/tmp/nimi_test_environment_editor tests/test_environment_editor.nim
 nim c -r --hints:off --path:src -o:/tmp/nimi_test_environment_ui tests/test_environment_ui.nim

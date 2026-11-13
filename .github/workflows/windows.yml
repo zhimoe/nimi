@@ -23,6 +23,10 @@ jobs:
       - run: nim c -r --hints:off tests/test_menu_callbacks.nim
       - run: nim c -r --hints:off tests/test_windows_menu.nim
       - run: nim c -r --hints:off tests/test_platform_contract.nim
+      - run: nim c -r --hints:off tests/test_cli_windows.nim
+      - run: nim c --hints:off -o:nimi.exe src/nimi/cli.nim
+      - run: .\nimi.exe version
+      - run: .\nimi.exe build examples/hello
       - run: nim c -r --hints:off tests/test_environment.nim
       - run: nim c -r --hints:off tests/test_environment_windows.nim
       - run: nim c -r --hints:off tests/test_windows_host.nim

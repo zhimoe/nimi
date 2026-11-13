@@ -4,7 +4,7 @@
 >
 > 当前框架阶段：原生 GUI 最小实现，尚非完整 Windows 后端。已接入 core 生命周期、Win32 窗口/派发、GDI 基础绘制、基础输入和文本剪贴板。仍缺完整后端能力声明与不支持错误处理、DPI 尺寸契约、完整 IME、文件对话框/菜单、图像/多边形/动画、WebView2、桌面集成及 Windows CLI 分发。
 >
-> 后续优先级：① 统一未实现 API 的错误边界，补窗口/DPI/生命周期契约；② 文件打开/保存对话框与菜单；③ IME 组合/候选窗、键盘和焦点完整性；④ 补 scene 图像/多边形、动画计时与渲染测试（2026-11-13 已完成源码与交叉编译，待 Windows 运行）；⑤ 接入 Windows CLI 构建/资源/manifest；⑥ WebView2、协议与 IPC；⑦ 托盘/通知/快捷键/主题/屏幕/监视等桌面能力。环境变量 demo 用于验证前五项，不再把业务备份等细节作为主线。Windows 运行验证贯穿各阶段。
+> 后续优先级：① 统一未实现 API 的错误边界，补窗口/DPI/生命周期契约；② 文件打开/保存对话框与菜单；③ IME 组合/候选窗、键盘和焦点完整性；④ 补 scene 图像/多边形、动画计时与渲染测试（2026-11-13 已完成源码与交叉编译，待 Windows 运行）；⑤ 接入 Windows CLI 构建/资源/manifest（2026-11-13 已完成源码与 CI 配置，待 Windows 运行）；⑥ WebView2、协议与 IPC；⑦ 托盘/通知/快捷键/主题/屏幕/监视等桌面能力。环境变量 demo 用于验证前五项，不再把业务备份等细节作为主线。Windows 运行验证贯穿各阶段。
 
 回检日期：2026-11-11。对照本地 MyGo `f234638d`，不是在线最新版。
 
@@ -86,3 +86,12 @@ MyGo 已有 Windows 平台实现及窗口、WebView、菜单等 E2E 测试。Nim
 - 新增 Win32 动画定时器：`SetTimer` 触发帧消息，Nim 侧用 `getMonoTime()` 计算单调时间与 dt，并钳制异常长帧；`startAnimation` / `stopAnimation` 已接入平台契约。`SetTimer` 分辨率约 15.6 ms，120 fps 实际会被系统节流，后续可换高精度定时器或 D3D11 呈现循环。
 - 新增测试：`tests/test_windows_render.nim`（真实窗口绘制 + WIC 缓存命中 + 半透明多边形）与 `tests/test_windows_animation.nim`（帧计数、dt 范围、停止与关窗）。两者已加入 Windows CI 和交叉构建，**尚未在 Windows 运行**。
 - 仍未实现：`opImageQuad`、文字 alpha、D3D11 后端；这些不影响当前环境变量 demo 和基础原生 UI。
+
+## Windows CLI 构建（2026-11-13）
+
+- `nimi build <dir>` 在 Windows 主机上输出 `dist/windows-<arch>/<slug>.exe`，并把 `nimi.json` 的 `resources` 复制到同目录的 `resources/`。macOS 仍走原有 `.app`/DMG 路径。
+- 图标读取 `windows.icon`，缺省回退到顶层 `icon`。支持 `.ico`，或不超过 256×256 的 PNG（纯 Nim 包装成单条目 ICO，PNG payload 由 Vista+ 支持）；更大的 PNG 会警告并跳过图标。这与 macOS 用 1024×1024 PNG 生成 `.icns` 的路径不同，Windows 项目需要单独准备 `windows.icon`。
+- 找到 `windres` 时生成 `.rc`，把图标和 manifest 编译为 COFF 资源并链接进 exe。manifest 声明 `asInvoker`、`PerMonitorV2` 和 `longPathAware`；找不到 `windres` 时警告并继续构建，不阻断 exe。
+- 链接使用 `--passL:-Wl,--subsystem,windows` 选择 GUI 子系统，继续规避 Nim 2.4.0 `--app:gui` 的 `MessageBoxA` 声明顺序问题。
+- 新增 `tests/test_cli_windows.nim` 覆盖 ICO 结构、非法/超大 PNG 拒绝和 manifest 内容；本机通过并加入交叉构建。Windows CI 现在会构建 `nimi.exe`、运行 `nimi version`、并执行 `nimi build examples/hello`，首次获得真实 Windows 打包路径的执行结果。
+- 限制：当前是 MinGW 风格链接参数；未适配 MSVC `rc.exe`/`link.exe`，未生成安装器、代码签名或自动更新。`resources/` 的运行时定位约定仍需写进应用模板。
