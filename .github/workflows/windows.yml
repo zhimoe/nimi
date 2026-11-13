@@ -20,15 +20,18 @@ jobs:
       - name: Enlarge the Nim compiler stack
         run: |
           # Nim 2.4.0's Windows compiler has a 1 MiB stack, which overflows
-          # while checking ui/context.nim. Raise it before running any tests.
-          $editbin = Get-ChildItem "C:\Program Files\Microsoft Visual Studio\2022\*\VC\Tools\MSVC\*\bin\Hostx64\x64\editbin.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $editbin) {
-            $editbin = Get-ChildItem "C:\Program Files (x86)\Microsoft Visual Studio\2022\*\VC\Tools\MSVC\*\bin\Hostx64\x64\editbin.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
-          }
-          if (-not $editbin) { throw "editbin.exe not found" }
-          Write-Output "editbin: $($editbin.FullName)"
-          & $editbin.FullName /STACK:8388608 "$env:GITHUB_WORKSPACE\.nim_runtime\bin\nim.exe"
-          if ($LASTEXITCODE -ne 0) { throw "editbin failed" }
+          # while checking ui/context.nim. Patch the PE32+ SizeOfStackReserve
+          # field directly so CI does not depend on Visual Studio's editbin.
+          $path = "$env:GITHUB_WORKSPACE\.nim_runtime\bin\nim.exe"
+          $bytes = [System.IO.File]::ReadAllBytes($path)
+          $pe = [BitConverter]::ToInt32($bytes, 0x3C)
+          $magic = [BitConverter]::ToUInt16($bytes, $pe + 24)
+          if ($magic -ne 0x20B) { throw "nim.exe is not PE32+" }
+          $offset = $pe + 96
+          Write-Output "old stack reserve: $([BitConverter]::ToUInt64($bytes, $offset))"
+          [BitConverter]::GetBytes([UInt64]8388608).CopyTo($bytes, $offset)
+          [System.IO.File]::WriteAllBytes($path, $bytes)
+          Write-Output "new stack reserve: $([BitConverter]::ToUInt64([System.IO.File]::ReadAllBytes($path), $offset))"
       - name: Verify the compiler stack
         run: |
           Set-Content mini_context.nim 'import nimi/ui/context'
