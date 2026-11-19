@@ -131,7 +131,12 @@ proc cfstr(s: string): CFRef =
 
 
 proc drawText(ctx: CFRef, op: Op, sceneHeight: float32) =
-  let fontName = cfstr(if op.bold: "Helvetica-Bold" else: "Helvetica")
+  let face =
+    if op.family == "mono":
+      (if op.bold: "Menlo-Bold" else: "Menlo")
+    else:
+      (if op.bold: "Helvetica-Bold" else: "Helvetica")
+  let fontName = cfstr(face)
   defer: CFRelease(fontName)
   let font = CTFontCreateWithName(fontName, CGFloat(op.size), nil)
   defer: CFRelease(font)
@@ -320,10 +325,19 @@ proc drawScene*(ctx: pointer, scene: Scene) =
     of opClip:
       let r = op.clipRect
       CGContextSaveGState(c)
-      CGContextClipToRect(c, CGRect(
+      let cr = CGRect(
         x: CGFloat(r.x),
         y: CGFloat(scene.height) - CGFloat(r.y) - CGFloat(r.h),
-        w: CGFloat(r.w), h: CGFloat(r.h)))
+        w: CGFloat(r.w), h: CGFloat(r.h))
+      if op.clipRadius > 0:
+        let radius = min(CGFloat(op.clipRadius),
+                         min(CGFloat(r.w), CGFloat(r.h)) / 2)
+        let path = CGPathCreateWithRoundedRect(cr, radius, radius, nil)
+        CGContextAddPath(c, path)
+        CGContextClip(c)
+        CGPathRelease(path)
+      else:
+        CGContextClipToRect(c, cr)
     of opRestore:
       CGContextRestoreGState(c)
     of opImage:

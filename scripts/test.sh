@@ -1,11 +1,24 @@
 #!/bin/sh
 set -eu
 cd "$(dirname "$0")/.."
+nim c -r --hints:off --path:src -o:/tmp/nimi_test_windows_input tests/test_windows_input.nim
+nim c -r --hints:off --path:src -o:/tmp/nimi_test_windows_menu_plan tests/test_windows_menu_plan.nim
+nim c -r --hints:off --path:src -o:/tmp/nimi_test_menu_callbacks tests/test_menu_callbacks.nim
+nim c -r --hints:off --path:src -o:/tmp/nimi_test_platform_contract tests/test_platform_contract.nim
+nim c -r --hints:off --path:src -o:/tmp/nimi_test_cli_windows tests/test_cli_windows.nim
+nim c -r --hints:off --path:src -o:/tmp/nimi_test_environment tests/test_environment.nim
+nim c -r --hints:off --path:src -o:/tmp/nimi_test_environment_model tests/test_environment_model.nim
+nim c -r --hints:off --path:src -o:/tmp/nimi_test_environment_storage tests/test_environment_storage.nim
+nim c -r --hints:off --path:src -o:/tmp/nimi_test_environment_app tests/test_environment_app.nim
+nim c -r --hints:off --path:src -o:/tmp/nimi_test_environment_ui tests/test_environment_ui.nim
 nim c -r --hints:off --path:src -o:/tmp/nimi_test_ipc tests/test_ipc.nim
 nim c -r --hints:off --path:src -o:/tmp/nimi_test_ipc_pool tests/test_ipc_pool.nim
 nim c -r --hints:off --path:src -o:/tmp/nimi_test_loop tests/test_loop.nim
 nim c -r --hints:off --path:src -o:/tmp/nimi_test_unicode tests/test_unicode.nim
 nim c -r --hints:off --path:src -o:/tmp/nimi_test_ui tests/test_ui.nim
+nim c -r --hints:off --path:src -o:/tmp/nimi_test_layout_legacy tests/test_layout_legacy.nim
+nim c -r --hints:off --path:src -o:/tmp/nimi_test_ui_layout tests/test_ui_layout.nim
+nim c -r --hints:off --path:src -o:/tmp/nimi_test_ui_widgets tests/test_ui_widgets.nim
 nim c -r --hints:off --path:src -o:/tmp/nimi_test_ime tests/test_ime.nim
 nim c -r --hints:off --path:src -o:/tmp/nimi_test_render tests/test_render.nim
 nim c -r --hints:off --path:src -o:/tmp/nimi_test_desktop tests/test_desktop.nim

@@ -43,11 +43,17 @@ proc handleMouseDown*(content: Content, x, y: float32, clicks: int = 1) =
 proc handleMouseUp*(content: Content, x, y: float32) =
   content.engine.handleMouseUp(x, y)
 
+proc cancelInput*(content: Content, composition: bool = true) =
+  content.engine.cancelInput(composition)
+
 proc handleMouseMove*(content: Content, x, y: float32) =
   content.engine.handleMouseMove(x, y)
 
 proc handleScroll*(content: Content, x, y, dy: float32) =
   content.engine.handleScroll(x, y, dy)
+
+proc handleHorizontalScroll*(content: Content, x, y, dx: float32): bool =
+  content.engine.handleHorizontalScroll(x, y, dx)
 
 proc clickKey*(content: Content, key: string): bool =
   content.engine.clickKey(key)
@@ -87,6 +93,9 @@ proc unmarkText*(content: Content) =
 
 proc hasMarkedText*(content: Content): bool =
   content.engine.hasMarkedText()
+
+proc textInputActive*(content: Content): bool =
+  content.engine.textInputActive()
 
 proc markedRange*(content: Content): TextRange =
   content.engine.markedRange()

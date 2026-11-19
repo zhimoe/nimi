@@ -32,8 +32,10 @@ type
       x*, y*: float32
       size*: float32
       bold*: bool
+      family*: string
     of opClip:
       clipRect*: Rect
+      clipRadius*: float32
     of opRestore:
       discard
     of opImage:
@@ -56,13 +58,14 @@ proc rect*(s: var Scene, r: Rect, color: Color, radius: float32 = 0) =
   s.ops.add Op(kind: opRect, rect: r, color: color, radius: radius)
 
 proc text*(s: var Scene, text: string, x, y: float32, size: float32,
-           color: Color, bold: bool = false) =
+           color: Color, bold: bool = false, family: string = "") =
   ## x is the left edge; y is the top of the line (not the baseline).
+  ## `family` is "" for the platform UI font or "mono" for its monospace font.
   s.ops.add Op(kind: opText, text: text, x: x, y: y, size: size,
-               bold: bold, color: color)
+               bold: bold, family: family, color: color)
 
-proc clip*(s: var Scene, r: Rect) =
-  s.ops.add Op(kind: opClip, clipRect: r)
+proc clip*(s: var Scene, r: Rect, radius: float32 = 0) =
+  s.ops.add Op(kind: opClip, clipRect: r, clipRadius: radius)
 
 proc restoreClip*(s: var Scene) =
   s.ops.add Op(kind: opRestore)

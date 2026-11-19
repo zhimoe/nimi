@@ -170,12 +170,15 @@ proc newWindow*(opts: WindowOptions): Window =
     surface.mouseUp = proc(x, y: float32) = content.handleMouseUp(x, y)
     surface.mouseMoved = proc(x, y: float32) = content.handleMouseMove(x, y)
     surface.scroll = proc(x, y, dy: float32) = content.handleScroll(x, y, dy)
+    surface.scrollHorizontal = proc(x, y, dx: float32): bool =
+      content.handleHorizontalScroll(x, y, dx)
     surface.keyDown = proc(key: string, modifiers: uint32) =
       content.handleKeyDown(key, modifiers)
     surface.copy = proc() = content.copySelection()
     surface.cut = proc() = content.cutSelection()
     surface.paste = proc() = content.paste()
     surface.selectAll = proc() = content.selectAll()
+    surface.cancelInput = proc(composition: bool) = content.cancelInput(composition)
     surface.undo = proc() = content.undo()
     surface.redo = proc() = content.redo()
     surface.insertText = proc(text: string, replacement: TextRange) =
@@ -184,6 +187,7 @@ proc newWindow*(opts: WindowOptions): Window =
       content.setMarkedText(text, selected, replacement)
     surface.unmarkText = proc() = content.unmarkText()
     surface.hasMarkedText = proc(): bool = content.hasMarkedText()
+    surface.textInputActive = proc(): bool = content.textInputActive()
     surface.markedRange = proc(): TextRange = content.markedRange()
     surface.selectedRange = proc(): TextRange = content.selectedRange()
     surface.attributedSubstring = proc(range: TextRange): string =
@@ -239,8 +243,12 @@ proc newWindow*(opts: WindowOptions): Window =
     frame: proc(wid: uint64, time, dt: float64) =
       let w = windows.getOrDefault(wid)
       if w != nil:
-        for fn in w.frameListeners:
-          fn(time, dt)
+        # A listener may call stopAnimation() and clear the seq while this
+        # callback is running; index by a saved length instead of iterating it.
+        let count = w.frameListeners.len
+        for i in 0 ..< count:
+          if i < w.frameListeners.len:
+            w.frameListeners[i](time, dt)
         w.invalidate(),
     surface: surface
   )
@@ -376,6 +384,16 @@ proc isFocused*(w: Window): bool =
   if not w.closed and w.native != nil and w.native.isFocused != nil:
     result = w.native.isFocused()
 
+proc isVisible*(w: Window): bool =
+  ## Whether the window is shown and not minimized.
+  not w.isClosed() and w.native != nil and w.native.isVisible != nil and w.native.isVisible()
+
+proc isMinimized*(w: Window): bool =
+  not w.isClosed() and w.native != nil and w.native.isMinimized != nil and w.native.isMinimized()
+
+proc isMaximized*(w: Window): bool =
+  not w.isClosed() and w.native != nil and w.native.isMaximized != nil and w.native.isMaximized()
+
 proc setSize*(w: Window, width, height: int) =
   if w.native != nil and w.native.setSize != nil:
     w.native.setSize(width, height)
@@ -387,6 +405,18 @@ proc setPosition*(w: Window, x, y: int) =
 proc setResizable*(w: Window, resizable: bool) =
   if w.native != nil and w.native.setResizable != nil:
     w.native.setResizable(resizable)
+
+proc getSize*(w: Window): tuple[width, height: int] =
+  if not w.closed and w.native != nil and w.native.getSize != nil:
+    w.native.getSize(result.width, result.height)
+
+proc getPosition*(w: Window): tuple[x, y: int] =
+  if not w.closed and w.native != nil and w.native.getPosition != nil:
+    w.native.getPosition(result.x, result.y)
+
+proc setDarkAppearance*(w: Window, dark: bool) =
+  if not w.closed and w.native != nil and w.native.setAppearance != nil:
+    w.native.setAppearance(dark)
 
 proc setAlwaysOnTop*(w: Window, always: bool) =
   if w.native != nil and w.native.setAlwaysOnTop != nil:

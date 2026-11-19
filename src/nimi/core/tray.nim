@@ -1,5 +1,4 @@
-## macOS status-bar tray. The platform description is a Menu, so tray menus
-## use the same items/roles/accelerators as the application menu.
+## System tray. Tray and application menus share the same item model.
 
 import std/tables
 
@@ -16,7 +15,6 @@ type
     id*: uint64
     native*: NativeTray
     menu*: Menu
-    callbacks: Table[uint32, proc()]
 
 var tray*: Tray
 
@@ -45,20 +43,19 @@ proc buildItems(items: seq[MenuItem], nextId: var uint32,
       callbacks[p.id] = item.onSelect
     result.add p
 
-proc platformMenu(t: Tray, m: Menu): PlatformMenu =
-  var nextId = 0'u32
-  t.callbacks.clear()
-  if m != nil:
-    result = PlatformMenu(items: buildItems(m.items, nextId, t.callbacks))
-
-proc applyMenu(t: Tray) =
+proc applyMenu(t: Tray, m: Menu) =
   if t == nil or t.native == nil:
     return
+  var nextId = 0'u32
+  var callbacks: Table[uint32, proc()]
+  let menu = if m == nil: PlatformMenu()
+             else: PlatformMenu(items: buildItems(m.items, nextId, callbacks))
   let handler = MenuHandler(select: proc(id: uint32) =
-    let cb = t.callbacks.getOrDefault(id)
+    let cb = callbacks.getOrDefault(id)
     if cb != nil:
       cb())
-  t.native.setMenu(platformMenu(t, t.menu), handler)
+  t.native.setMenu(menu, handler)
+  t.menu = m
 
 proc remove*(t: Tray)
 
@@ -67,13 +64,17 @@ proc newTray*(opts: TrayOptions): Tray =
     raise newException(BackendError, "tray is not supported by this backend")
   if tray != nil:
     tray.remove()
-  let t = Tray(menu: opts.menu)
+  let t = Tray()
   t.native = currentBackend.newTray(PlatformTrayOptions(
     title: opts.title, tooltip: opts.tooltip))
   if t.native == nil:
     raise newException(BackendError, "cannot create status bar item")
   t.id = t.native.id
-  t.applyMenu()
+  try:
+    t.applyMenu(opts.menu)
+  except:
+    t.native.remove()
+    raise
   tray = t
   result = t
 
@@ -88,8 +89,8 @@ proc setTooltip*(t: Tray, tooltip: string) =
 proc setMenu*(t: Tray, m: Menu) =
   if t == nil:
     return
-  t.menu = m
-  t.applyMenu()
+  if t.native == nil: t.menu = m
+  else: t.applyMenu(m)
 
 proc remove*(t: Tray) =
   if t == nil:
