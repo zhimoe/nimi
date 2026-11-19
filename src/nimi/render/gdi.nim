@@ -1,7 +1,6 @@
 ## Windows CPU scene slice: rectangles, text, images, polygons and clipping.
 import ../scene/scene
 import ../platform/windows/graphics
-import ../platform/contract
 
 proc clearImageCache*() =
   ## Render-thread only; mirrors the CoreGraphics cache controls.
@@ -29,10 +28,16 @@ proc drawScene*(dc: pointer, scene: Scene) =
     of opRect: fill(dc, op.rect, op.color, op.radius)
     of opText:
       let wide = newWideCString(op.text)
-      gdiText(dc, wide, cint(wide.len), op.x, op.y, op.size, cint(op.bold), color(op.color))
+      let family = newWideCString(op.family)
+      gdiText(dc, wide, cint(wide.len), op.x, op.y, op.size, cint(op.bold),
+              color(op.color), component(op.color.a), family)
     of opClip:
       let r = op.clipRect
-      gdiClip(dc, cint(r.x), cint(r.y), cint(r.w), cint(r.h))
+      if op.clipRadius > 0:
+        gdiClipRound(dc, cint(r.x), cint(r.y), cint(r.w), cint(r.h),
+                     cint(op.clipRadius))
+      else:
+        gdiClip(dc, cint(r.x), cint(r.y), cint(r.w), cint(r.h))
       inc clips
     of opRestore:
       if clips > 0:
@@ -46,7 +51,13 @@ proc drawScene*(dc: pointer, scene: Scene) =
           cint(r.w), cint(r.h), 0, 0, gdiImageWidth(image),
           gdiImageHeight(image))
     of opImageQuad:
-      raise newException(BackendError, "Windows renderer does not yet support image quads")
+      let image = loadImage(op.imagePath)
+      if image != nil:
+        let source = op.sourceRect
+        var quad: array[4, NimiFloatPoint]
+        for i, point in op.quad:
+          quad[i] = NimiFloatPoint(x: point.x, y: point.y)
+        gdiImageQuad(dc, image, source.x, source.y, source.w, source.h, addr quad[0])
     of opPolygon:
       if op.points.len >= 3:
         var points = newSeq[NimiPoint](op.points.len)

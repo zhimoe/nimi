@@ -5,12 +5,13 @@ import std/[monotimes, os, strutils, tables, widestrs, unicode]
 import ../[contract, unsupported]
 import ./dialogs
 import ./menu as winMenu
+import ./tray as winTray
 import ./webview2
-import ./[input, ime]
+import ./[input, ime, clipboardhtml, watch]
 
 const hostHeader = (currentSourcePath.parentDir / "host.h").replace('\\', '/')
 {.compile: "host.c".}
-{.passL: "-luser32 -lgdi32 -ladvapi32".}
+{.passL: "-luser32 -lgdi32 -ladvapi32 -lshell32 -lole32".}
 type
   Paint {.importc: "NimiPaint", header: hostHeader, bycopy.} = object
     dc: pointer
@@ -42,6 +43,8 @@ proc hostTitle(w: pointer, title: WideCString) {.cdecl, importc: "nimi_host_titl
 proc hostShow(w: pointer, mode: cint) {.cdecl, importc: "nimi_host_show", header: hostHeader.}
 proc hostSize(w: pointer, width, height: cint) {.cdecl, importc: "nimi_host_size", header: hostHeader.}
 proc hostPosition(w: pointer, x, y: cint) {.cdecl, importc: "nimi_host_position", header: hostHeader.}
+proc hostFitWorkArea(w: pointer): cint
+  {.cdecl, importc: "nimi_host_fit_work_area", header: hostHeader.}
 proc hostResizable(w: pointer, enabled: cint) {.cdecl, importc: "nimi_host_resizable", header: hostHeader.}
 proc hostFullscreen(w: pointer, toggle: cint): cint {.cdecl, importc: "nimi_host_fullscreen", header: hostHeader.}
 proc hostZoom(w: pointer) {.cdecl, importc: "nimi_host_zoom", header: hostHeader.}
@@ -49,17 +52,31 @@ proc hostClientSize(w: pointer, width, height: ptr cfloat) {.cdecl, importc: "ni
 proc hostCenter(w: pointer) {.cdecl, importc: "nimi_host_center", header: hostHeader.}
 proc hostTopmost(w: pointer, enabled: cint) {.cdecl, importc: "nimi_host_topmost", header: hostHeader.}
 proc hostFocused(w: pointer): cint {.cdecl, importc: "nimi_host_focused", header: hostHeader.}
+proc hostVisible(w: pointer): cint {.cdecl, importc: "nimi_host_visible", header: hostHeader.}
+proc hostMinimized(w: pointer): cint {.cdecl, importc: "nimi_host_minimized", header: hostHeader.}
+proc hostMaximized(w: pointer): cint {.cdecl, importc: "nimi_host_maximized", header: hostHeader.}
 proc hostFocus(w: pointer) {.cdecl, importc: "nimi_host_focus", header: hostHeader.}
 
 proc hostClipboardRead(text: ptr WideCString): cint {.cdecl, importc: "nimi_host_clipboard_read", header: hostHeader.}
 proc hostFree(p: pointer) {.cdecl, importc: "nimi_host_free", header: hostHeader.}
 proc hostClipboardWrite(text: WideCString): cint {.cdecl, importc: "nimi_host_clipboard_write", header: hostHeader.}
+proc hostClipboardReadHTML(text: ptr cstring, length: ptr csize_t): cint
+  {.cdecl, importc: "nimi_host_clipboard_read_html", header: hostHeader.}
+proc hostClipboardWriteHTML(text: cstring, length: csize_t): cint
+  {.cdecl, importc: "nimi_host_clipboard_write_html", header: hostHeader.}
 proc hostClipboardClear(): cint {.cdecl, importc: "nimi_host_clipboard_clear", header: hostHeader.}
 proc hostInputError() {.cdecl, importc: "nimi_host_input_error", header: hostHeader.}
 proc hostMessage(title, text: WideCString, confirm: cint): cint {.cdecl, importc: "nimi_host_message", header: hostHeader.}
 proc hostDisplays(items: ptr NimiDisplay, capacity: cint): cint {.cdecl, importc: "nimi_host_displays", header: hostHeader.}
 proc hostCursor(x, y: ptr cfloat): cint {.cdecl, importc: "nimi_host_cursor", header: hostHeader.}
 proc hostAppsDark(): cint {.cdecl, importc: "nimi_host_apps_dark", header: hostHeader.}
+proc hostSetTitleBarDark(w: pointer, dark: cint): cint {.cdecl, importc: "nimi_host_set_titlebar_dark", header: hostHeader.}
+proc hostTitleBarDark(w: pointer): cint {.cdecl, importc: "nimi_host_titlebar_dark", header: hostHeader.}
+proc hostTextScale(): cdouble {.cdecl, importc: "nimi_host_text_scale", header: hostHeader.}
+proc hostHighContrast(): cint {.cdecl, importc: "nimi_host_high_contrast", header: hostHeader.}
+proc hostIsElevated(): cint {.cdecl, importc: "nimi_host_is_elevated", header: hostHeader.}
+proc hostRelaunchElevated(args: WideCString): cint {.cdecl, importc: "nimi_host_relaunch_elevated", header: hostHeader.}
+proc hostRect(w: pointer, x, y, width, height: ptr cint): cint {.cdecl, importc: "nimi_host_rect", header: hostHeader.}
 proc hostAccent(): cuint {.cdecl, importc: "nimi_host_accent", header: hostHeader.}
 proc hostRegisterHotkey(id: cint, modifiers, key: cuint): cint {.cdecl, importc: "nimi_host_register_hotkey", header: hostHeader.}
 proc hostUnregisterHotkey(id: cint): cint {.cdecl, importc: "nimi_host_unregister_hotkey", header: hostHeader.}
@@ -75,6 +92,9 @@ type WindowState = ref object
   menuPlan: MenuPlan
   menuHandler: MenuHandler
 var windowStates: Table[pointer, WindowState]
+var lastFocusedWindow: pointer
+var cookieParent: pointer
+var cookieStore: WebView2
 var appHandler: AppHandler
 var callbackError: string
 var initialized, running, shuttingDown: bool
@@ -112,26 +132,35 @@ proc syncIme(state: WindowState) =
     if state.handle != nil: enableIme(state.handle, cint(active))
   if active and state.handle != nil: placeIme(state.handle, surface)
 
-proc menuCommand(state: WindowState, command: uint16) =
-  if command == 0 or int(command) > state.menuPlan.commands.len: return
-  let item = state.menuPlan.commands[int(command) - 1]
+proc runMenuCommand(item: MenuCommand, handler: MenuHandler, state: WindowState) =
   if not item.enabled: return
-  let h = state.handler.surface
   case item.role
   of "":
-    if state.menuHandler.select != nil: state.menuHandler.select(item.callbackId)
+    if handler.select != nil: handler.select(item.callbackId)
+    return
   of "quit":
     if appHandler.quitRequested == nil or appHandler.quitRequested(): hostQuit()
+    return
+  of "showAll", "bringAllToFront":
+    var windows: seq[WindowState]
+    for window in windowStates.values: windows.add window
+    for window in windows:
+      if window.handle != nil: hostShow(window.handle, 5)
+    if state != nil and state.handle != nil: hostFocus(state.handle)
+    return
+  of "about":
+    discard hostMessage(newWideCString("About"), newWideCString("Nimi application"), 0)
+    return
+  else: discard
+  if state == nil or state.handle == nil: return
+  let h = state.handler.surface
+  case item.role
   of "close": hostClose(state.handle)
   of "minimize": hostShow(state.handle, 6)
   of "zoom": hostZoom(state.handle)
   of "fullscreen":
     if hostFullscreen(state.handle, 1) < 0: raise newException(BackendError, "Cannot toggle fullscreen")
   of "hide": hostShow(state.handle, 0)
-  of "showAll", "bringAllToFront":
-    for window in windowStates.values: hostShow(window.handle, 5)
-    hostFocus(state.handle)
-  of "about": discard hostMessage(newWideCString("About"), newWideCString("Nimi application"), 0)
   of "undo":
     if h.undo != nil: h.undo()
   of "redo":
@@ -148,6 +177,14 @@ proc menuCommand(state: WindowState, command: uint16) =
     if h.keyDown != nil: h.keyDown("delete", 0)
   else: discard
 
+proc menuCommand(state: WindowState, command: uint16) =
+  if command != 0 and int(command) <= state.menuPlan.commands.len:
+    runMenuCommand(state.menuPlan.commands[int(command) - 1], state.menuHandler, state)
+
+proc failCallback(error: string) =
+  if callbackError.len == 0: callbackError = error
+  if not shuttingDown: hostQuit()
+
 proc event(window: pointer, message: cuint, wp: uint, lp: int): int {.cdecl.} =
   # Never unwind Nim exceptions through a Windows callback frame.
   try:
@@ -158,6 +195,9 @@ proc event(window: pointer, message: cuint, wp: uint, lp: int): int {.cdecl.} =
       let fn = hotkeyCallbacks.getOrDefault(int(wp))
       if fn != nil:
         fn()
+      return 0
+    if message == 0x8005: # NIMI_WATCH_READY from the dispatch window.
+      dispatchWatch(wp)
       return 0
     let state = windowStates.getOrDefault(window)
     if state == nil: return 0
@@ -187,7 +227,13 @@ proc event(window: pointer, message: cuint, wp: uint, lp: int): int {.cdecl.} =
       if surface.mouseMoved != nil: surface.mouseMoved(x, y)
     of 0x020a:
       let delta = float32(cast[int16](uint16((wp shr 16) and 0xffff))) / 120 * 40
-      if surface.scroll != nil: surface.scroll(x, y, -delta)
+      let horizontal = (wp and 4) != 0 and surface.scrollHorizontal != nil and
+        surface.scrollHorizontal(x, y, -delta) # MK_SHIFT
+      if not horizontal and surface.scroll != nil:
+        surface.scroll(x, y, -delta)
+    of 0x020e: # WM_MOUSEHWHEEL uses a positive delta when tilting right.
+      let delta = float32(cast[int16](uint16((wp shr 16) and 0xffff))) / 120 * 40
+      if surface.scrollHorizontal != nil: discard surface.scrollHorizontal(x, y, delta)
     of 0x0100:
       if state.composing: return 0
       let mods = uint32(hostModifiers())
@@ -252,9 +298,13 @@ proc event(window: pointer, message: cuint, wp: uint, lp: int): int {.cdecl.} =
         let width = int(lp and 0xffff)
         let height = int((lp shr 16) and 0xffff)
         state.webview.resize(width, height, float32(hostScale(window)))
+        state.webview.show(hostVisible(window) != 0)
+    of 0x0018: # WM_SHOWWINDOW also covers show/hide before controller creation.
+      if state.webview != nil: state.webview.show(wp != 0 and hostMinimized(window) == 0)
     of 0x0010:
       return int(h.shouldClose == nil or h.shouldClose(h.windowId))
     of 0x0002:
+      if window == lastFocusedWindow: lastFocusedWindow = nil
       state.animating = false
       hostStopAnimation(state.handle)
       if state.webview != nil:
@@ -267,6 +317,7 @@ proc event(window: pointer, message: cuint, wp: uint, lp: int): int {.cdecl.} =
       state.menuPlan = MenuPlan()
       if h.closed != nil: h.closed(h.windowId)
     of 0x0007:
+      lastFocusedWindow = window
       if state.webview != nil: state.webview.focus()
       if h.focused != nil: h.focused(h.windowId)
     of 0x0215, 0x001f:
@@ -282,8 +333,7 @@ proc event(window: pointer, message: cuint, wp: uint, lp: int): int {.cdecl.} =
     # Clipboard contention is recoverable. The edit has not changed its document.
     hostInputError()
   except Exception as e:
-    if callbackError.len == 0: callbackError = e.msg
-    if not shuttingDown: hostQuit()
+    failCallback(e.msg)
 
 proc requireLive(state: WindowState) =
   if hostMainThread() == 0:
@@ -306,7 +356,14 @@ proc shutdownWindows() =
       if state.handle != nil: hostDestroy(state.handle)
     if appHandler.terminated != nil: appHandler.terminated()
   finally:
+    if cookieStore != nil:
+      cookieStore.close()
+      cookieStore = nil
+    if cookieParent != nil:
+      hostDestroy(cookieParent)
+      cookieParent = nil
     windowStates.clear()
+    lastFocusedWindow = nil
     appHandler = AppHandler()
     currentMenuHandler = MenuHandler()
     currentMenuPlan = MenuPlan()
@@ -316,10 +373,25 @@ proc shutdownWindows() =
     hotkeyIds.clear()
     displayHandler = nil
     themeHandler = nil
+    winTray.closeTray()
+    closeWatches()
     hostShutdown()
     initialized = false
     running = false
     shuttingDown = false
+
+proc defaultCookieStore(): WebView2 =
+  if cookieStore == nil:
+    let parent = hostWindow(newWideCString(""), 1, 1, 0)
+    if parent == nil: raise newException(BackendError, "Cannot create the WebView2 cookie host")
+    try:
+      cookieStore = newWebView2(parent, 0, WindowHandler(), "", "", "", "", false)
+      cookieStore.show(false)
+      cookieParent = parent
+    except:
+      hostDestroy(parent)
+      raise
+  cookieStore
 
 proc newWindowsBackend*(): Backend =
   var ownsHost = false
@@ -350,18 +422,36 @@ proc newWindowsBackend*(): Backend =
     if hostClipboardClear() == 0:
       raise newException(ClipboardError, "Cannot clear Windows clipboard")
   result.clipboard.readHTML = proc(): string =
-    raise newException(UnsupportedBackendError, "Windows HTML clipboard is not implemented")
+    requireClipboard()
+    var data: cstring
+    var length: csize_t
+    let status = hostClipboardReadHTML(addr data, addr length)
+    if status < 0: raise newException(ClipboardError, "Cannot read Windows HTML clipboard")
+    if status == 0: return ""
+    defer: hostFree(cast[pointer](data))
+    var payload = newString(int(length))
+    copyMem(addr payload[0], data, payload.len)
+    decodeClipboardHTML(payload)
   result.clipboard.writeHTML = proc(html: string) =
-    raise newException(UnsupportedBackendError, "Windows HTML clipboard is not implemented")
+    requireClipboard()
+    let payload = encodeClipboardHTML(html)
+    if hostClipboardWriteHTML(payload.cstring, csize_t(payload.len)) == 0:
+      raise newException(ClipboardError, "Cannot write Windows HTML clipboard")
   result.dialogs = newUnsupportedDialogs("windows")
   installFileDialogs(result.dialogs)
   result.dialogs.message = proc(title, text: string): int =
+    requireDesktop()
     if hostMessage(newWideCString(title), newWideCString(text), 0) == 0:
       raise newException(BackendError, "MessageBoxW failed")
     0
   result.dialogs.messageWith = proc(title, text: string, buttons: seq[string]): int =
+    requireDesktop()
+    if buttons.len == 0:
+      if hostMessage(newWideCString(title), newWideCString(text), 0) == 0:
+        raise newException(BackendError, "MessageBoxW failed")
+      return 0
     if buttons != @["OK", "Cancel"]:
-      raise newException(UnsupportedBackendError, "Windows message dialog currently supports OK/Cancel only")
+      return customMessage(title, text, buttons)
     let answer = hostMessage(newWideCString(title), newWideCString(text), 1)
     if answer == 0: raise newException(BackendError, "MessageBoxW failed")
     if answer == 1: 0 else: 1
@@ -397,6 +487,23 @@ proc newWindowsBackend*(): Backend =
   result.wake = proc() = hostSignal()
   result.step = proc() = hostStep()
   result.isMainThread = proc(): bool = hostMainThread() != 0
+  result.watchFiles = proc(path: string, handler: proc(e: PlatformFileEvent)): NativeFileWatcher =
+    requireDesktop()
+    watch.watchFiles(path, handler)
+  result.newTray = proc(options: PlatformTrayOptions): NativeTray =
+    requireDesktop()
+    winTray.createTray(options, proc(item: MenuCommand, handler: MenuHandler) =
+      runMenuCommand(item, handler, windowStates.getOrDefault(lastFocusedWindow)),
+      failCallback)
+  result.notify = proc(notification: PlatformNotification) =
+    requireDesktop()
+    winTray.notify(notification)
+  result.getCookies = proc(cb: proc(cookies: seq[PlatformCookie])) =
+    requireDesktop()
+    defaultCookieStore().getCookies(cb)
+  result.clearCookies = proc(cb: proc()) =
+    requireDesktop()
+    defaultCookieStore().clearCookies(cb)
   result.screens = proc(): seq[PlatformDisplay] =
     requireDesktop()
     var items: array[16, NimiDisplay]
@@ -542,6 +649,21 @@ proc newWindowsBackend*(): Backend =
     result.setResizable = proc(enabled: bool) =
       requireLive(state)
       hostResizable(state.handle, cint(enabled))
+    result.setAppearance = proc(dark: bool) =
+      requireLive(state)
+      discard hostSetTitleBarDark(state.handle, cint(dark))
+    result.getSize = proc(width, height: var int) =
+      requireLive(state)
+      var w, h: cfloat
+      hostClientSize(state.handle, addr w, addr h)
+      width = int(w + 0.5)
+      height = int(h + 0.5)
+    result.getPosition = proc(x, y: var int) =
+      requireLive(state)
+      var px, py, pw, ph: cint
+      if hostRect(state.handle, addr px, addr py, addr pw, addr ph) != 0:
+        x = int(px)
+        y = int(py)
     result.toggleFullScreen = proc() =
       requireLive(state)
       if hostFullscreen(state.handle, 1) < 0:
@@ -588,6 +710,15 @@ proc newWindowsBackend*(): Backend =
     result.isFocused = proc(): bool =
       requireLive(state)
       hostFocused(state.handle) != 0
+    result.isVisible = proc(): bool =
+      requireLive(state)
+      hostVisible(state.handle) != 0
+    result.isMinimized = proc(): bool =
+      requireLive(state)
+      hostMinimized(state.handle) != 0
+    result.isMaximized = proc(): bool =
+      requireLive(state)
+      hostMaximized(state.handle) != 0
     result.setAlwaysOnTop = proc(on: bool) =
       requireLive(state)
       hostTopmost(state.handle, cint(on))
@@ -625,3 +756,52 @@ proc clientSizeDip*(id: uint64): PlatformPoint =
       hostClientSize(state.handle, addr result.x, addr result.y)
       return
   raise newException(BackendError, "Unknown Windows window")
+
+proc fitWindowToWorkArea*(id: uint64) =
+  ## Clamp a normal window's physical frame to the nearest monitor's work area.
+  for state in windowStates.values:
+    if state.handler.windowId == id:
+      requireLive(state)
+      if hostFitWorkArea(state.handle) == 0:
+        raise newException(BackendError, "Cannot fit the Windows window to its work area")
+      return
+  raise newException(BackendError, "Unknown Windows window")
+
+# --- small desktop helpers shared by applications -------------------------
+
+proc ExpandEnvironmentStringsW(lpSrc: WideCString, lpDst: ptr uint16,
+                               nSize: uint32): uint32
+  {.stdcall, dynlib: "kernel32.dll", importc.}
+
+proc isElevated*(): bool =
+  hostIsElevated() != 0
+
+proc relaunchElevated*(args: string): string =
+  let code = int(hostRelaunchElevated(newWideCString(args)))
+  if code == 0:
+    return ""
+  if code == 1223:
+    return "用户取消了管理员权限请求"
+  "无法以管理员身份重启（Windows error " & $code & "）"
+
+proc textScale*(): float32 =
+  float32(hostTextScale())
+
+proc highContrast*(): bool =
+  hostHighContrast() != 0
+
+proc expandEnvironment*(value: string): string =
+  if value.len == 0:
+    return value
+  let wide = newWideCString(value)
+  let size = ExpandEnvironmentStringsW(wide, nil, 0)
+  if size == 0:
+    return value
+  var buffer = newSeq[uint16](int(size) + 1)
+  let written = ExpandEnvironmentStringsW(wide, addr buffer[0], size)
+  if written == 0 or written > size:
+    return value
+  var count = int(written) - 1
+  while count > 0 and buffer[count - 1] == 0:
+    dec count
+  $cast[WideCString](addr buffer[0])

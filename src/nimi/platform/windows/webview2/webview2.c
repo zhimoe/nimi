@@ -38,6 +38,7 @@ struct NimiWebView2 {
     int has_message_token;
     int com_initialized;
     float scale;
+    int visible;
     int ready;
     int closed;
     int failed;
@@ -73,6 +74,7 @@ static void owner_addref(NimiWebView2 *owner) {
 }
 
 static void owner_release(NimiWebView2 *owner);
+static void free_pending(NimiWebView2 *owner);
 
 static void set_error(char *buffer, int size, const char *message) {
     if (!buffer || size <= 0) return;
@@ -101,6 +103,7 @@ static char *wide_to_utf8(const wchar_t *text) {
 static void fail(NimiWebView2 *owner, const char *message) {
     if (!owner || owner->failed) return;
     owner->failed = 1;
+    free_pending(owner);
     set_error(owner->error, (int)sizeof(owner->error), message);
     if (!owner->closed && owner->callbacks.error) {
         owner->callbacks.error(owner->callbacks.context, owner->error);
@@ -114,7 +117,9 @@ static int pending_add(NimiWebView2 *owner, NimiPendingKind kind,
     item->kind = kind;
     item->text = wide_dup(text);
     item->base = base && *base ? wide_dup(base) : NULL;
-    if (!item->text) {
+    if (!item->text || (base && *base && !item->base)) {
+        free(item->text);
+        free(item->base);
         free(item);
         return 0;
     }
@@ -280,8 +285,8 @@ static HRESULT STDMETHODCALLTYPE controller_Invoke(
     NimiControllerHandler *handler = (NimiControllerHandler *)This;
     NimiWebView2 *owner = handler->owner;
     if (!owner) return S_OK;
-    if (owner->closed) {
-        if (controller) controller->lpVtbl->Release(controller);
+    if (owner->closed || owner->failed) {
+        if (controller) ICoreWebView2Controller_Close(controller);
         return S_OK;
     }
     if (FAILED(errorCode) || !controller) {
@@ -296,7 +301,7 @@ static HRESULT STDMETHODCALLTYPE controller_Invoke(
         fail(owner, "cannot access CoreWebView2");
         return S_OK;
     }
-    ICoreWebView2Controller_put_IsVisible(controller, TRUE);
+    ICoreWebView2Controller_put_IsVisible(controller, owner->visible ? TRUE : FALSE);
     if (owner->scale <= 0) {
         HDC dc = GetDC(owner->hwnd);
         int dpi = dc ? GetDeviceCaps(dc, LOGPIXELSX) : 96;
@@ -416,8 +421,7 @@ static HRESULT STDMETHODCALLTYPE env_Invoke(
     NimiEnvHandler *handler = (NimiEnvHandler *)This;
     NimiWebView2 *owner = handler->owner;
     if (!owner) return S_OK;
-    if (owner->closed) {
-        if (environment) environment->lpVtbl->Release(environment);
+    if (owner->closed || owner->failed) {
         return S_OK;
     }
     if (FAILED(errorCode) || !environment) {
@@ -529,6 +533,119 @@ static NimiMessageHandler *message_handler_create(NimiWebView2 *owner) {
     return handler;
 }
 
+/* --- cookie manager ----------------------------------------------------- */
+
+typedef struct {
+    ICoreWebView2GetCookiesCompletedHandler iface;
+    LONG refs;
+    NimiWebView2 *owner;
+    uintptr_t request;
+    NimiCookiesDone done;
+} CookieRequest;
+
+static HRESULT STDMETHODCALLTYPE cookie_query(
+    ICoreWebView2GetCookiesCompletedHandler *self, REFIID iid, void **value) {
+    if (!value) return E_POINTER;
+    *value = NULL;
+    if (!IsEqualIID(iid, &IID_IUnknown) &&
+        !IsEqualIID(iid, &IID_ICoreWebView2GetCookiesCompletedHandler)) return E_NOINTERFACE;
+    *value = self;
+    ICoreWebView2GetCookiesCompletedHandler_AddRef(self);
+    return S_OK;
+}
+static ULONG STDMETHODCALLTYPE cookie_addref(ICoreWebView2GetCookiesCompletedHandler *self) {
+    return (ULONG)InterlockedIncrement(&((CookieRequest *)self)->refs);
+}
+static ULONG STDMETHODCALLTYPE cookie_release(ICoreWebView2GetCookiesCompletedHandler *self) {
+    CookieRequest *request = (CookieRequest *)self;
+    ULONG refs = (ULONG)InterlockedDecrement(&request->refs);
+    if (!refs) {
+        owner_release(request->owner);
+        free(request);
+    }
+    return refs;
+}
+static HRESULT STDMETHODCALLTYPE cookie_result(ICoreWebView2GetCookiesCompletedHandler *self,
+                                                HRESULT status, ICoreWebView2CookieList *list) {
+    CookieRequest *request = (CookieRequest *)self;
+    if (request->owner->closed) return S_OK;
+    UINT count = 0, read = 0;
+    NimiCookie *cookies = NULL;
+    if (SUCCEEDED(status) && list) status = ICoreWebView2CookieList_get_Count(list, &count);
+    if (SUCCEEDED(status) && count) {
+        cookies = calloc(count, sizeof(*cookies));
+        if (!cookies) status = E_OUTOFMEMORY;
+    }
+    for (UINT i = 0; SUCCEEDED(status) && i < count; ++i) {
+        ICoreWebView2Cookie *cookie = NULL;
+        status = ICoreWebView2CookieList_GetValueAtIndex(list, i, &cookie);
+        if (FAILED(status)) break;
+        NimiCookie *out = &cookies[read++];
+        status = ICoreWebView2Cookie_get_Name(cookie, &out->name);
+        if (SUCCEEDED(status)) status = ICoreWebView2Cookie_get_Value(cookie, &out->value);
+        if (SUCCEEDED(status)) status = ICoreWebView2Cookie_get_Domain(cookie, &out->domain);
+        if (SUCCEEDED(status)) status = ICoreWebView2Cookie_get_Path(cookie, &out->path);
+        if (SUCCEEDED(status)) status = ICoreWebView2Cookie_get_IsSecure(cookie, &out->secure);
+        if (SUCCEEDED(status)) status = ICoreWebView2Cookie_get_IsHttpOnly(cookie, &out->http_only);
+        ICoreWebView2Cookie_Release(cookie);
+    }
+    request->done(request->owner->callbacks.context, request->request, cookies,
+                  SUCCEEDED(status) ? read : 0, status);
+    for (UINT i = 0; i < read; ++i) {
+        CoTaskMemFree(cookies[i].name);
+        CoTaskMemFree(cookies[i].value);
+        CoTaskMemFree(cookies[i].domain);
+        CoTaskMemFree(cookies[i].path);
+    }
+    free(cookies);
+    return S_OK;
+}
+static ICoreWebView2GetCookiesCompletedHandlerVtbl cookie_vtbl = {
+    cookie_query, cookie_addref, cookie_release, cookie_result
+};
+
+static HRESULT cookie_manager(NimiWebView2 *view, ICoreWebView2CookieManager **manager) {
+    if (!nimi_webview2_ready(view)) return E_UNEXPECTED;
+    ICoreWebView2_2 *webview2 = NULL;
+    HRESULT hr = ICoreWebView2_QueryInterface(view->webview, &IID_ICoreWebView2_2,
+                                             (void **)&webview2);
+    if (SUCCEEDED(hr)) {
+        hr = ICoreWebView2_2_get_CookieManager(webview2, manager);
+        ICoreWebView2_2_Release(webview2);
+    }
+    return hr;
+}
+
+int32_t nimi_webview2_read_cookies(NimiWebView2 *view, uintptr_t id, NimiCookiesDone done) {
+    ICoreWebView2CookieManager *manager = NULL;
+    HRESULT hr = cookie_manager(view, &manager);
+    if (FAILED(hr)) return hr;
+    CookieRequest *request = calloc(1, sizeof(*request));
+    if (!request) hr = E_OUTOFMEMORY;
+    else {
+        request->iface.lpVtbl = &cookie_vtbl;
+        request->refs = 1;
+        request->owner = view;
+        request->request = id;
+        request->done = done;
+        owner_addref(view);
+        hr = ICoreWebView2CookieManager_GetCookies(manager, L"", &request->iface);
+        ICoreWebView2GetCookiesCompletedHandler_Release(&request->iface);
+    }
+    ICoreWebView2CookieManager_Release(manager);
+    return hr;
+}
+
+int32_t nimi_webview2_clear_cookies(NimiWebView2 *view) {
+    ICoreWebView2CookieManager *manager = NULL;
+    HRESULT hr = cookie_manager(view, &manager);
+    if (SUCCEEDED(hr)) {
+        hr = ICoreWebView2CookieManager_DeleteAllCookies(manager);
+        ICoreWebView2CookieManager_Release(manager);
+    }
+    return hr;
+}
+
 /* --- owner lifetime ----------------------------------------------------- */
 
 static void free_pending(NimiWebView2 *owner) {
@@ -597,9 +714,16 @@ NimiWebView2 *nimi_webview2_create(void *parent, const wchar_t *user_data_folder
     owner->hwnd = (HWND)parent;
     owner->callbacks = callbacks;
     owner->scale = 1.0f;
+    owner->visible = 1;
     owner->scheme = wide_dup(scheme);
     owner->file_root = wide_dup(file_root);
     owner->bridge = wide_dup(bridge_script);
+    if ((scheme && !owner->scheme) || (file_root && !owner->file_root) ||
+        (bridge_script && !owner->bridge)) {
+        set_error(error, error_size, "out of memory");
+        owner_release(owner);
+        return NULL;
+    }
 
     HRESULT hr = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED |
                                       COINIT_DISABLE_OLE1DDE);
@@ -611,9 +735,11 @@ NimiWebView2 *nimi_webview2_create(void *parent, const wchar_t *user_data_folder
     }
     if (SUCCEEDED(hr)) owner->com_initialized = 1;
 
-    HMODULE loader = LoadLibraryW(L"WebView2Loader.dll");
+    HMODULE loader = LoadLibraryExW(L"WebView2Loader.dll", NULL,
+        LOAD_LIBRARY_SEARCH_APPLICATION_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32);
     if (!loader && loader_hint && *loader_hint) {
-        loader = LoadLibraryW(loader_hint);
+        loader = LoadLibraryExW(loader_hint, NULL,
+            LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32);
     }
     if (!loader) {
         set_error(error, error_size,
@@ -684,8 +810,10 @@ void nimi_webview2_resize(NimiWebView2 *view, int width, int height,
 }
 
 void nimi_webview2_show(NimiWebView2 *view, int visible) {
-    if (!view || view->closed || !view->controller) return;
-    ICoreWebView2Controller_put_IsVisible(view->controller, visible ? TRUE : FALSE);
+    if (!view || view->closed) return;
+    view->visible = visible;
+    if (view->controller)
+        ICoreWebView2Controller_put_IsVisible(view->controller, visible ? TRUE : FALSE);
 }
 
 void nimi_webview2_focus(NimiWebView2 *view) {

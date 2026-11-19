@@ -128,3 +128,53 @@ MyGo 已有 Windows 平台实现及窗口、WebView、菜单等 E2E 测试。Nim
 - `nimi 0.1.0` 构建成功；`nimi build examples/hello` 产出 `dist/windows-amd64/hello-nimi.exe`，并复制 `WebView2Loader.dll`。
 - 本轮修出的真实 Windows 问题：帧回调内 `stopAnimation` 导致 seq 迭代崩溃；全屏恢复丢失客户区尺寸；Windows 会规范化无终止符的剪贴板文本；渲染测试等待不存在的第二次 paint。
 - 仍需人工/交互验收：真实键鼠与微软拼音/日文 IME、候选窗、混合 DPI 多显示器、WebView2 视觉/输入/下载、托盘/通知/监视、安装器与代码签名。
+
+## EnvMan 对等实现（2026-11-16）
+
+主目标仍是补齐 Nimi Windows 框架能力；环境变量管理器现在同时作为完整验收应用。决策：完整功能对等、系统标题栏 + DWM 深色、中文界面。
+
+### 框架能力
+
+- `src/nimi/ui/context.nim`：
+  - flex/盒模型：`grow/basis`、`alignItems/justifyContent/alignSelf`、margin、四边 padding、min/max、`fillWidth/fillHeight`、`spacer`；fixed-size 容器在测量子节点时使用自身尺寸，避免固定面板内溢出；两遍 arrange 让 scroll 偏移在最终视口尺寸上收敛。
+  - 容器绘制：背景、圆角、1px 边框、`clipChildren`（命中裁剪同步）。
+  - 交互：`buttonBase`、`whenClicked/whenDoubleClicked/whenActivated/whenSpacePressed/whenSubmitted`、hover/pressed、focus/tabStop、焦点请求、带修饰键的应用快捷键注册（优先于文本编辑，Ctrl+A/C/X/V/Z/Y 保留）。
+  - 顶层：`overlay(c, modal)` 覆盖层；sheet/modal/toast 都基于它；modal 只在顶层参与 Tab；非 modal toast 不阻塞背景。
+  - 文本：`opText.family`（`"mono"` 映射平台等宽字体）；等宽/粗体/对齐/单行省略；`richText` 单行 runs（`%VAR%` 与搜索高亮）；多行输入 `noWrap`、行号 gutter、横向光标滚动。
+  - 自定义绘制节点 `custom` + 24×24 矢量图标（`examples/environment/icons.nim`）。
+- 场景/渲染：`opClip` 支持圆角裁剪；CG 用 `CGPathCreateWithRoundedRect`，GDI 用 `RoundRect` path + `SelectClipPath`。
+- Windows 文本性能：GDI 字体与测量 DC 缓存、`measureText`/`layoutText` 有界缓存；GDI mono + CJK 使用 `NSimSun` 回退。
+- Windows 桌面：`NativeWindow.setAppearance` → `DwmSetWindowAttribute`（属性 20，回退 19）；`getSize/getPosition`；`textScale()`、`highContrast()`、`isElevated()`、`relaunchElevated()`、`expandEnvironment()`。
+- 窗口状态：设置保存/恢复客户区逻辑尺寸和物理屏幕位置；关闭时保存。
+
+### 应用
+
+- `examples/environment/` 拆分为 `state/model/service/storage/theme/widgets/icons/view*/main/capture`；旧单页 `view.nim` / `editor.nim` 已替换。
+- 主界面：侧栏（双范围/快速查看/admin/备份/主题）、搜索、筛选、排序、tri-state 多选、复制/导出、缺失路径、内联展开多值、等宽 rich text、行 hover/focus。
+- 编辑 sheet：文本/列表模式、原始空项保留、PATH 分项增删改序、重复警告、`%VAR%` 解析预览、类型/作用域信息、删除、脏检查、Ctrl+S/Ctrl+Enter/Esc。
+- 批量编辑器：行号 + noWrap、实时新增/移除/顺序/重复分析、空值清空确认、应用前备份。
+- 备份：整 scope 快照最多 20；恢复确认并再次备份；8 秒撤销 toast（merge 保留无关外部修改）。
+- 提权：系统变量写入 → 快照 → `pending.json` → `ShellExecuteExW runas` → 退出；提权实例 claim/apply/complete；失败保留 `.interrupted.json`；UAC 取消保留应用。
+- 主题：EnvMan 调色板/metrics；浅色/深色/跟随系统；高对比度黑白回退；DWM 深色同步。
+- 数据目录：`%LOCALAPPDATA%\Nimi\Environment`，支持 `--data-dir=`。
+
+### 测试与验证
+
+- 新增 `test_layout_legacy/test_ui_layout/test_ui_widgets`：旧布局几何冻结、flex、容器/裁剪、buttonBase、overlay、焦点/快捷键、rich text、noWrap 行号。
+- 新增 `test_environment_model/test_environment_storage/test_environment_app`：领域、快照/pending/settings、搜索/筛选/多选、创建/编辑/删除、PATH 列表、批量、备份恢复、主题、脏检查、UAC pending 全流程。
+- `test_environment_ui` 重写为主界面/sheet/batch/backups/深色截图与边界检查；`test_environment_app_windows` 重写为真实 Win32 绘制 + HKCU 临时变量 CRUD/恢复，并检查窗口尺寸与 DWM 调用不崩溃。
+- `./scripts/test.sh` 全绿；`./scripts/windows-cross-build.sh` 全量交叉编译通过，`NimiEnvironment.exe` PE Subsystem = 2（GUI）。
+- Windows CI 增加新测试与 `nimi build examples/environment`；尚未触发远端运行，需推送后确认。
+
+### 仍未完成
+
+- Windows 实机人工验收：中文/emoji、微软拼音/日文 IME 与候选窗、混合 DPI 多显示器、DWM 深色视觉、UAC 弹窗与提权后读回、安装器/签名。
+- 自绘无边框标题栏、D3D11/DirectComposition/DirectWrite、无障碍 UIA。
+- 2026-11-19 已补图像四边形、托盘、气泡通知、文件监视和默认 WebView2 Cookie API，等待 Windows 验收。NowPlaying 与媒体键仍待实现。[Windows 框架状态](32-windows-framework.md)
+
+### GUI 复检
+
+- 批量编辑器的横向滚动按最长行计算范围，保留固定行号。Windows 支持横向滚轮和 Shift+滚轮，手动平移时保留当前光标及选区。
+- 窄窗口下编辑区、解析预览上下排列。变量过多或名称过长时改用可滚动的目标选择器，切换目标仍保留原有的草稿确认。
+- 启动时把窗口恢复到最近显示器的可用工作区，保留容得下的已保存尺寸。此路径使用 Win32 的物理窗口边框和工作区坐标。
+- 已在 Windows 11 ARM64 验证 640×480 批量页面、未保存草稿的目标切换确认和 HKCU 集成。原生滚轮测试验证了横向与纵向事件的分发。[Windows 框架验证](32-windows-framework.md#windows-gui-复检)

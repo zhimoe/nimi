@@ -45,6 +45,18 @@ suite "Win32 host lifecycle":
     backend.init(AppHandler(ready: proc() =
       let window = backend.newWindow(PlatformWindowOptions(title: "DPI/state test",
         width: 640, height: 480, resizable: true), WindowHandler(windowId: 8))
+      check window.isVisible() and not window.isMinimized() and not window.isMaximized()
+      window.hide()
+      check not window.isVisible()
+      window.show()
+      window.minimize()
+      check window.isMinimized() and not window.isVisible()
+      window.deminimize()
+      check window.isVisible() and not window.isMinimized()
+      window.zoom()
+      check window.isMaximized()
+      window.zoom()
+      check not window.isMaximized()
       let initial = clientSizeDip(8)
       check abs(initial.x - 640) <= 1
       check abs(initial.y - 480) <= 1
@@ -87,6 +99,26 @@ suite "Win32 host lifecycle":
       next.quit()), AppOptions())
     next.run()
     check dispatched
+
+  test "restored windows move back into the nearest work area":
+    let backend = newWindowsBackend()
+    backend.init(AppHandler(), AppOptions())
+    defer: backend.shutdown()
+    let window = backend.newWindow(PlatformWindowOptions(title: "Work area test",
+      width: 320, height: 220, resizable: true), WindowHandler(windowId: 75))
+    defer: window.destroy()
+    window.setPosition(30000, 30000)
+    fitWindowToWorkArea(window.id)
+    var x, y, width, height: int
+    window.getPosition(x, y)
+    window.getSize(width, height)
+    check x < 30000 and y < 30000
+    check width > 0 and width <= 321
+    check height > 0 and height <= 221
+    fitWindowToWorkArea(window.id)
+    var nextX, nextY: int
+    window.getPosition(nextX, nextY)
+    check (nextX, nextY) == (x, y)
 
   test "failed duplicate initialization cannot shut down another backend":
     let first = newWindowsBackend()

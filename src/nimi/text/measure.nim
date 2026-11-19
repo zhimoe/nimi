@@ -1,9 +1,15 @@
-## Shared layout with platform font measurement: CoreText on macOS, GDI on Windows.
-## Each platform renderer uses the same font and size as its measurement path.
+## Shared layout with platform font measurement: CoreText on macOS, GDI on
+## Windows. Each platform renderer uses the same font and size as its
+## measurement path.
+##
+## `family` is "" for the platform UI font or "mono" for its monospace font.
+## Bounded caches keep per-frame table rendering from repeating expensive
+## platform measurement calls.
 
-import std/[strutils, unicode]
+import std/[strutils, tables, unicode]
+
 when not defined(windows):
-  import std/[dynlib, tables]
+  import std/dynlib
 
 type
   TextMetrics* = object
@@ -16,13 +22,40 @@ type
       ## adjacent (no separator byte), unlike lines split at newlines.
     width*, height*, lineHeight*, ascent*: float32
 
+const
+  measureCacheLimit = 4096
+  layoutCacheLimit = 2048
+  layoutCacheTextLimit = 4096
+
+proc monoFamily*(): string =
+  ## The platform monospace face. Measurement and rendering both map the
+  ## "mono" family marker to this face (and to CJK-capable fallbacks).
+  when defined(windows): "Consolas" else: "Menlo"
+
 when defined(windows):
   import ../platform/windows/graphics
-  proc measureText*(text: string, size: float32, bold: bool): TextMetrics =
+
+  var measureCache: Table[string, TextMetrics]
+
+  proc measureKey(text: string, size: float32, bold: bool,
+                  family: string): string =
+    text & "\x00" & $size & "\x00" & $bold & "\x00" & family
+
+  proc measureText*(text: string, size: float32, bold: bool,
+                    family: string = ""): TextMetrics =
+    let key = measureKey(text, size, bold, family)
+    if measureCache.hasKey(key):
+      return measureCache[key]
     let wide = newWideCString(text)
+    let face = newWideCString(family)
     var m: array[5, cfloat]
-    gdiMeasure(wide, cint(wide.len), max(1'f32, size), cint(bold), addr m[0])
-    TextMetrics(width: m[0], height: m[1], ascent: m[2], descent: m[3], leading: m[4])
+    gdiMeasure(wide, cint(wide.len), max(1'f32, size), cint(bold), face,
+               addr m[0])
+    result = TextMetrics(width: m[0], height: m[1], ascent: m[2],
+                         descent: m[3], leading: m[4])
+    if measureCache.len >= measureCacheLimit:
+      measureCache.clear()
+    measureCache[key] = result
 else:
   type CFRef = pointer
 
@@ -64,13 +97,24 @@ else:
   proc cfstr(s: string): CFRef =
     CFStringCreateWithCString(nil, s.cstring, 0x08000100'u32)
 
-  proc measureText*(text: string, size: float32, bold: bool): TextMetrics =
+  proc faceName(family: string, bold: bool): string =
+    if family == "mono":
+      if bold: "Menlo-Bold" else: "Menlo"
+    else:
+      if bold: "Helvetica-Bold" else: "Helvetica"
+
+  proc measureKey(text: string, size: float32, bold: bool,
+                  family: string): string =
+    text & "\x00" & $size & "\x00" & $bold & "\x00" & family
+
+  proc measureText*(text: string, size: float32, bold: bool,
+                    family: string = ""): TextMetrics =
     ## Advance width and line metrics for one line.
-    let key = text & "\x00" & $size & "\x00" & $bold
+    let key = measureKey(text, size, bold, family)
     if cache.hasKey(key):
       return cache[key]
 
-    let fontName = cfstr(if bold: "Helvetica-Bold" else: "Helvetica")
+    let fontName = cfstr(faceName(family, bold))
     defer: CFRelease(fontName)
     let font = CTFontCreateWithName(fontName, float64(max(size, 1.0'f32)), nil)
     defer: CFRelease(font)
@@ -96,14 +140,21 @@ else:
       ascent: float32(ascent),
       descent: float32(descent),
       leading: float32(leading))
+    if cache.len >= measureCacheLimit:
+      cache.clear()
     cache[key] = result
 
+var layoutCache: Table[string, TextLayout]
 
-proc layoutText*(text: string, size: float32, bold: bool,
-                 maxWidth: float32 = 0): TextLayout =
+proc layoutKey(text: string, size: float32, bold: bool,
+               maxWidth: float32, family: string): string =
+  text & "\x00" & $size & "\x00" & $bold & "\x00" & $maxWidth & "\x00" & family
+
+proc computeLayout(text: string, size: float32, bold: bool,
+                   maxWidth: float32, family: string): TextLayout =
   ## M2 line breaking: split on newlines, then greedily wrap at spaces (or
   ## between runes for CJK/long words). Replace with CTTypesetter/Pango later.
-  let sample = measureText("Ag", size, bold)
+  let sample = measureText("Ag", size, bold, family)
   result.lineHeight = sample.height
   result.ascent = sample.ascent
 
@@ -128,7 +179,7 @@ proc layoutText*(text: string, size: float32, bold: bool,
         line = ""
         continue
       let candidate = line & ch
-      if line.len == 0 or measureText(candidate, size, bold).width <= maxWidth:
+      if line.len == 0 or measureText(candidate, size, bold, family).width <= maxWidth:
         line = candidate
       else:
         let cut = line.rfind(' ')
@@ -149,5 +200,36 @@ proc layoutText*(text: string, size: float32, bold: bool,
 
   result.width = 0
   for line in result.lines:
-    result.width = max(result.width, measureText(line, size, bold).width)
+    result.width = max(result.width, measureText(line, size, bold, family).width)
   result.height = result.lineHeight * float32(result.lines.len)
+
+proc layoutText*(text: string, size: float32, bold: bool,
+                 maxWidth: float32 = 0, family: string = ""): TextLayout =
+  if text.len <= layoutCacheTextLimit:
+    let key = layoutKey(text, size, bold, maxWidth, family)
+    if layoutCache.hasKey(key):
+      return layoutCache[key]
+    result = computeLayout(text, size, bold, maxWidth, family)
+    if layoutCache.len >= layoutCacheLimit:
+      layoutCache.clear()
+    layoutCache[key] = result
+  else:
+    result = computeLayout(text, size, bold, maxWidth, family)
+
+proc ellipsizeText*(text: string, size: float32, bold: bool,
+                    family: string, maxWidth: float32): string =
+  ## Grapheme-aware single-line truncation. Returns `text` unchanged when it
+  ## fits; otherwise the longest prefix plus U+2026.
+  if maxWidth <= 0:
+    return text
+  if measureText(text, size, bold, family).width <= maxWidth:
+    return text
+  let ellipsis = "…"
+  var prefix = ""
+  for r in text.runes:
+    let next = prefix & $r
+    if measureText(next, size, bold, family).width +
+        measureText(ellipsis, size, bold, family).width > maxWidth:
+      return prefix & ellipsis
+    prefix = next
+  ellipsis

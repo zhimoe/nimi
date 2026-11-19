@@ -2,15 +2,15 @@ name: Windows framework
 on:
   workflow_dispatch:
   push:
-    paths: ['examples/environment/**', 'src/nimi/core/environment.nim', 'src/nimi/platform/**', 'tests/test_platform_contract.nim', 'tests/test_menu_callbacks.nim', 'tests/test_environment*.nim', 'tests/test_windows*.nim', 'tests/windows_input_fixture.c', 'src/nimi/core/app.nim', 'src/nimi/core/content.nim', 'src/nimi/core/window.nim', 'src/nimi/render/gdi.nim', 'src/nimi/text/**', 'src/nimi/ui/**', 'src/nimi/keys.nim', '.github/workflows/windows.yml']
+    paths: ['examples/environment/**', 'src/nimi/core/environment.nim', 'src/nimi/platform/**', 'tests/test_platform_contract.nim', 'tests/test_menu_callbacks.nim', 'tests/test_environment*.nim', 'tests/test_windows*.nim', 'tests/test_ui*.nim', 'tests/test_layout*.nim', 'tests/environment_fixture.nim', 'tests/windows_input_fixture.c', 'src/nimi/core/app.nim', 'src/nimi/core/content.nim', 'src/nimi/core/window.nim', 'src/nimi/render/**', 'src/nimi/scene/**', 'src/nimi/text/**', 'src/nimi/ui/**', 'src/nimi/keys.nim', '.github/workflows/windows.yml']
   pull_request:
-    paths: ['examples/environment/**', 'src/nimi/core/environment.nim', 'src/nimi/platform/**', 'tests/test_platform_contract.nim', 'tests/test_menu_callbacks.nim', 'tests/test_environment*.nim', 'tests/test_windows*.nim', 'tests/windows_input_fixture.c', 'src/nimi/core/app.nim', 'src/nimi/core/content.nim', 'src/nimi/core/window.nim', 'src/nimi/render/gdi.nim', 'src/nimi/text/**', 'src/nimi/ui/**', 'src/nimi/keys.nim', '.github/workflows/windows.yml']
+    paths: ['examples/environment/**', 'src/nimi/core/environment.nim', 'src/nimi/platform/**', 'tests/test_platform_contract.nim', 'tests/test_menu_callbacks.nim', 'tests/test_environment*.nim', 'tests/test_windows*.nim', 'tests/test_ui*.nim', 'tests/test_layout*.nim', 'tests/environment_fixture.nim', 'tests/windows_input_fixture.c', 'src/nimi/core/app.nim', 'src/nimi/core/content.nim', 'src/nimi/core/window.nim', 'src/nimi/render/**', 'src/nimi/scene/**', 'src/nimi/text/**', 'src/nimi/ui/**', 'src/nimi/keys.nim', '.github/workflows/windows.yml']
 permissions:
   contents: read
 jobs:
   environment:
     runs-on: windows-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
       - uses: jiro4989/setup-nim-action@v2.3.1
@@ -48,6 +48,9 @@ jobs:
             "test_platform_contract",
             "test_cli_windows",
             "test_environment",
+            "test_environment_model",
+            "test_environment_storage",
+            "test_environment_app",
             "test_environment_windows",
             "test_windows_host",
             "test_windows_surface",
@@ -56,9 +59,12 @@ jobs:
             "test_windows_desktop",
             "test_windows_animation",
             "test_windows_render",
-            "test_environment_editor",
             "test_environment_ui",
-            "test_environment_app_windows"
+            "test_environment_app_windows",
+            "test_layout_legacy",
+            "test_ui",
+            "test_ui_layout",
+            "test_ui_widgets"
           )
           $failed = @()
           foreach ($test in $tests) {
@@ -80,6 +86,8 @@ jobs:
             if ($LASTEXITCODE -ne 0) { $failed += "nimi version" }
             .\nimi.exe build examples/hello
             if ($LASTEXITCODE -ne 0) { $failed += "nimi build examples/hello" }
+            .\nimi.exe build examples/environment
+            if ($LASTEXITCODE -ne 0) { $failed += "nimi build examples/environment" }
           }
           nim c --passL:-Wl,--subsystem,windows --hints:off -o:NimiEnvironment.exe examples/environment/main.nim
           if ($LASTEXITCODE -ne 0) { $failed += "environment gui" }

@@ -29,6 +29,11 @@ app.whenReady(proc() =
   </script></body></html>"""
   window = newWindow(WindowOptions(title: "Nimi WebView2", width: 640,
                                   height: 480, html: page))
+  let earlyClose = newWindow(WindowOptions(title: "Nimi WebView2 early close",
+    width: 240, height: 120, html: "<p>Closing</p>", session: smEphemeral))
+  earlyClose.hide()
+  earlyClose.close()
+  doAssert earlyClose.isClosed()
   # A watchdog: a WebView2 failure must fail rather than hang CI.
   window.startAnimation(2, proc(time, dt: float64) =
     inc ticks

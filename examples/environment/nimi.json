@@ -1,0 +1,9 @@
+{
+  "name": "Nimi Environment Manager",
+  "slug": "nimi-environment",
+  "identifier": "com.zhimoe.nimi.environment",
+  "version": "0.1.0",
+  "main": "main.nim",
+  "out": "dist",
+  "icon": "resources/icon.png"
+}

@@ -1,5 +1,6 @@
-import std/unittest
-import nimi/platform/windows/input
+import std/[strutils, unittest]
+import nimi/platform/contract
+import nimi/platform/windows/[input, clipboardhtml]
 import nimi/ui
 
 suite "Windows input decoding":
@@ -89,3 +90,25 @@ suite "Desktop text input boundaries":
     check value == "日本語"
     t.engine.unmarkText()
     check value == "日本語"
+
+suite "Windows HTML clipboard format":
+  test "fragment offsets count UTF-8 bytes and preserve surrounding markup":
+    let html = "<b>中文😀</b>\r\n<p>next</p>"
+    let payload = encodeClipboardHTML(html)
+    let lines = payload.splitLines
+    let startHTML = parseInt(lines[1].split(':')[1])
+    let startFragment = parseInt(lines[3].split(':')[1])
+    let endFragment = parseInt(lines[4].split(':')[1])
+    check payload[startHTML..^1].startsWith("<html><body>")
+    check payload[startFragment..<endFragment] == html
+    check decodeClipboardHTML(payload) == html
+    check decodeClipboardHTML(encodeClipboardHTML("")) == ""
+
+  test "malformed, out-of-bounds and non-UTF-8 fragments fail":
+    let payload = encodeClipboardHTML("<b>中</b>")
+    let offset = payload.splitLines[4]
+    for ending in ["0000000001", "99999999999999999999999", "+abc", "-1"]:
+      expect ClipboardError:
+        discard decodeClipboardHTML(payload.replace(offset, "EndFragment:" & ending))
+    expect ClipboardError: discard decodeClipboardHTML(payload.replace("中", "\xff\xff\xff"))
+    expect ClipboardError: discard encodeClipboardHTML("embedded\0null")

@@ -1,7 +1,7 @@
 ## NSWindow + WKWebView + the runtime-defined delegate that receives page
 ## messages and window close events.
 
-import std/[monotimes, strutils, tables]
+import std/[math, monotimes, strutils, tables]
 
 import ../contract
 import ../../core/bridge
@@ -112,14 +112,17 @@ proc windowDidBecomeMain(self: Id, cmd: SEL, notification: Id) {.cdecl.} =
 proc windowDidResignMain(self: Id, cmd: SEL, notification: Id) {.cdecl.} =
   windowDidResignKey(self, cmd, notification)
 
-proc appKitOrigin(win: Id, x, y: int): NSPoint =
-  ## Nimi window coordinates are top-left relative to the primary display;
-  ## AppKit window origins are bottom-left in screen coordinates.
-  let frame = sendRect(win, sel("frame"))
+proc primaryScreenFrame(): tuple[frame: NSRect, available: bool] =
   let list = send0(loadClass("NSScreen"), sel("screens"))
   if list != nil and int(sendInt(list, sel("count"))) > 0:
     let first = sendIdUInt(list, sel("objectAtIndex:"), NSUInteger(0))
-    let primary = sendRect(first, sel("frame"))
+    return (sendRect(first, sel("frame")), true)
+
+proc appKitOrigin(win: Id, x, y: int): NSPoint =
+  ## Nimi window coordinates are top-left relative to the primary display.
+  let (primary, available) = primaryScreenFrame()
+  if available:
+    let frame = sendRect(win, sel("frame"))
     return NSPoint(
       x: primary.x + CGFloat(x),
       y: primary.y + primary.h - CGFloat(y) - frame.h)
@@ -644,11 +647,32 @@ proc createWindow*(state: DarwinState, opts: PlatformWindowOptions,
               NSWindowStyleMaskFullScreen) != 0
   result.isFocused = proc(): bool =
     result = sendBool(win, sel("isKeyWindow"))
+  result.isVisible = proc(): bool =
+    sendBool(win, sel("isVisible")) and not sendBool(win, sel("isMiniaturized"))
+  result.isMinimized = proc(): bool =
+    sendBool(win, sel("isMiniaturized"))
+  result.isMaximized = proc(): bool =
+    (sendUInt(win, sel("styleMask")) and NSWindowStyleMaskFullScreen) == 0 and
+      sendBool(win, sel("isZoomed"))
   result.setSize = proc(width, height: int) =
     sendVoidSize(win, sel("setContentSize:"),
                  NSSize(w: CGFloat(width), h: CGFloat(height)))
   result.setPosition = proc(x, y: int) =
     sendVoidPoint(win, sel("setFrameOrigin:"), appKitOrigin(win, x, y))
+  result.getSize = proc(width, height: var int) =
+    let frame = sendRect(win, sel("frame"))
+    let content = sendRectRect(win, sel("contentRectForFrameRect:"), frame)
+    width = int(round(content.w))
+    height = int(round(content.h))
+  result.getPosition = proc(x, y: var int) =
+    let frame = sendRect(win, sel("frame"))
+    let (primary, available) = primaryScreenFrame()
+    if available:
+      x = int(round(frame.x - primary.x))
+      y = int(round(primary.y + primary.h - frame.y - frame.h))
+    else:
+      x = int(round(frame.x))
+      y = int(round(frame.y))
   result.setResizable = proc(resizable: bool) =
     var mask = sendUInt(win, sel("styleMask"))
     if resizable:

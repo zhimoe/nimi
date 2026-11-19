@@ -64,7 +64,7 @@ proc parseShortcut*(text: string): MenuShortcut =
         if result.key == 0: raise newException(UnsupportedBackendError, "Unsupported menu key: " & part)
   if not found: raise newException(BackendError, "Shortcut has no key: " & text)
 
-proc planMenu*(menu: PlatformMenu): MenuPlan =
+proc planMenu*(menu: PlatformMenu, accelerators = true): MenuPlan =
   var commands: seq[MenuCommand]
   var shortcuts: seq[MenuShortcut]
   var used: HashSet[uint32]
@@ -84,7 +84,7 @@ proc planMenu*(menu: PlatformMenu): MenuPlan =
         if item.role.len == 0 and item.id == 0: node.enabled = false
         commands.add MenuCommand(nativeId: node.command, callbackId: item.id,
           role: item.role, enabled: node.enabled)
-        if item.accelerator.len > 0:
+        if accelerators and item.accelerator.len > 0:
           var shortcut = parseShortcut(item.accelerator)
           shortcut.command = node.command
           # Win32 uses tab to separate a menu caption from its shortcut display.

@@ -50,6 +50,7 @@ type
     mouseUp*: proc(x, y: float32) {.closure.}
     mouseMoved*: proc(x, y: float32) {.closure.}
     scroll*: proc(x, y, dy: float32) {.closure.}
+    scrollHorizontal*: proc(x, y, dx: float32): bool {.closure.}
     keyDown*: proc(key: string, modifiers: uint32) {.closure.}
     copy*: proc() {.closure.}
     cut*: proc() {.closure.}
@@ -181,9 +182,15 @@ type
     toggleFullScreen*: proc() {.closure.}
     isFullScreen*: proc(): bool {.closure.}
     isFocused*: proc(): bool {.closure.}
+    isVisible*: proc(): bool {.closure.}
+    isMinimized*: proc(): bool {.closure.}
+    isMaximized*: proc(): bool {.closure.}
     # setSize uses logical client pixels. Windows setPosition uses physical desktop coordinates.
     setSize*: proc(width, height: int) {.closure.}
     setPosition*: proc(x, y: int) {.closure.}
+    getSize*: proc(width, height: var int) {.closure.}
+    getPosition*: proc(x, y: var int) {.closure.}
+    setAppearance*: proc(dark: bool) {.closure.}
     setResizable*: proc(resizable: bool) {.closure.}
     setAlwaysOnTop*: proc(always: bool) {.closure.}
     loadHTML*: proc(html: string, baseURL: string) {.closure.}

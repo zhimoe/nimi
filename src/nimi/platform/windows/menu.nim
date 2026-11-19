@@ -8,7 +8,7 @@ proc testMenuKey*(window: pointer, key, modifiers: cuint) {.cdecl, importc: "nim
 proc create(popup: cint): pointer {.cdecl, importc: "nimi_menu_create", header: header.}
 proc append(menu: pointer, label: WideCString, command: cuint, child: pointer,
   separator, enabled, checked: cint): cint {.cdecl, importc: "nimi_menu_append", header: header.}
-proc freeMenu(menu: pointer) {.cdecl, importc: "nimi_menu_free", header: header.}
+proc freeMenu*(menu: pointer) {.cdecl, importc: "nimi_menu_free", header: header.}
 proc createAccel(keys, commands: ptr uint16, flags: ptr uint8, count: cint): pointer {.cdecl, importc: "nimi_accel_create", header: header.}
 proc freeAccel(accel: pointer) {.cdecl, importc: "nimi_accel_free", header: header.}
 proc install(window, menu, accel: pointer): cint {.cdecl, importc: "nimi_menu_install", header: header.}
@@ -27,6 +27,9 @@ proc build(nodes: seq[MenuNode], popup: bool): pointer =
   except:
     freeMenu(result)
     raise
+
+proc buildPopup*(plan: MenuPlan): pointer =
+  build(plan.nodes, true)
 
 proc installMenu*(window: pointer, plan: MenuPlan) =
   var menu, accel: pointer

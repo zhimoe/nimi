@@ -2,6 +2,7 @@
 #include <windows.h>
 #include <windowsx.h>
 #include <imm.h>
+#include <shellapi.h>
 #include <stdlib.h>
 #include <string.h>
 #include "host.h"
@@ -94,6 +95,7 @@ static LRESULT CALLBACK nimi_proc(HWND window, UINT message, WPARAM wp, LPARAM l
     if (window == dispatch_window) {
         if (message == NIMI_DISPATCH) { nimi_event(NULL, NIMI_DISPATCH, 0, 0); return 0; }
         if (message == WM_HOTKEY) { nimi_event(NULL, NIMI_HOTKEY, wp, lp); return 0; }
+        if (message == NIMI_WATCH_READY) { nimi_event(NULL, message, wp, 0); return 0; }
     } else if (nimi_event) {
         switch (message) {
         case WM_NCDESTROY: {
@@ -135,7 +137,7 @@ static LRESULT CALLBACK nimi_proc(HWND window, UINT message, WPARAM wp, LPARAM l
         case WM_LBUTTONUP:
             nimi_event(window,message,wp,lp);
             if(GetCapture()==window) ReleaseCapture(); return 0;
-        case WM_MOUSEWHEEL: {
+        case WM_MOUSEWHEEL: case WM_MOUSEHWHEEL: {
             POINT p={GET_X_LPARAM(lp),GET_Y_LPARAM(lp)}; ScreenToClient(window,&p);
             nimi_event(window,message,wp,MAKELPARAM(p.x,p.y)); return 0;
         }
@@ -165,6 +167,8 @@ static LRESULT CALLBACK nimi_proc(HWND window, UINT message, WPARAM wp, LPARAM l
             nimi_menu_detach(window);
             nimi_event(window,message,wp,lp); break;
         case WM_SETFOCUS: case WM_KILLFOCUS:
+            nimi_event(window, message, wp, lp); break;
+        case WM_SHOWWINDOW:
             nimi_event(window, message, wp, lp); break;
         case WM_SETTINGCHANGE: case WM_DISPLAYCHANGE: case WM_THEMECHANGED:
             nimi_event(window, message, wp, lp); break;
@@ -218,6 +222,7 @@ void nimi_host_step(void) {
 void nimi_host_quit(void) { PostQuitMessage(0); }
 void nimi_host_signal(void) { PostMessageW(dispatch_window, NIMI_DISPATCH, 0, 0); }
 int nimi_host_main_thread(void) { return GetCurrentThreadId() == main_thread; }
+void *nimi_host_dispatch_window(void) { return dispatch_window; }
 void *nimi_host_window(const wchar_t *title, int width, int height, int resizable) {
     DWORD style = WS_OVERLAPPEDWINDOW;
     if (!resizable) style &= ~(WS_THICKFRAME | WS_MAXIMIZEBOX);
@@ -238,6 +243,20 @@ void nimi_host_size(void *w, int width, int height) {
     SetWindowPos(w, NULL, 0,0,r.right-r.left,r.bottom-r.top,SWP_NOMOVE|SWP_NOZORDER);
 }
 void nimi_host_position(void *w, int x, int y) { SetWindowPos(w,NULL,x,y,0,0,SWP_NOSIZE|SWP_NOZORDER); }
+int nimi_host_fit_work_area(void *window) {
+    RECT rect;
+    MONITORINFO monitor = {sizeof(monitor)};
+    if (!GetWindowRect(window, &rect) ||
+        !GetMonitorInfoW(MonitorFromRect(&rect, MONITOR_DEFAULTTONEAREST), &monitor)) return 0;
+    RECT work = monitor.rcWork;
+    int width = min(rect.right - rect.left, work.right - work.left);
+    int height = min(rect.bottom - rect.top, work.bottom - work.top);
+    int x = max(work.left, min(rect.left, work.right - width));
+    int y = max(work.top, min(rect.top, work.bottom - height));
+    if (x == rect.left && y == rect.top &&
+        width == rect.right - rect.left && height == rect.bottom - rect.top) return 1;
+    return SetWindowPos(window, NULL, x, y, width, height, SWP_NOZORDER | SWP_NOACTIVATE);
+}
 void nimi_host_center(void *w) {
     MONITORINFO m = {sizeof(m)}; RECT r;
     GetMonitorInfoW(MonitorFromWindow(w, MONITOR_DEFAULTTONEAREST), &m);
@@ -247,6 +266,9 @@ void nimi_host_center(void *w) {
 }
 void nimi_host_topmost(void *w, int on) { SetWindowPos(w,on?HWND_TOPMOST:HWND_NOTOPMOST,0,0,0,0,SWP_NOMOVE|SWP_NOSIZE); }
 int nimi_host_focused(void *w) { return GetForegroundWindow() == w; }
+int nimi_host_visible(void *w) { return IsWindowVisible(w) && !IsIconic(w); }
+int nimi_host_minimized(void *w) { return IsIconic(w); }
+int nimi_host_maximized(void *w) { return IsZoomed(w) && !nimi_host_fullscreen(w,0); }
 void nimi_host_focus(void *w) { ShowWindow(w, SW_SHOW); SetForegroundWindow(w); SetFocus(w); }
 
 float nimi_host_scale(void *w) { return (float)window_dpi(w)/96.0f; }
@@ -289,19 +311,53 @@ int nimi_host_clipboard_read(wchar_t **copy) {
     CloseClipboard(); return status;
 }
 void nimi_host_free(void *memory) { free(memory); }
-int nimi_host_clipboard_write(const wchar_t *text) {
-    if (!dispatch_window || !nimi_host_main_thread()) return 0;
-    SIZE_T bytes=(wcslen(text)+1)*sizeof(wchar_t);
+static int clipboard_write(UINT format, const void *text, SIZE_T bytes) {
+    if (!format || !dispatch_window || !nimi_host_main_thread()) return 0;
     HGLOBAL memory=GlobalAlloc(GMEM_MOVEABLE,bytes);
     if(!memory) return 0;
     void *data=GlobalLock(memory);
     if(!data) { GlobalFree(memory); return 0; }
     memcpy(data,text,bytes); GlobalUnlock(memory);
     if(!OpenClipboard(dispatch_window)) { GlobalFree(memory); return 0; }
-    int success=EmptyClipboard() && SetClipboardData(CF_UNICODETEXT,memory)!=NULL;
+    int success=EmptyClipboard() && SetClipboardData(format,memory)!=NULL;
     CloseClipboard();
     if(!success) GlobalFree(memory);
     return success;
+}
+int nimi_host_clipboard_write(const wchar_t *text) {
+    return clipboard_write(CF_UNICODETEXT, text, (wcslen(text)+1)*sizeof(wchar_t));
+}
+int nimi_host_clipboard_read_html(char **copy, size_t *length) {
+    *copy = NULL;
+    *length = 0;
+    UINT format = RegisterClipboardFormatW(L"HTML Format");
+    if (!format || !dispatch_window || !nimi_host_main_thread() ||
+        !OpenClipboard(dispatch_window)) return -1;
+    int status = 0;
+    if (IsClipboardFormatAvailable(format)) {
+        status = -1;
+        HANDLE memory = GetClipboardData(format);
+        if (memory) {
+            const char *data = GlobalLock(memory);
+            if (data) {
+                SIZE_T size = GlobalSize(memory);
+                if (size && size <= PTRDIFF_MAX) {
+                    const char *end = memchr(data, 0, size);
+                    *length = end ? (size_t)(end - data) : size;
+                    if (*length && (*copy = malloc(*length))) {
+                        memcpy(*copy, data, *length);
+                        status = 1;
+                    }
+                }
+                GlobalUnlock(memory);
+            }
+        }
+    }
+    CloseClipboard();
+    return status;
+}
+int nimi_host_clipboard_write_html(const char *text, size_t length) {
+    return clipboard_write(RegisterClipboardFormatW(L"HTML Format"), text, length + 1);
 }
 int nimi_host_clipboard_clear(void) {
     if (!dispatch_window || !nimi_host_main_thread() || !OpenClipboard(dispatch_window)) return 0;
@@ -421,6 +477,95 @@ int nimi_host_cursor(float *x,float *y) {
     } else {
         *x=(float)p.x; *y=(float)p.y;
     }
+    return 1;
+}
+
+
+typedef HRESULT (WINAPI *NimiDwmSet)(HWND, DWORD, LPCVOID, DWORD);
+typedef HRESULT (WINAPI *NimiDwmGet)(HWND, DWORD, LPVOID, DWORD);
+static HMODULE dwm_module;
+static NimiDwmSet dwm_set;
+static NimiDwmGet dwm_get;
+static void load_dwm(void) {
+    if (dwm_module) return;
+    dwm_module=LoadLibraryW(L"dwmapi.dll");
+    if (dwm_module) {
+        dwm_set=(NimiDwmSet)GetProcAddress(dwm_module,"DwmSetWindowAttribute");
+        dwm_get=(NimiDwmGet)GetProcAddress(dwm_module,"DwmGetWindowAttribute");
+    }
+}
+int nimi_host_set_titlebar_dark(void *window, int dark) {
+    load_dwm();
+    if (!dwm_set || !window) return 0;
+    BOOL value=dark?TRUE:FALSE;
+    HRESULT hr=dwm_set((HWND)window,20,&value,sizeof(value));
+    if (FAILED(hr)) hr=dwm_set((HWND)window,19,&value,sizeof(value));
+    return SUCCEEDED(hr)?1:0;
+}
+int nimi_host_titlebar_dark(void *window) {
+    load_dwm();
+    if (!dwm_get || !window) return 0;
+    BOOL value=FALSE;
+    HRESULT hr=dwm_get((HWND)window,20,&value,sizeof(value));
+    if (FAILED(hr)) hr=dwm_get((HWND)window,19,&value,sizeof(value));
+    return SUCCEEDED(hr) && value ? 1 : 0;
+}
+double nimi_host_text_scale(void) {
+    HKEY key; DWORD value=100, size=sizeof(value), kind=0;
+    if (RegOpenKeyExW(HKEY_CURRENT_USER,
+        L"Software\\Microsoft\\Accessibility",0,KEY_READ,&key)==ERROR_SUCCESS) {
+        if (RegQueryValueExW(key,L"TextScaleFactor",NULL,&kind,
+            (LPBYTE)&value,&size)!=ERROR_SUCCESS || kind!=REG_DWORD) value=100;
+        RegCloseKey(key);
+    }
+    if (value<100) value=100;
+    if (value>500) value=500;
+    return (double)value/100.0;
+}
+int nimi_host_high_contrast(void) {
+    HIGHCONTRASTW hc;
+    memset(&hc,0,sizeof(hc));
+    hc.cbSize=sizeof(hc);
+    if (SystemParametersInfoW(SPI_GETHIGHCONTRAST,sizeof(hc),&hc,0))
+        return (hc.dwFlags & HCF_HIGHCONTRASTON) ? 1 : 0;
+    return 0;
+}
+int nimi_host_is_elevated(void) {
+    BOOL member=FALSE;
+    PSID admins=NULL;
+    SID_IDENTIFIER_AUTHORITY nt=SECURITY_NT_AUTHORITY;
+    if (AllocateAndInitializeSid(&nt,2,SECURITY_BUILTIN_DOMAIN_RID,
+        DOMAIN_ALIAS_RID_ADMINS,0,0,0,0,0,0,&admins)) {
+        CheckTokenMembership(NULL,admins,&member);
+        FreeSid(admins);
+    }
+    return member?1:0;
+}
+int nimi_host_relaunch_elevated(const wchar_t *args) {
+    wchar_t exe[MAX_PATH];
+    DWORD len=GetModuleFileNameW(NULL,exe,MAX_PATH);
+    if (!len || len>=MAX_PATH) return (int)ERROR_FILE_NOT_FOUND;
+    SHELLEXECUTEINFOW sei;
+    memset(&sei,0,sizeof(sei));
+    sei.cbSize=sizeof(sei);
+    sei.fMask=SEE_MASK_NOCLOSEPROCESS;
+    sei.lpVerb=L"runas";
+    sei.lpFile=exe;
+    sei.lpParameters=args;
+    sei.nShow=SW_SHOWNORMAL;
+    if (ShellExecuteExW(&sei)) {
+        if (sei.hProcess) CloseHandle(sei.hProcess);
+        return 0;
+    }
+    return (int)GetLastError();
+}
+int nimi_host_rect(void *window, int *x, int *y, int *w, int *h) {
+    RECT r;
+    if (!window || !GetWindowRect((HWND)window,&r)) return 0;
+    if (x) *x=r.left;
+    if (y) *y=r.top;
+    if (w) *w=r.right-r.left;
+    if (h) *h=r.bottom-r.top;
     return 1;
 }
 

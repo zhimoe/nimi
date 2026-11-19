@@ -1,4 +1,4 @@
-import std/[tables, unicode, unittest]
+import std/[strutils, tables, unicode, unittest]
 
 import nimi/ui
 import nimi/core/[content, window]
@@ -259,9 +259,9 @@ suite "ui":
     t.clickAt(20, 20)
     t.typeText("hello")
     check value == "hello"
-    t.key("z", KeyCommand)
+    t.key("z", KeyShortcut)
     check value == "hell"
-    t.key("z", KeyCommand or KeyShift)
+    t.key("z", KeyShortcut or KeyShift)
     check value == "hello"
 
   test "selection and clipboard":
@@ -280,10 +280,10 @@ suite "ui":
     t.key("end")
     t.key("left", KeyShift)
     t.key("left", KeyShift)
-    t.key("c", KeyCommand)
+    t.key("c", KeyShortcut)
     check clip == "ld"
     t.key("end")
-    t.key("v", KeyCommand)
+    t.key("v", KeyShortcut)
     check value == "hello worldld"
     t.key("home")
     t.key("right", KeyShift)
@@ -291,10 +291,10 @@ suite "ui":
     t.key("right", KeyShift)
     t.key("right", KeyShift)
     t.key("right", KeyShift)
-    t.key("x", KeyCommand)
+    t.key("x", KeyShortcut)
     check clip == "hello"
     check value == " worldld"
-    t.key("v", KeyCommand)
+    t.key("v", KeyShortcut)
     check value == "hello worldld"
 
   test "text area multiline typing":
@@ -517,3 +517,99 @@ suite "input cancellation":
     check t.engine.markedText == ""
     check t.engine.selectingInput == ""
     check t.engine.focusedKey == "input"
+
+suite "line-numbered no-wrap textarea":
+  test "no-wrap lines, gutter and horizontal caret scrolling":
+    var value = "short\n" & repeat("x", 100) & "\nend"
+    let t = newTester(proc(c: Context) =
+      column(c).fill().padding(10, 10).children(c, proc() =
+        textArea(c, value, (proc(v: string) = value = v), key = "area",
+                 height = 80, family = "mono").width(150).
+          noWrap().lineNumbers(rgb(0.4, 0.4, 0.45))
+      ), 220, 140)
+    discard t.render()
+    var hit: Hit
+    for h in t.engine.hits:
+      if h.key == "area": hit = h
+    check hit.input
+    check hit.lines.len == 3
+    check hit.lines[1].len == 100
+    check hit.padX > 8
+    check t.hasText(" 1")
+    check t.hasText(" 2")
+    check t.hasText(" 3")
+    t.clickAt(hit.rect.x + hit.padX + 5,
+              hit.rect.y + hit.padY + hit.lineHeight + 5)
+    t.key("end")
+    for h in t.engine.hits:
+      if h.key == "area": hit = h
+    check hit.scrollX > 0
+    let caret = t.engine.caretRect()
+    check caret.x >= hit.rect.x + hit.padX - hit.scrollX
+    check caret.x <= hit.rect.x + hit.rect.w
+    t.typeText("Z")
+    check value.split('\n')[1].endsWith("xZ")
+
+  test "horizontal thumb scrolls the whole document without moving the caret":
+    var value = "short\n" & repeat("路径X", 85) & "\nlast"
+    let t = newTester(proc(c: Context) =
+      textArea(c, value, proc(s: string) = value = s, key = "area", height = 65,
+               family = "mono").width(190).noWrap().lineNumbers(rgb(0.3, 0.3, 0.3)),
+      240, 100)
+    proc bar(): Rect =
+      for hit in t.engine.hits:
+        if hit.key == "__textscrollx:area": return hit.rect
+    proc gutterX(): float32 =
+      for op in t.scene.ops:
+        if op.kind == opText and op.text == " 1": return op.x
+      -1
+    discard t.render()
+    t.clickAt(36, 11)
+    let caret = t.engine.caretPos
+    let gutter = gutterX()
+    let track = bar()
+    require track.w > 20 and gutter >= 0
+    let y = track.y + 3
+    t.engine.handleMouseDown(track.x + 2, y)
+    check t.engine.inputOffsets.getOrDefault("area") == 0
+    t.engine.handleMouseMove(track.x + track.w + 20, y)
+    discard t.render()
+    let endOffset = t.engine.inputOffsets.getOrDefault("area")
+    check endOffset > track.w
+    check gutterX() == gutter
+    check t.engine.caretPos == caret
+    check t.engine.focusedKey == "area"
+    t.engine.cancelInput(false)
+    t.engine.handleMouseMove(track.x, y)
+    check t.engine.inputOffsets.getOrDefault("area") == endOffset
+    t.engine.handleHorizontalScroll(track.x + 10, 20, -50)
+    discard t.render()
+    check t.engine.inputOffsets.getOrDefault("area") == endOffset - 50
+    t.key("home")
+    check t.engine.inputOffsets.getOrDefault("area") == 0
+    t.engine.handleHorizontalScroll(track.x + 10, 20, 5000)
+    value = "fits"
+    discard t.render()
+    check bar().w == 0
+    check t.engine.inputOffsets.getOrDefault("area") == 0
+
+  test "modal overlays block wheel scrolling in background editors":
+    let value = repeat(repeat("x", 90) & "\n", 30)
+    var modal = false
+    let t = newTester(proc(c: Context) =
+      textArea(c, value, nil, key = "area", height = 80).width(160).noWrap()
+      if modal:
+        overlay(c, "dialog").children(c, proc() = discard),
+      200, 100)
+    discard t.render()
+    t.engine.handleHorizontalScroll(50, 20, 40)
+    t.engine.handleScroll(50, 20, 40)
+    check t.engine.inputOffsets.getOrDefault("area") == 40
+    check t.engine.scrollOffsets.getOrDefault("area") == 40
+    modal = true
+    discard t.render()
+    t.engine.handleHorizontalScroll(50, 20, 40)
+    t.engine.handleScroll(50, 20, 40)
+    t.engine.pageScroll(1)
+    check t.engine.inputOffsets.getOrDefault("area") == 40
+    check t.engine.scrollOffsets.getOrDefault("area") == 40

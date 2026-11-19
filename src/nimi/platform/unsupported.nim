@@ -59,10 +59,22 @@ proc newUnsupportedNativeWindow*(platform: string): NativeWindow =
     unsupported(platform, "NativeWindow.isFullScreen")
   result.isFocused = proc(): bool =
     unsupported(platform, "NativeWindow.isFocused")
+  result.isVisible = proc(): bool =
+    unsupported(platform, "NativeWindow.isVisible")
+  result.isMinimized = proc(): bool =
+    unsupported(platform, "NativeWindow.isMinimized")
+  result.isMaximized = proc(): bool =
+    unsupported(platform, "NativeWindow.isMaximized")
   result.setSize = proc(width, height: int) =
     unsupported(platform, "NativeWindow.setSize")
   result.setPosition = proc(x, y: int) =
     unsupported(platform, "NativeWindow.setPosition")
+  result.getSize = proc(width, height: var int) =
+    unsupported(platform, "NativeWindow.getSize")
+  result.getPosition = proc(x, y: var int) =
+    unsupported(platform, "NativeWindow.getPosition")
+  result.setAppearance = proc(dark: bool) =
+    discard
   result.setResizable = proc(resizable: bool) =
     unsupported(platform, "NativeWindow.setResizable")
   result.setAlwaysOnTop = proc(always: bool) =

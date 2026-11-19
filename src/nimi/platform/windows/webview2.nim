@@ -3,9 +3,9 @@
 when not defined(windows):
   {.error: "WebView2 requires Windows".}
 
-import std/[os, strutils, tables, times, widestrs]
+import std/[os, strutils, tables, tempfiles, widestrs]
 
-import ../../core/bridge
+import ../../core/[bridge, loop]
 import ../contract
 
 const
@@ -24,14 +24,23 @@ type
     error: proc(context: pointer, text: cstring) {.cdecl.}
     finalized: proc(context: pointer) {.cdecl.}
     context: pointer
+  NativeCookie {.importc: "NimiCookie", header: header, bycopy.} = object
+    name, value, domain, path: WideCString
+    secure, http_only: cint
+  CookiesDone = proc(context: pointer, id: uint, list: ptr NativeCookie,
+                     count: cuint, status: int32) {.cdecl.}
+  CookieCallback = proc(cookies: seq[PlatformCookie])
+  ReadyCallback = proc(view: WebView2, ready: bool)
 
   WebView2* = ref object
     owner: pointer
     userId: uint64
     handler: WindowHandler
-    ready, closed, failed: bool
     error: string
     userDataDir: string
+    readyCallbacks: seq[ReadyCallback]
+    cookieCallbacks: Table[uint, CookieCallback]
+    nextCookieId: uint
 
 var webviews: Table[pointer, WebView2]
 
@@ -53,6 +62,10 @@ proc cLoadURL(view: pointer, url: WideCString)
   {.cdecl, importc: "nimi_webview2_load_url", header: header.}
 proc cEval(view: pointer, js: WideCString)
   {.cdecl, importc: "nimi_webview2_eval", header: header.}
+proc cReadCookies(view: pointer, id: uint, done: CookiesDone): int32
+  {.cdecl, importc: "nimi_webview2_read_cookies", header: header.}
+proc cClearCookies(view: pointer): int32
+  {.cdecl, importc: "nimi_webview2_clear_cookies", header: header.}
 proc cClose(view: pointer)
   {.cdecl, importc: "nimi_webview2_close", header: header.}
 
@@ -79,10 +92,16 @@ proc bridgeScript*(secret, token: string): string =
     .replace("__NIMI_SECRET__", secret)
     .replace("__NIMI_TOKEN__", token)
 
+proc completeReadiness(view: WebView2, ok: bool) =
+  let pending = move(view.readyCallbacks)
+  if pending.len > 0:
+    discard postMain(proc() =
+      if view.owner != nil:
+        for callback in pending: callback(view, ok))
+
 proc onReady(context: pointer) {.cdecl.} =
-  let webview = cast[WebView2](context)
-  if webview != nil:
-    webview.ready = true
+  let view = webviews.getOrDefault(context)
+  if view != nil: completeReadiness(view, true)
 
 proc onMessage(context: pointer, text: cstring) {.cdecl.} =
   let webview = cast[WebView2](context)
@@ -99,12 +118,13 @@ proc onError(context: pointer, text: cstring) {.cdecl.} =
   let webview = cast[WebView2](context)
   if webview == nil:
     return
-  webview.failed = true
   webview.error = if text == nil: "WebView2 error" else: $text
-  stderr.writeLine("webview2: " & webview.error)
+  try: stderr.writeLine("webview2: " & webview.error)
+  except IOError: discard
+  completeReadiness(webview, false)
 
 proc onFinalized(context: pointer) {.cdecl.} =
-  let webview = cast[WebView2](context)
+  let webview = webviews.getOrDefault(context)
   if webview == nil:
     return
   if webview.userDataDir.len > 0:
@@ -112,10 +132,8 @@ proc onFinalized(context: pointer) {.cdecl.} =
       removeDir(webview.userDataDir)
     except CatchableError:
       discard
-  if webview.owner != nil:
-    webviews.del(webview.owner)
-
-var ephemeralCounter = 0
+  webview.owner = nil
+  webviews.del(context)
 
 proc newWebView2*(parent: pointer, userId: uint64, handler: WindowHandler,
                   scheme, fileRoot, secret, token: string,
@@ -124,30 +142,24 @@ proc newWebView2*(parent: pointer, userId: uint64, handler: WindowHandler,
     raise newException(BackendError, "WebView2 requires a parent window")
   result = WebView2(userId: userId, handler: handler)
   if ephemeral:
-    inc ephemeralCounter
-    result.userDataDir = getTempDir() / ("nimi-webview2-" &
-      $getTime().toUnix & "-" & $ephemeralCounter)
-    createDir(result.userDataDir)
+    result.userDataDir = createTempDir("nimi-webview2-", "")
+  let context = cast[pointer](result)
   let callbacks = Callbacks(
     ready: onReady,
     message: onMessage,
     error: onError,
     finalized: onFinalized,
-    context: cast[pointer](result))
+    context: context)
   var error = newString(512)
+  webviews[context] = result
   result.owner = cCreate(parent, newWideCString(result.userDataDir),
     newWideCString(loaderHint), newWideCString(scheme),
     newWideCString(fileRoot), newWideCString(bridgeScript(secret, token)),
     callbacks, cast[cstring](addr error[0]), cint(error.len))
   if result.owner == nil:
-    if result.userDataDir.len > 0:
-      try:
-        removeDir(result.userDataDir)
-      except CatchableError:
-        discard
+    onFinalized(context)
     raise newException(BackendError,
       "WebView2: " & $cast[cstring](addr error[0]))
-  webviews[result.owner] = result
 
 proc isReady*(webview: WebView2): bool =
   webview != nil and webview.owner != nil and cReady(webview.owner) != 0
@@ -179,9 +191,63 @@ proc eval*(webview: WebView2, js: string) =
   if webview != nil and webview.owner != nil:
     cEval(webview.owner, newWideCString(js))
 
+proc whenReady(view: WebView2, callback: ReadyCallback) =
+  let ready = view.isReady()
+  if ready or view.lastError().len > 0:
+    discard postMain(proc() =
+      if view.owner != nil: callback(view, ready))
+  else:
+    view.readyCallbacks.add callback
+
+proc cookieError(status: int32): string =
+  "WebView2 cookie operation failed: HRESULT 0x" & toHex(cast[uint32](status), 8)
+
+proc cookieString(value: WideCString): string =
+  if value == nil: "" else: $value
+
+proc onCookies(context: pointer, id: uint, items: ptr NativeCookie, count: cuint,
+               status: int32) {.cdecl.} =
+  let view = webviews.getOrDefault(context)
+  if view == nil: return
+  let callback = view.cookieCallbacks.getOrDefault(id)
+  if callback == nil: return
+  view.cookieCallbacks.del(id)
+  var cookies: seq[PlatformCookie]
+  let list = cast[ptr UncheckedArray[NativeCookie]](items)
+  for i in 0..<int(count):
+    let item = list[i]
+    cookies.add PlatformCookie(name: cookieString(item.name), value: cookieString(item.value),
+      domain: cookieString(item.domain), path: cookieString(item.path), secure: item.secure != 0,
+      httpOnly: item.http_only != 0)
+  discard postMain(proc() =
+    if status < 0: stderr.writeLine(cookieError(status))
+    callback(cookies))
+
+proc getCookies*(view: WebView2, callback: CookieCallback) =
+  if callback == nil: return
+  view.whenReady(proc(store: WebView2, ready: bool) =
+    if not ready:
+      callback(@[])
+      return
+    inc store.nextCookieId
+    let id = store.nextCookieId
+    store.cookieCallbacks[id] = callback
+    let status = cReadCookies(store.owner, id, onCookies)
+    if status < 0:
+      onCookies(cast[pointer](store), id, nil, 0, status))
+
+proc clearCookies*(view: WebView2, callback: proc()) =
+  view.whenReady(proc(store: WebView2, ready: bool) =
+    if ready:
+      let status = cClearCookies(store.owner)
+      if status < 0: stderr.writeLine(cookieError(status))
+    if callback != nil: callback())
+
 proc close*(webview: WebView2) =
-  if webview == nil or webview.closed:
+  if webview == nil or webview.owner == nil:
     return
-  webview.closed = true
-  if webview.owner != nil:
-    cClose(webview.owner)
+  let owner = webview.owner
+  webview.owner = nil
+  webview.readyCallbacks.setLen(0)
+  webview.cookieCallbacks.clear()
+  cClose(owner)

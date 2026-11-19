@@ -9,8 +9,39 @@ proc formatAvailable(format: cuint): cint {.stdcall, importc: "IsClipboardFormat
 proc lockClipboard(): cint {.cdecl, importc: "test_lock_clipboard".}
 proc unlockClipboard() {.cdecl, importc: "test_unlock_clipboard".}
 proc badClipboard(window: pointer): cint {.cdecl, importc: "test_bad_clipboard".}
+proc startDialog(button: WideCString): cint {.cdecl, importc: "test_start_dialog".}
+proc stopDialog(): cint {.cdecl, importc: "test_stop_dialog".}
+proc scrollAtClientOrigin(window: pointer, message: cuint, delta: cint, modifiers: cuint): cint
+  {.cdecl, importc: "test_scroll_at_client_origin".}
 
 suite "Win32 native input boundaries":
+  test "wheel and tilt route to the correct scroll axis in client coordinates":
+    let backend = newWindowsBackend()
+    backend.init(AppHandler(), AppOptions())
+    defer: backend.shutdown()
+    var vertical, horizontal: seq[float32]
+    var allowHorizontal = true
+    let title = newWideCString("Nimi wheel test")
+    let window = backend.newWindow(PlatformWindowOptions(title: $title, width: 240, height: 160),
+      WindowHandler(windowId: 74, surface: SurfaceHandler(
+        scroll: (proc(x, y, delta: float32) =
+          check x == 0 and y == 0
+          vertical.add delta),
+        scrollHorizontal: (proc(x, y, delta: float32): bool =
+          check x == 0 and y == 0
+          if allowHorizontal: horizontal.add delta
+          allowHorizontal))))
+    defer: window.destroy()
+    let handle = findWindow(nil, title)
+    require handle != nil
+    check scrollAtClientOrigin(handle, 0x020a, -120, 0) != 0
+    check scrollAtClientOrigin(handle, 0x020a, 120, 4) != 0 # MK_SHIFT
+    check scrollAtClientOrigin(handle, 0x020e, 60, 0) != 0
+    allowHorizontal = false
+    check scrollAtClientOrigin(handle, 0x020a, -60, 4) != 0
+    check vertical == @[40'f32, 20'f32]
+    check horizontal == @[-40'f32, 20'f32]
+
   test "IME messages suppress duplicate text, cancellation and UTF-16 routing":
     let backend = newWindowsBackend()
     backend.init(AppHandler(), AppOptions())
@@ -94,4 +125,37 @@ suite "Win32 native input boundaries":
     backend.clipboard.writeText("")
     check backend.clipboard.readText() == ""
     check formatAvailable(13) != 0
+    let html = "<strong>中文😀</strong>"
+    backend.clipboard.writeHTML(html)
+    check backend.clipboard.readHTML() == html
+    check backend.clipboard.readText() == ""
+    expect ClipboardError: backend.clipboard.writeHTML("\xff")
+    check backend.clipboard.readHTML() == html
+    check lockClipboard() != 0
+    try:
+      expect ClipboardError: discard backend.clipboard.readHTML()
+      expect ClipboardError: backend.clipboard.writeHTML("blocked")
+    finally: unlockClipboard()
+    backend.clipboard.clear()
+    check backend.clipboard.readHTML() == ""
     window.destroy()
+
+  test "message dialog returns Unicode button index or cancellation":
+    let backend = newWindowsBackend()
+    backend.init(AppHandler(), AppOptions())
+    defer: backend.shutdown()
+    let window = backend.newWindow(PlatformWindowOptions(title: "Nimi dialog owner",
+      width: 200, height: 120), WindowHandler(windowId: 73))
+    defer: window.destroy()
+    let label = newWideCString("放弃修改")
+    let buttons = @["保存", "稍后", "放弃修改"]
+    check startDialog(label) != 0
+    try:
+      check backend.dialogs.messageWith("Nimi custom dialog test", "请选择", buttons) == 2
+    finally:
+      check stopDialog() != 0
+    check startDialog(nil) != 0
+    try:
+      check backend.dialogs.messageWith("Nimi custom dialog test", "请选择", buttons) == -1
+    finally:
+      check stopDialog() != 0

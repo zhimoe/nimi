@@ -15,6 +15,10 @@ type
     data*: EnvironmentValue
   EnvironmentError* = object of CatchableError
   EnvironmentConflictError* = object of EnvironmentError
+  EnvironmentApplyError* = object of EnvironmentError
+    upserts*: int
+    deletions*: int
+    partial*: bool
   EnvironmentStore* = ref object
     read*: proc(scope: EnvironmentScope, name: string): Option[EnvironmentValue]
     write*: proc(scope: EnvironmentScope, name: string, value: EnvironmentValue)
@@ -39,6 +43,53 @@ proc pathValue*(entries: openArray[string]): string =
     if ';' in entry or '\0' in entry:
       raise newException(EnvironmentError, "A PATH entry cannot contain ';' or NUL")
   entries.join(";")
+
+proc findEntry(entries: openArray[EnvironmentEntry], name: string): int =
+  let wanted = name.toLowerAscii()
+  for i, entry in entries:
+    if entry.name.toLowerAscii() == wanted:
+      return i
+  -1
+
+proc applyEnvironmentChanges*(store: EnvironmentStore,
+    scope: EnvironmentScope, before, desired: openArray[EnvironmentEntry]):
+    tuple[notified: bool, upserts: int, deletions: int] =
+  ## Apply only the delta needed to turn `before` into `desired`. Writes are
+  ## not a registry transaction: on failure the completed count is recorded,
+  ## already-written values are broadcast, and EnvironmentApplyError is raised.
+  var upserts: seq[EnvironmentEntry]
+  var deletions: seq[string]
+  for entry in desired:
+    validateEnvironmentName(entry.name)
+    validateEnvironmentValue(entry.data)
+    let idx = findEntry(before, entry.name)
+    if idx < 0 or before[idx] != entry:
+      upserts.add entry
+  for entry in before:
+    if findEntry(desired, entry.name) < 0:
+      deletions.add entry.name
+  var completedUpserts, completedDeletions = 0
+  try:
+    for entry in upserts:
+      store.write(scope, entry.name, entry.data)
+      inc completedUpserts
+    for name in deletions:
+      store.remove(scope, name)
+      inc completedDeletions
+  except CatchableError as e:
+    let partial = completedUpserts > 0 or completedDeletions > 0
+    if partial:
+      discard store.notify()
+    let error = newException(EnvironmentApplyError,
+      "应用环境变量失败：" & e.msg)
+    error.upserts = completedUpserts
+    error.deletions = completedDeletions
+    error.partial = partial
+    raise error
+  if completedUpserts > 0 or completedDeletions > 0:
+    result.notified = store.notify()
+  result.upserts = completedUpserts
+  result.deletions = completedDeletions
 
 proc applyEnvironmentEdit*(store: EnvironmentStore, scope: EnvironmentScope,
     name: string, expected, replacement: Option[EnvironmentValue]): bool =

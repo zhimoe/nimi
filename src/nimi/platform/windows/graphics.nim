@@ -6,14 +6,20 @@ const header = (currentSourcePath.parentDir / "graphics.h").replace('\\', '/')
 type
   NimiPoint* {.importc: "NimiPoint", header: header, bycopy.} = object
     x*, y*: cint
+  NimiFloatPoint* {.importc: "NimiFloatPoint", header: header, bycopy.} = object
+    x*, y*: cfloat
 proc gdiMeasure*(text: WideCString, count: cint, size: cfloat, bold: cint,
+                 family: WideCString,
                  metrics: ptr cfloat) {.cdecl, importc: "nimi_gdi_measure", header: header.}
 proc gdiText*(dc: pointer, text: WideCString, count: cint, x, y, size: cfloat,
-              bold: cint, color: cuint) {.cdecl, importc: "nimi_gdi_text", header: header.}
+              bold: cint, color, alpha: cuint,
+              family: WideCString) {.cdecl, importc: "nimi_gdi_text", header: header.}
 proc gdiRect*(dc: pointer, x, y, w, h, radius: cint, color, alpha: cuint) {.cdecl, importc: "nimi_gdi_rect", header: header.}
 proc gdiPolygon*(dc: pointer, points: ptr NimiPoint, count: cint,
                  color, alpha: cuint) {.cdecl, importc: "nimi_gdi_polygon", header: header.}
 proc gdiClip*(dc: pointer, x, y, w, h: cint) {.cdecl, importc: "nimi_gdi_clip", header: header.}
+proc gdiClipRound*(dc: pointer, x, y, w, h, radius: cint)
+  {.cdecl, importc: "nimi_gdi_clip_round", header: header.}
 proc gdiRestore*(dc: pointer) {.cdecl, importc: "nimi_gdi_restore", header: header.}
 proc gdiImageLoad*(path: WideCString): pointer {.cdecl, importc: "nimi_gdi_image_load", header: header.}
 proc gdiImageFree*(image: pointer) {.cdecl, importc: "nimi_gdi_image_free", header: header.}
@@ -22,6 +28,8 @@ proc gdiImageHeight*(image: pointer): cint {.cdecl, importc: "nimi_gdi_image_hei
 proc gdiImageDraw*(dc, image: pointer, x, y, w, h, sourceX, sourceY,
                    sourceWidth, sourceHeight: cint): cint
   {.cdecl, importc: "nimi_gdi_image_draw", header: header.}
+proc gdiImageQuad*(dc, image: pointer, x, y, w, h: cfloat, quad: ptr NimiFloatPoint)
+  {.cdecl, importc: "nimi_gdi_image_quad", header: header.}
 
 var
   imageCache: Table[string, pointer]
