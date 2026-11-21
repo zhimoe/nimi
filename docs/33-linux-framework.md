@@ -13,7 +13,7 @@ Linux 已经可以作为**可用后端**启动 Nimi 应用：
 - 单实例/深链：首个进程通过 D-Bus 持有 `org.nimi.Instance.<hash>` 并响应 `OpenURL`/`Raise`；后续启动把 URL 转发给首个实例后退出。`.desktop` 在配置了 `urlSchemes` 时使用 `%u`。
 - 输入：GtkIMContext 组合串/提交/光标定位/周围文本；普通键值与鼠标路径不受影响。
 - 音频：GStreamer `playbin` 播放本地文件，支持暂停/进度/跳转/音量/完成回调；无音频设备时可用 `NIMI_AUDIO_SINK=fakesink` 做解码验证。
-- CLI：Linux 主机上 `nimi build` 生成 `dist/linux-<arch>/<slug>`、复制 resources、生成 `.desktop`，并在 `dpkg-deb` 可用时生成 `.deb`（安装到 `/opt/<slug>`，带 `/usr/bin` 链接、desktop 与图标）。
+- CLI：Linux 主机上 `nimi build` 生成 `dist/linux-<arch>/<slug>`、复制 resources、生成 `.desktop`，并在 `dpkg-deb` 可用时生成 `.deb`（安装到 `/opt/<slug>`，带 `/usr/bin` 链接、desktop 与图标）。运行时按 `<exe>.png`、`icon.png`、`resources/icon.png` 顺序加载默认窗口图标。
 - 测试：Ubuntu 24.04 + xvfb + dbus 下 36 个共享/Linux 测试程序，包含 WebKitGTK、MPRIS、D-Bus 深链与 GStreamer 端到端测试；GitHub Actions `linux.yml` 覆盖同一套。
 
 构建机不需要 GTK/WebKit 头文件：所有平台库通过 `dlopen` 在运行时加载。运行时只需安装 GTK3；只有页面窗口需要 WebKitGTK。
@@ -117,7 +117,7 @@ src/nimi/render/cairo.nim  # scene → Cairo：矩形/圆角/裁剪/文本/图�
 
 ### 2.7.1 托盘、全局快捷键与媒体
 
-- 托盘：GtkStatusIcon 使用系统主题的 `application-x-executable` 图标；title 同时作为 title 属性与默认 tooltip 回退，菜单复用窗口菜单的 `MenuAction` 派发与角色。
+- 托盘：GtkStatusIcon 优先加载应用图标（`<exe>.png`/`icon.png`/`resources/icon.png`），找不到时回退系统主题的 `application-x-executable`；title 同时作为 title 属性与默认 tooltip 回退，菜单复用窗口菜单的 `MenuAction` 派发与角色。
   - GtkStatusIcon 是 GTK3 已弃用但仍可用的 API；现代 GNOME/Wayland 需要 AppIndicator/StatusNotifier 才能显示。
 - 全局快捷键：`XGrabKey` 在 root window 注册，同时抓取 CapsLock/NumLock 组合；GDK 原生事件 filter 在按键时回调主线程。注册时临时安装 X 错误处理器，`BadAccess`（组合被占用）返回 false 并撤销部分 grab。
   - 仅 X11/XWayland 可用；Wayland 原生会话返回 false。当前不依赖 XDG portal。

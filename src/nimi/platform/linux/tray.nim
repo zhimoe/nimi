@@ -2,7 +2,7 @@
 ## part of GTK3 and works on X11 panels; AppIndicator/StatusNotifier can be a
 ## later enhancement for GNOME/Wayland.
 
-import std/tables
+import std/[os, tables]
 
 import ../contract
 import ./[ffi, menu, state]
@@ -55,14 +55,29 @@ proc createTray*(opts: PlatformTrayOptions): NativeTray =
   if linuxState == nil or not linuxState.initialized:
     raise newException(BackendError,
       "Tray requires an initialized GTK backend")
-  let icon = gtk_status_icon_new()
+  var icon: pointer
+  var loadedFromFile = false
+  if gtk_status_icon_new_from_file != nil:
+    let directory = getAppDir()
+    let exeName = splitFile(getAppFilename()).name
+    for candidate in [directory / (exeName & ".png"),
+                      directory / "icon.png",
+                      directory / "resources" / "icon.png"]:
+      if fileExists(candidate):
+        icon = gtk_status_icon_new_from_file(candidate.cstring)
+        if icon != nil:
+          loadedFromFile = true
+          break
+  if icon == nil:
+    icon = gtk_status_icon_new()
   if icon == nil:
     raise newException(BackendError, "Cannot create a GTK status icon")
   let tray = TrayState(id: nextTrayId, icon: icon,
                        title: opts.title, tooltip: opts.tooltip)
   inc nextTrayId
   trays[icon] = tray
-  gtk_status_icon_set_from_icon_name(icon, "application-x-executable")
+  if not loadedFromFile:
+    gtk_status_icon_set_from_icon_name(icon, "application-x-executable")
   if opts.title.len > 0 and gtk_status_icon_set_title != nil:
     gtk_status_icon_set_title(icon, opts.title.cstring)
   tray.updateTooltip()

@@ -5,7 +5,7 @@
 when not defined(linux):
   {.error: "The Linux backend requires Linux".}
 
-import std/[tables]
+import std/[os, tables]
 
 import ../contract
 import ../unsupported
@@ -26,6 +26,17 @@ proc wakeLinuxMain*() {.gcsafe.} =
     if g_idle_add != nil:
       discard g_idle_add(dispatchIdle, nil)
 
+proc installAppIcon() =
+  if gtk_window_set_default_icon_from_file == nil:
+    return
+  let directory = getAppDir()
+  let exeName = splitFile(getAppFilename()).name
+  for candidate in [directory / (exeName & ".png"), directory / "icon.png",
+                    directory / "resources" / "icon.png"]:
+    if fileExists(candidate):
+      if gtk_window_set_default_icon_from_file(candidate.cstring, nil) != 0:
+        return
+
 proc initLinuxBackend(state: LinuxState, h: AppHandler, opts: AppOptions) =
   ensureGtk()
   var argc: cint = 0
@@ -34,6 +45,7 @@ proc initLinuxBackend(state: LinuxState, h: AppHandler, opts: AppOptions) =
     raise newException(BackendError,
       "Cannot open a GTK display; install the GTK3 runtime and run inside " &
       "X11 or Wayland (for CI use xvfb-run)")
+  installAppIcon()
   state.handler = h
   state.appName = opts.name
   state.mainThreadId = getThreadId()

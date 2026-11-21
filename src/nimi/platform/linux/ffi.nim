@@ -132,6 +132,8 @@ var
   gtk_get_current_event_time*: proc(): cuint {.cdecl.}
   gtk_window_new*: proc(kind: cint): pointer {.cdecl.}
   gtk_window_set_title*: proc(window: pointer, title: cstring) {.cdecl.}
+  gtk_window_set_default_icon_from_file*: proc(filename: cstring,
+                                                error: ptr pointer): cint {.cdecl.}
   gtk_window_set_default_size*: proc(window: pointer, width, height: cint) {.cdecl.}
   gtk_window_resize*: proc(window: pointer, width, height: cint) {.cdecl.}
   gtk_window_move*: proc(window: pointer, x, y: cint) {.cdecl.}
@@ -191,6 +193,7 @@ var
   gtk_check_menu_item_get_active*: proc(item: pointer): cint {.cdecl.}
   gtk_menu_item_activate*: proc(item: pointer) {.cdecl.}
   gtk_status_icon_new*: proc(): pointer {.cdecl.}
+  gtk_status_icon_new_from_file*: proc(filename: cstring): pointer {.cdecl.}
   gtk_status_icon_set_from_icon_name*: proc(icon: pointer, name: cstring) {.cdecl.}
   gtk_status_icon_set_title*: proc(icon: pointer, title: cstring) {.cdecl.}
   gtk_status_icon_set_tooltip_text*: proc(icon: pointer, text: cstring) {.cdecl.}
@@ -754,6 +757,8 @@ proc ensureGtk*() =
            "gtk_get_current_event_time")
   mustBind(gtk_window_new, gtkLib.handle, "gtk_window_new")
   mustBind(gtk_window_set_title, gtkLib.handle, "gtk_window_set_title")
+  bindOptional(gtk_window_set_default_icon_from_file, gtkLib.handle,
+               "gtk_window_set_default_icon_from_file")
   mustBind(gtk_window_set_default_size, gtkLib.handle, "gtk_window_set_default_size")
   mustBind(gtk_window_resize, gtkLib.handle, "gtk_window_resize")
   mustBind(gtk_window_move, gtkLib.handle, "gtk_window_move")
@@ -811,6 +816,8 @@ proc ensureGtk*() =
   mustBind(gtk_check_menu_item_get_active, gtkLib.handle, "gtk_check_menu_item_get_active")
   mustBind(gtk_menu_item_activate, gtkLib.handle, "gtk_menu_item_activate")
   mustBind(gtk_status_icon_new, gtkLib.handle, "gtk_status_icon_new")
+  bindOptional(gtk_status_icon_new_from_file, gtkLib.handle,
+               "gtk_status_icon_new_from_file")
   mustBind(gtk_status_icon_set_from_icon_name, gtkLib.handle,
            "gtk_status_icon_set_from_icon_name")
   bindOptional(gtk_status_icon_set_title, gtkLib.handle,
