@@ -10,7 +10,7 @@ Nimi 的目标是保留 MyGo 的架构与开发体验——系统 WebView + 类�
 > **M2 核心切片已跑通**(原生 NSView Surface + CoreGraphics/CoreText + 布局/Text/Button + 鼠标/键盘/焦点 + 多行换行 + `Tester`/离屏 PNG + `counter-native`)。
 > **M3 控件/Image/ScrollView/纹理四边形/NSTimer/Metal 效果原型、M4 macOS 桌面 API(菜单/对话框/剪贴板/屏幕/主题/窗口/托盘/通知/全局快捷键)、M5 FileServer/深链/Session/文件监视/Cookie/Document、M6 TextInput/TextArea(内部滚动/滚动条)/选择/剪贴板/Undo/ScrollView/滚动条/IME、M7 `.app`/DMG/签名/CI**已落地;`examples/desktop-native` 是桌面 API 验收,`examples/form-native` 是原生 GUI 验收,`examples/notes` 是 WebView-first 的完整笔记应用,`examples/protocol-native` 是自定义协议验收,`examples/shredder` 是 WebGL 碎纸效果/物理切片验收,`examples/shred-native` 是 CoreGraphics 纹理四边形/原生帧驱动验收,`examples/shred-metal` 是 Metal mask + LayerEffect 验收。其余差距见 [M3–M7 状态](docs/11-m3-m7-status.md)。
 > Windows/Linux 在 M8/M9。Windows 已接入原生 GUI、WebView2/IPC/`nimi://`、GDI 动画、显示/主题/全局快捷键，以及 exe/资源/manifest 打包。2026-11-19 回检补上自定义按钮消息框、HTML 剪贴板、GDI 纹理四边形和文字透明度、文件监视、系统托盘和气泡通知、默认 WebView2 Cookie 查询与清理。本轮 Windows 实机验收待完成。框架差距见 [Windows 框架状态](docs/32-windows-framework.md)，验收应用见 [Windows 环境变量工具](docs/31-windows-environment.md)。
-> Linux 第一切片已落地(2026-11-22)：GTK3 + GtkDrawingArea + Cairo/Pango 原生 UI、WebKitGTK 页面与 `nimi://` scheme、菜单/对话框/剪贴板/inotify 文件监视/libnotify 通知、`nimi build` 与 Linux CI 已接通；托盘/全局快捷键/MPRIS/音频/IME/ATK 尚未实现。详见 [Linux 后端](docs/33-linux-framework.md)。
+> Linux 已落地(2026-11-22)：GTK3 + GtkDrawingArea + Cairo/Pango 原生 UI、WebKitGTK 页面/`nimi://` scheme/Cookie/ephemeral session、菜单/对话框/剪贴板/inotify 文件监视/libnotify 通知、GtkStatusIcon 托盘、X11 全局快捷键、MPRIS2、GStreamer 本地音频、GtkIMContext 输入法、D-Bus 单实例/深链、`nimi build`(.deb) 与 Linux CI。ATK/GL surface/Wayland portal/PKGBUILD/签名仍待补。详见 [Linux 后端](docs/33-linux-framework.md)。
 > 参考实现:MyGo v0.8.3(`5add3817`,MIT License);本地能力盘点快照 `f234638d`。差异与计划校准见 [MyGo 能力对照](docs/30-mygo-alignment.md)。
 
 ---
@@ -153,7 +153,8 @@ xvfb-run -a dbus-run-session -- ./scripts/test-linux.sh
 Linux 桌面运行原生示例(需要 GTK3；页面示例另需 WebKitGTK 4.1)：
 
 ```sh
-sudo apt install libgtk-3-0 libwebkit2gtk-4.1-0
+sudo apt install libgtk-3-0 libwebkit2gtk-4.1-0 \
+  gstreamer1.0-plugins-base gstreamer1.0-plugins-good
 nim c -r --path:src examples/counter-native/main.nim
 nim c -r --path:src examples/hello/main.nim
 ```

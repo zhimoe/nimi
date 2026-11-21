@@ -6,6 +6,8 @@ import nimi/scene/scene
 
 when defined(linux):
   import nimi/platform/linux/app
+  import nimi/platform/linux/shortcuts
+  import nimi/platform/linux/tray
 
   proc pump(backend: Backend, condition: proc(): bool,
             timeoutMs = 3000): bool =
@@ -62,7 +64,7 @@ when defined(linux):
 
         let win = backend.newWindow(
           PlatformWindowOptions(title: "Linux Test", width: 300, height: 200,
-                                resizable: true, content: true),
+                                resizable: true, content: true, ime: true),
           windowHandler)
         check win != nil
 
@@ -165,11 +167,35 @@ when defined(linux):
         check theme.accentB >= theme.accentR
         let point = backend.cursorPosition()
         check point.x >= 0
-        check not backend.registerShortcut("ctrl+shift+f12", proc() = discard)
+        var shortcutFired = 0
+        let shortcutRegistered = backend.registerShortcut("ctrl+shift+f12",
+          proc() = inc shortcutFired)
+        if shortcutRegistered:
+          check not backend.registerShortcut("ctrl+shift+f12",
+                                             proc() = inc shortcutFired)
+          if testShortcut("ctrl+shift+f12"):
+            check pump(backend, proc(): bool = shortcutFired > 0, 2000)
+            check shortcutFired == 1
+          check backend.unregisterShortcut("ctrl+shift+f12")
+        else:
+          echo "X11 global shortcuts unavailable; skipping shortcut test"
         backend.notify(PlatformNotification(title: "Nimi",
                                             body: "Linux notification smoke"))
-        expect UnsupportedBackendError:
-          discard backend.newTray(PlatformTrayOptions(title: "Nimi"))
+        let tray = backend.newTray(PlatformTrayOptions(title: "Nimi",
+                                                       tooltip: "Linux tray"))
+        check tray != nil
+        tray.setTitle("Nimi")
+        tray.setTooltip("Linux tray")
+        var trayCalls = 0
+        tray.setMenu(PlatformMenu(items: @[
+          PlatformMenuItem(label: "Show", kind: pmiNormal, id: 1,
+                           enabled: true)]),
+          MenuHandler(select: proc(id: uint32) =
+            if id == 1:
+              inc trayCalls))
+        check testTrayItem(tray.id, "Show")
+        check trayCalls == 1
+        tray.remove()
       finally:
         backend.shutdown()
 

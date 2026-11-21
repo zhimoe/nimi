@@ -1,6 +1,8 @@
 import std/[unittest, uri, strutils, md5, os, json, tempfiles]
-when defined(macosx):
+when defined(macosx) or defined(linux):
   import nimi/audio
+when defined(linux):
+  putEnv("NIMI_AUDIO_SINK", "fakesink")
 import ../examples/music/services/subsonic
 
 suite "Subsonic adapter":
@@ -41,7 +43,7 @@ suite "Subsonic adapter":
     let tracks = config.searchTracks("中文")
     let path = config.downloadTrack(tracks[0].id, directory)
     check fileExists(path)
-    when defined(macosx):
+    when defined(macosx) or defined(linux):
       let audio = openAudio(path)
       defer: audio.close()
       check abs(audio.duration - 1.0) < 0.01

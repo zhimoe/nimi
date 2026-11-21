@@ -99,8 +99,27 @@ window.webkit.messageHandlers.nimi.postMessage("scheme-ok");
             check cleared
             soup_cookie_free(cookie)
 
+          var ephemeralMessages: seq[string]
+          var ephemeralHandler = WindowHandler(windowId: 9)
+          ephemeralHandler.message = proc(id: uint64, msg: string) =
+            ephemeralMessages.add msg
+          ephemeralHandler.surface = SurfaceHandler()
+          let ephemeralWindow = backend.newWindow(
+            PlatformWindowOptions(
+              title: "Private", width: 240, height: 160, resizable: true,
+              ephemeral: true,
+              html: """<!doctype html><html><body><script>
+window.webkit.messageHandlers.nimi.postMessage("ephemeral-ok");
+</script></body></html>"""),
+            ephemeralHandler)
+          check ephemeralWindow != nil
+          check pump(backend, proc(): bool = "ephemeral-ok" in
+            ephemeralMessages)
+          check "ephemeral-ok" in ephemeralMessages
+
           page.close()
           schemeWindow.close()
+          ephemeralWindow.close()
           discard pump(backend, proc(): bool = false, 100)
         finally:
           removeDir(directory)

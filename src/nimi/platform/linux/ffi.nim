@@ -52,8 +52,10 @@ var
   glibLib*, gobjectLib*, gioLib*, gdkLib*, gtkLib*: LibGroup
   cairoLib*, pangoLib*, pangocairoLib*, pixbufLib*: LibGroup
   webkitLib*, jscLib*, soupLib*, notifyLib*: LibGroup
+  x11Lib*, xtstLib*: LibGroup
 
   coreLoaded*, gtkLoaded*, webkitChecked*, notifyChecked*: bool
+  x11Checked*, x11Available*: bool
   webkitAvailable*, notifyAvailable*: bool
 
 proc candidateNames(pattern: string): seq[string] =
@@ -103,6 +105,12 @@ var
   g_signal_connect_data*: proc(instance: pointer, signalName: cstring,
                                handler: pointer, data: pointer,
                                destroy: pointer, flags: cuint): culong {.cdecl.}
+  g_signal_handlers_disconnect_matched*: proc(instance: pointer, mask: cuint,
+                                              signalId, detail: cuint,
+                                              closure, callback,
+                                              data: pointer): cuint {.cdecl.}
+  g_type_check_instance_is_a*: proc(instance: pointer,
+                                     ifaceType: culong): cint {.cdecl.}
   g_idle_add*: proc(fn: GSourceFunc, data: pointer): cuint {.cdecl.}
   g_source_remove*: proc(id: cuint): cint {.cdecl.}
   g_timeout_add*: proc(interval: cuint, fn: GTimeoutFunc,
@@ -121,6 +129,7 @@ var
   gtk_main*: proc() {.cdecl.}
   gtk_main_quit*: proc() {.cdecl.}
   gtk_main_level*: proc(): cuint {.cdecl.}
+  gtk_get_current_event_time*: proc(): cuint {.cdecl.}
   gtk_window_new*: proc(kind: cint): pointer {.cdecl.}
   gtk_window_set_title*: proc(window: pointer, title: cstring) {.cdecl.}
   gtk_window_set_default_size*: proc(window: pointer, width, height: cint) {.cdecl.}
@@ -181,7 +190,31 @@ var
   gtk_check_menu_item_set_active*: proc(item: pointer, active: cint) {.cdecl.}
   gtk_check_menu_item_get_active*: proc(item: pointer): cint {.cdecl.}
   gtk_menu_item_activate*: proc(item: pointer) {.cdecl.}
+  gtk_status_icon_new*: proc(): pointer {.cdecl.}
+  gtk_status_icon_set_from_icon_name*: proc(icon: pointer, name: cstring) {.cdecl.}
+  gtk_status_icon_set_title*: proc(icon: pointer, title: cstring) {.cdecl.}
+  gtk_status_icon_set_tooltip_text*: proc(icon: pointer, text: cstring) {.cdecl.}
+  gtk_status_icon_set_visible*: proc(icon: pointer, visible: cint) {.cdecl.}
+  gtk_menu_popup*: proc(menu: pointer, parentShell, parentItem: pointer,
+                        positionFunc: pointer, data: pointer,
+                        button: cuint, activateTime: cuint) {.cdecl.}
+  gtk_menu_popup_at_pointer*: proc(menu, triggerEvent: pointer) {.cdecl.}
   gtk_accel_group_new*: proc(): pointer {.cdecl.}
+  gtk_im_multicontext_new*: proc(): pointer {.cdecl.}
+  gtk_im_context_set_client_window*: proc(context, window: pointer) {.cdecl.}
+  gtk_im_context_focus_in*: proc(context: pointer) {.cdecl.}
+  gtk_im_context_focus_out*: proc(context: pointer) {.cdecl.}
+  gtk_im_context_reset*: proc(context: pointer) {.cdecl.}
+  gtk_im_context_filter_keypress*: proc(context, event: pointer): cint {.cdecl.}
+  gtk_im_context_get_preedit_string*: proc(context: pointer,
+                                           text: ptr cstring,
+                                           attrs: ptr pointer,
+                                           cursorPos: ptr cint) {.cdecl.}
+  gtk_im_context_set_surrounding*: proc(context: pointer, text: cstring,
+                                        length, cursorIndex: cint) {.cdecl.}
+  gtk_im_context_set_cursor_location*: proc(context: pointer,
+                                            area: ptr GdkRectangle) {.cdecl.}
+  gtk_im_context_set_use_preedit*: proc(context: pointer, usePreedit: cint) {.cdecl.}
   gtk_settings_get_default*: proc(): pointer {.cdecl.}
   gtk_style_context_get_color*: proc(context: pointer, state: cuint,
                                      color: ptr GdkRGBA) {.cdecl.}
@@ -262,6 +295,22 @@ var
   gdk_window_get_state*: proc(window: pointer): cint {.cdecl.}
   gdk_window_get_scale_factor*: proc(window: pointer): cint {.cdecl.}
   gdk_window_is_visible*: proc(window: pointer): cint {.cdecl.}
+  gdk_get_default_root_window*: proc(): pointer {.cdecl.}
+  gdk_window_add_filter*: proc(window, filter, data: pointer) {.cdecl.}
+  gdk_window_remove_filter*: proc(window, filter, data: pointer) {.cdecl.}
+  gdk_x11_display_get_type*: proc(): culong {.cdecl.}
+  gdk_x11_display_get_xdisplay*: proc(display: pointer): pointer {.cdecl.}
+  gdk_x11_get_default_root_xwindow*: proc(): culong {.cdecl.}
+  XKeysymToKeycode*: proc(display: pointer, keysym: culong): uint8 {.cdecl.}
+  XGrabKey*: proc(display: pointer, keycode: cint, modifiers: cuint,
+                  grabWindow: culong, ownerEvents: cint,
+                  pointerMode, keyboardMode: cint): cint {.cdecl.}
+  XUngrabKey*: proc(display: pointer, keycode: cint, modifiers: cuint,
+                    grabWindow: culong): cint {.cdecl.}
+  XSync*: proc(display: pointer, discardEvents: cint): cint {.cdecl.}
+  XSetErrorHandler*: proc(handler: pointer): pointer {.cdecl.}
+  XTestFakeKeyEvent*: proc(display: pointer, keycode: cuint, isPress: cint,
+                           delay: culong): cint {.cdecl.}
 
 # --- Pango / Cairo / GdkPixbuf --------------------------------------------
 
@@ -347,6 +396,9 @@ var
   webkit_user_script_unref*: proc(script: pointer) {.cdecl.}
   webkit_user_content_manager_add_script*: proc(manager, script: pointer) {.cdecl.}
   webkit_web_view_new_with_user_content_manager*: proc(manager: pointer): pointer {.cdecl.}
+  webkit_web_view_new_with_context*: proc(context: pointer): pointer {.cdecl.}
+  webkit_web_view_get_user_content_manager*: proc(view: pointer): pointer {.cdecl.}
+  webkit_web_context_new_ephemeral*: proc(): pointer {.cdecl.}
   webkit_web_view_load_html*: proc(view: pointer, content, baseUri: cstring) {.cdecl.}
   webkit_web_view_load_uri*: proc(view: pointer, uri: cstring) {.cdecl.}
   webkit_web_view_evaluate_javascript*: proc(view: pointer, script: cstring,
@@ -396,6 +448,57 @@ var
   g_memory_input_stream_new_from_bytes*: proc(bytes: pointer): pointer {.cdecl.}
   g_bytes_new*: proc(data: pointer, size: csize_t): pointer {.cdecl.}
   g_bytes_unref*: proc(bytes: pointer) {.cdecl.}
+  g_bus_get_sync*: proc(busType: cint, cancellable, error: pointer): pointer {.cdecl.}
+  g_bus_own_name_on_connection*: proc(connection: pointer, name: cstring,
+                                      flags: cint, acquired, lost: pointer,
+                                      userData, userDataFree: pointer): cuint {.cdecl.}
+  g_bus_unown_name*: proc(ownerId: cuint) {.cdecl.}
+  g_dbus_node_info_new_for_xml*: proc(xml: cstring, error: ptr pointer): pointer {.cdecl.}
+  g_dbus_node_info_lookup_interface*: proc(info: pointer,
+                                           name: cstring): pointer {.cdecl.}
+  g_dbus_node_info_unref*: proc(info: pointer) {.cdecl.}
+  g_dbus_connection_register_object*: proc(connection: pointer,
+                                           objectPath, interfaceInfo: pointer,
+                                           vtable, userData, userDataFree: pointer,
+                                           error: ptr pointer): cuint {.cdecl.}
+  g_dbus_connection_unregister_object*: proc(connection: pointer,
+                                             registrationId: cuint): cint {.cdecl.}
+  g_dbus_connection_emit_signal*: proc(connection: pointer, destination: cstring,
+                                       objectPath, interfaceName,
+                                       signalName: cstring,
+                                       parameters, error: pointer): cint {.cdecl.}
+  g_dbus_connection_call_sync*: proc(connection: pointer, busName, objectPath,
+                                     interfaceName, methodName: cstring,
+                                     parameters, replyType: pointer,
+                                     flags: cint, timeoutMs: cint,
+                                     cancellable, error: pointer): pointer {.cdecl.}
+  g_dbus_method_invocation_return_value*: proc(invocation,
+                                               parameters: pointer) {.cdecl.}
+  g_dbus_method_invocation_return_dbus_error*: proc(invocation: pointer,
+                                                    name, message: cstring) {.cdecl.}
+  g_dbus_method_invocation_get_parameters*: proc(invocation: pointer): pointer {.cdecl.}
+  g_variant_type_new*: proc(typeName: cstring): pointer {.cdecl.}
+  g_variant_type_free*: proc(typeInfo: pointer) {.cdecl.}
+  g_variant_builder_new*: proc(typeInfo: pointer): pointer {.cdecl.}
+  g_variant_builder_unref*: proc(builder: pointer) {.cdecl.}
+  g_variant_builder_end*: proc(builder: pointer): pointer {.cdecl.}
+  g_variant_builder_add*: proc(builder: pointer, formatString: cstring) {.cdecl, varargs.}
+  g_variant_new_string*: proc(value: cstring): pointer {.cdecl.}
+  g_variant_new_object_path*: proc(value: cstring): pointer {.cdecl.}
+  g_variant_new_int64*: proc(value: int64): pointer {.cdecl.}
+  g_variant_new_uint64*: proc(value: uint64): pointer {.cdecl.}
+  g_variant_new_int32*: proc(value: int32): pointer {.cdecl.}
+  g_variant_new_uint32*: proc(value: uint32): pointer {.cdecl.}
+  g_variant_new_boolean*: proc(value: cint): pointer {.cdecl.}
+  g_variant_new_double*: proc(value: cdouble): pointer {.cdecl.}
+  g_variant_new_tuple*: proc(children: ptr pointer, count: csize_t): pointer {.cdecl.}
+  g_variant_get_child_value*: proc(value: pointer, index: csize_t): pointer {.cdecl.}
+  g_variant_get_string*: proc(value: pointer, length: ptr csize_t): cstring {.cdecl.}
+  g_variant_get_int64*: proc(value: pointer): int64 {.cdecl.}
+  g_variant_get_uint64*: proc(value: pointer): uint64 {.cdecl.}
+  g_variant_get_uint32*: proc(value: pointer): uint32 {.cdecl.}
+  g_variant_get_type_string*: proc(value: pointer): cstring {.cdecl.}
+  g_variant_unref*: proc(value: pointer) {.cdecl.}
 
 # --- libnotify -------------------------------------------------------------
 
@@ -552,8 +655,58 @@ proc ensureGtk*() =
   mustBind(g_object_ref, gobjectLib.handle, "g_object_ref")
   mustBind(g_object_set, gobjectLib.handle, "g_object_set")
   mustBind(g_signal_connect_data, gobjectLib.handle, "g_signal_connect_data")
+  mustBind(g_signal_handlers_disconnect_matched, gobjectLib.handle,
+           "g_signal_handlers_disconnect_matched")
+  mustBind(g_type_check_instance_is_a, gobjectLib.handle,
+           "g_type_check_instance_is_a")
   mustBind(g_memory_input_stream_new_from_bytes, gioLib.handle,
            "g_memory_input_stream_new_from_bytes")
+  mustBind(g_bus_get_sync, gioLib.handle, "g_bus_get_sync")
+  mustBind(g_bus_own_name_on_connection, gioLib.handle,
+           "g_bus_own_name_on_connection")
+  mustBind(g_bus_unown_name, gioLib.handle, "g_bus_unown_name")
+  mustBind(g_dbus_node_info_new_for_xml, gioLib.handle,
+           "g_dbus_node_info_new_for_xml")
+  mustBind(g_dbus_node_info_lookup_interface, gioLib.handle,
+           "g_dbus_node_info_lookup_interface")
+  mustBind(g_dbus_node_info_unref, gioLib.handle, "g_dbus_node_info_unref")
+  mustBind(g_dbus_connection_register_object, gioLib.handle,
+           "g_dbus_connection_register_object")
+  mustBind(g_dbus_connection_unregister_object, gioLib.handle,
+           "g_dbus_connection_unregister_object")
+  mustBind(g_dbus_connection_emit_signal, gioLib.handle,
+           "g_dbus_connection_emit_signal")
+  mustBind(g_dbus_connection_call_sync, gioLib.handle,
+           "g_dbus_connection_call_sync")
+  mustBind(g_dbus_method_invocation_return_value, gioLib.handle,
+           "g_dbus_method_invocation_return_value")
+  mustBind(g_dbus_method_invocation_return_dbus_error, gioLib.handle,
+           "g_dbus_method_invocation_return_dbus_error")
+  mustBind(g_dbus_method_invocation_get_parameters, gioLib.handle,
+           "g_dbus_method_invocation_get_parameters")
+  mustBind(g_variant_type_new, glibLib.handle, "g_variant_type_new")
+  mustBind(g_variant_type_free, glibLib.handle, "g_variant_type_free")
+  mustBind(g_variant_builder_new, glibLib.handle, "g_variant_builder_new")
+  mustBind(g_variant_builder_unref, glibLib.handle, "g_variant_builder_unref")
+  mustBind(g_variant_builder_end, glibLib.handle, "g_variant_builder_end")
+  mustBind(g_variant_builder_add, glibLib.handle, "g_variant_builder_add")
+  mustBind(g_variant_new_string, glibLib.handle, "g_variant_new_string")
+  mustBind(g_variant_new_object_path, glibLib.handle, "g_variant_new_object_path")
+  mustBind(g_variant_new_int64, glibLib.handle, "g_variant_new_int64")
+  mustBind(g_variant_new_uint64, glibLib.handle, "g_variant_new_uint64")
+  mustBind(g_variant_new_int32, glibLib.handle, "g_variant_new_int32")
+  mustBind(g_variant_new_uint32, glibLib.handle, "g_variant_new_uint32")
+  mustBind(g_variant_new_boolean, glibLib.handle, "g_variant_new_boolean")
+  mustBind(g_variant_new_double, glibLib.handle, "g_variant_new_double")
+  mustBind(g_variant_new_tuple, glibLib.handle, "g_variant_new_tuple")
+  mustBind(g_variant_get_child_value, glibLib.handle, "g_variant_get_child_value")
+  mustBind(g_variant_get_string, glibLib.handle, "g_variant_get_string")
+  mustBind(g_variant_get_int64, glibLib.handle, "g_variant_get_int64")
+  mustBind(g_variant_get_uint64, glibLib.handle, "g_variant_get_uint64")
+  mustBind(g_variant_get_uint32, glibLib.handle, "g_variant_get_uint32")
+  mustBind(g_variant_get_type_string, glibLib.handle,
+           "g_variant_get_type_string")
+  mustBind(g_variant_unref, glibLib.handle, "g_variant_unref")
 
   mustBind(gdk_screen_get_default, gdkLib.handle, "gdk_screen_get_default")
   mustBind(gdk_screen_get_n_monitors, gdkLib.handle, "gdk_screen_get_n_monitors")
@@ -582,11 +735,23 @@ proc ensureGtk*() =
   mustBind(gdk_window_get_state, gdkLib.handle, "gdk_window_get_state")
   mustBind(gdk_window_get_scale_factor, gdkLib.handle, "gdk_window_get_scale_factor")
   mustBind(gdk_window_is_visible, gdkLib.handle, "gdk_window_is_visible")
+  mustBind(gdk_get_default_root_window, gdkLib.handle,
+           "gdk_get_default_root_window")
+  mustBind(gdk_window_add_filter, gdkLib.handle, "gdk_window_add_filter")
+  mustBind(gdk_window_remove_filter, gdkLib.handle, "gdk_window_remove_filter")
+  bindOptional(gdk_x11_display_get_type, gdkLib.handle,
+               "gdk_x11_display_get_type")
+  bindOptional(gdk_x11_display_get_xdisplay, gdkLib.handle,
+               "gdk_x11_display_get_xdisplay")
+  bindOptional(gdk_x11_get_default_root_xwindow, gdkLib.handle,
+               "gdk_x11_get_default_root_xwindow")
 
   mustBind(gtk_init_check, gtkLib.handle, "gtk_init_check")
   mustBind(gtk_main, gtkLib.handle, "gtk_main")
   mustBind(gtk_main_quit, gtkLib.handle, "gtk_main_quit")
   mustBind(gtk_main_level, gtkLib.handle, "gtk_main_level")
+  mustBind(gtk_get_current_event_time, gtkLib.handle,
+           "gtk_get_current_event_time")
   mustBind(gtk_window_new, gtkLib.handle, "gtk_window_new")
   mustBind(gtk_window_set_title, gtkLib.handle, "gtk_window_set_title")
   mustBind(gtk_window_set_default_size, gtkLib.handle, "gtk_window_set_default_size")
@@ -645,7 +810,35 @@ proc ensureGtk*() =
   mustBind(gtk_check_menu_item_set_active, gtkLib.handle, "gtk_check_menu_item_set_active")
   mustBind(gtk_check_menu_item_get_active, gtkLib.handle, "gtk_check_menu_item_get_active")
   mustBind(gtk_menu_item_activate, gtkLib.handle, "gtk_menu_item_activate")
+  mustBind(gtk_status_icon_new, gtkLib.handle, "gtk_status_icon_new")
+  mustBind(gtk_status_icon_set_from_icon_name, gtkLib.handle,
+           "gtk_status_icon_set_from_icon_name")
+  bindOptional(gtk_status_icon_set_title, gtkLib.handle,
+               "gtk_status_icon_set_title")
+  mustBind(gtk_status_icon_set_tooltip_text, gtkLib.handle,
+           "gtk_status_icon_set_tooltip_text")
+  mustBind(gtk_status_icon_set_visible, gtkLib.handle,
+           "gtk_status_icon_set_visible")
+  mustBind(gtk_menu_popup, gtkLib.handle, "gtk_menu_popup")
+  bindOptional(gtk_menu_popup_at_pointer, gtkLib.handle,
+               "gtk_menu_popup_at_pointer")
   mustBind(gtk_accel_group_new, gtkLib.handle, "gtk_accel_group_new")
+  mustBind(gtk_im_multicontext_new, gtkLib.handle, "gtk_im_multicontext_new")
+  mustBind(gtk_im_context_set_client_window, gtkLib.handle,
+           "gtk_im_context_set_client_window")
+  mustBind(gtk_im_context_focus_in, gtkLib.handle, "gtk_im_context_focus_in")
+  mustBind(gtk_im_context_focus_out, gtkLib.handle, "gtk_im_context_focus_out")
+  mustBind(gtk_im_context_reset, gtkLib.handle, "gtk_im_context_reset")
+  mustBind(gtk_im_context_filter_keypress, gtkLib.handle,
+           "gtk_im_context_filter_keypress")
+  mustBind(gtk_im_context_get_preedit_string, gtkLib.handle,
+           "gtk_im_context_get_preedit_string")
+  mustBind(gtk_im_context_set_surrounding, gtkLib.handle,
+           "gtk_im_context_set_surrounding")
+  mustBind(gtk_im_context_set_cursor_location, gtkLib.handle,
+           "gtk_im_context_set_cursor_location")
+  mustBind(gtk_im_context_set_use_preedit, gtkLib.handle,
+           "gtk_im_context_set_use_preedit")
   mustBind(gtk_settings_get_default, gtkLib.handle, "gtk_settings_get_default")
   bindOptional(gtk_style_context_get_color, gtkLib.handle, "gtk_style_context_get_color")
   bindOptional(gtk_style_context_get_background_color, gtkLib.handle,
@@ -712,6 +905,12 @@ proc ensureWebKit*(): bool =
              "webkit_user_content_manager_add_script")
     mustBind(webkit_web_view_new_with_user_content_manager, webkitLib.handle,
              "webkit_web_view_new_with_user_content_manager")
+    mustBind(webkit_web_view_new_with_context, webkitLib.handle,
+             "webkit_web_view_new_with_context")
+    mustBind(webkit_web_view_get_user_content_manager, webkitLib.handle,
+             "webkit_web_view_get_user_content_manager")
+    mustBind(webkit_web_context_new_ephemeral, webkitLib.handle,
+             "webkit_web_context_new_ephemeral")
     mustBind(webkit_web_view_load_html, webkitLib.handle, "webkit_web_view_load_html")
     mustBind(webkit_web_view_load_uri, webkitLib.handle, "webkit_web_view_load_uri")
     mustBind(webkit_web_view_evaluate_javascript, webkitLib.handle,
@@ -759,6 +958,40 @@ proc ensureWebKit*(): bool =
   except BackendError:
     return false
   webkitAvailable = true
+  result = true
+
+proc ensureX11*(): bool =
+  ## Loads libX11 for global shortcuts. Returns false on a non-X11 GDK
+  ## backend (Wayland) or when the library is unavailable.
+  if x11Checked:
+    return x11Available
+  x11Checked = true
+  ensureGtk()
+  x11Lib = openGroup("libX11.so.6|libX11.so")
+  if x11Lib.handle == nil:
+    return false
+  try:
+    mustBind(XKeysymToKeycode, x11Lib.handle, "XKeysymToKeycode")
+    mustBind(XGrabKey, x11Lib.handle, "XGrabKey")
+    mustBind(XUngrabKey, x11Lib.handle, "XUngrabKey")
+    mustBind(XSync, x11Lib.handle, "XSync")
+    mustBind(XSetErrorHandler, x11Lib.handle, "XSetErrorHandler")
+  except BackendError:
+    return false
+  xtstLib = openGroup("libXtst.so.6|libXtst.so")
+  if xtstLib.handle != nil:
+    bindOptional(XTestFakeKeyEvent, xtstLib.handle, "XTestFakeKeyEvent")
+  let display = gdk_display_get_default()
+  if display == nil or gdk_x11_display_get_type == nil or
+      gdk_x11_display_get_xdisplay == nil or
+      gdk_x11_get_default_root_xwindow == nil:
+    return false
+  if g_type_check_instance_is_a(display,
+                                gdk_x11_display_get_type()) == 0:
+    return false
+  if gdk_x11_display_get_xdisplay(display) == nil:
+    return false
+  x11Available = true
   result = true
 
 proc ensureNotify*(): bool =

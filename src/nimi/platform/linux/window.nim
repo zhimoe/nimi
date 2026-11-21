@@ -93,6 +93,109 @@ proc keyName(keyval: cuint): string =
     except ValueError:
       result = ""
 
+proc updateImeCursor(w: LinuxWindow) =
+  if w == nil or w.imeContext == nil or w.closed:
+    return
+  let surface = w.handler.surface
+  if surface.caretRect == nil:
+    return
+  let caret = surface.caretRect()
+  var area = GdkRectangle(x: cint(caret.x), y: cint(caret.y),
+                          width: cint(max(1.0'f32, caret.w)),
+                          height: cint(max(1.0'f32, caret.h)))
+  gtk_im_context_set_cursor_location(w.imeContext, addr area)
+
+proc utf16Prefix(text: string, characters: int): int =
+  var seen = 0
+  for rune in text.runes:
+    if seen >= characters:
+      break
+    inc seen
+    result += (if int(rune) > 0xffff: 2 else: 1)
+
+proc onImeCommit(context: pointer, text: cstring, data: pointer) {.cdecl.} =
+  let w = cast[LinuxWindow](data)
+  if w == nil or w.closed or text == nil:
+    return
+  if w.handler.surface.insertText != nil:
+    try:
+      w.handler.surface.insertText($text, NoTextRange)
+    except CatchableError:
+      discard
+  updateImeCursor(w)
+
+proc onImePreeditChanged(context, data: pointer) {.cdecl.} =
+  let w = cast[LinuxWindow](data)
+  if w == nil or w.closed:
+    return
+  var text: cstring
+  var cursor: cint
+  gtk_im_context_get_preedit_string(context, addr text,
+                                    cast[ptr pointer](nil), addr cursor)
+  if text == nil:
+    return
+  let preedit = $text
+  g_free(cast[pointer](text))
+  let surface = w.handler.surface
+  if preedit.len == 0:
+    if surface.unmarkText != nil:
+      try:
+        surface.unmarkText()
+      except CatchableError:
+        discard
+  elif surface.setMarkedText != nil:
+    try:
+      surface.setMarkedText(preedit,
+        TextRange(location: utf16Prefix(preedit, int(cursor)), length: 0),
+        NoTextRange)
+    except CatchableError:
+      discard
+  updateImeCursor(w)
+
+proc onImePreeditEnd(context, data: pointer) {.cdecl.} =
+  let w = cast[LinuxWindow](data)
+  if w == nil or w.closed:
+    return
+  if w.handler.surface.unmarkText != nil:
+    try:
+      w.handler.surface.unmarkText()
+    except CatchableError:
+      discard
+
+proc onImeRetrieveSurrounding(context, data: pointer): cint {.cdecl.} =
+  let w = cast[LinuxWindow](data)
+  if w == nil or w.closed:
+    return 0
+  let surface = w.handler.surface
+  if surface.textInputActive != nil and not surface.textInputActive():
+    return 0
+  if surface.textLength == nil or surface.attributedSubstring == nil:
+    return 0
+  let length = surface.textLength()
+  if length <= 0 or length > 65535:
+    return 0
+  let text = surface.attributedSubstring(TextRange(location: 0, length: length))
+  if text.len == 0:
+    return 0
+  var caret = length
+  if surface.selectedRange != nil:
+    caret = max(0, min(surface.selectedRange().location, length))
+  gtk_im_context_set_surrounding(context, text.cstring, cint(text.len),
+                                 cint(caret))
+  1
+
+proc onImeDeleteSurrounding(context, offset, nChars: cint,
+                            data: pointer): cint {.cdecl.} =
+  # Deleting surrounding text needs a shared-engine range deletion API.
+  # Returning false lets GTK fall back without corrupting the document.
+  0
+
+proc onRealize(widget, data: pointer) {.cdecl.} =
+  let w = cast[LinuxWindow](data)
+  if w == nil or w.closed or w.imeContext == nil:
+    return
+  gtk_im_context_set_client_window(w.imeContext, gtk_widget_get_window(widget))
+
 proc modifiersFrom(state: cuint): uint32 =
   if (state and GdkShiftMask) != 0: result = result or KeyShift
   if (state and GdkControlMask) != 0: result = result or KeyControl
@@ -115,6 +218,7 @@ proc onDraw(widget, cr, data: pointer): cint {.cdecl.} =
     let width = float32(max(1, int(gtk_widget_get_allocated_width(widget))))
     let height = float32(max(1, int(gtk_widget_get_allocated_height(widget))))
     w.handler.surface.draw(cr, width, height)
+    updateImeCursor(w)
   except CatchableError:
     discard
   GdkEventStop
@@ -123,6 +227,12 @@ proc onKeyPress(widget, event, data: pointer): cint {.cdecl.} =
   let w = cast[LinuxWindow](data)
   if w == nil or w.closed:
     return GdkEventPropagate
+  let surface = w.handler.surface
+  if w.imeContext != nil and
+      (surface.textInputActive == nil or surface.textInputActive()):
+    if gtk_im_context_filter_keypress(w.imeContext, event) != 0:
+      updateImeCursor(w)
+      return GdkEventStop
   var keyval: cuint
   var state: cuint
   if gdk_event_get_keyval(event, addr keyval) == 0:
@@ -131,7 +241,6 @@ proc onKeyPress(widget, event, data: pointer): cint {.cdecl.} =
   let key = keyName(keyval)
   if key.len == 0:
     return GdkEventPropagate
-  let surface = w.handler.surface
   if surface.keyDown != nil:
     try:
       surface.keyDown(key, modifiersFrom(state))
@@ -168,6 +277,7 @@ proc onButtonPress(widget, event, data: pointer): cint {.cdecl.} =
       w.handler.surface.mouseDown(x, y, lastClickCount)
     except CatchableError:
       discard
+  updateImeCursor(w)
   GdkEventStop
 
 proc onButtonRelease(widget, event, data: pointer): cint {.cdecl.} =
@@ -183,6 +293,7 @@ proc onButtonRelease(widget, event, data: pointer): cint {.cdecl.} =
       w.handler.surface.mouseUp(x, y)
     except CatchableError:
       discard
+  updateImeCursor(w)
   GdkEventStop
 
 proc onMotion(widget, event, data: pointer): cint {.cdecl.} =
@@ -243,6 +354,8 @@ proc onFocusIn(widget, event, data: pointer): cint {.cdecl.} =
   if w == nil or w.closed:
     return GdkEventPropagate
   lastFocusedWindow = w
+  if w.imeContext != nil:
+    gtk_im_context_focus_in(w.imeContext)
   if w.handler.focused != nil:
     try:
       w.handler.focused(w.id)
@@ -254,6 +367,9 @@ proc onFocusOut(widget, event, data: pointer): cint {.cdecl.} =
   let w = cast[LinuxWindow](data)
   if w == nil or w.closed:
     return GdkEventPropagate
+  if w.imeContext != nil:
+    gtk_im_context_focus_out(w.imeContext)
+    gtk_im_context_reset(w.imeContext)
   if w.handler.surface.cancelInput != nil:
     try:
       w.handler.surface.cancelInput(true)
@@ -289,9 +405,17 @@ proc onDestroy(widget, data: pointer) {.cdecl.} =
     discard g_source_remove(w.animationSource)
     w.animationSource = 0
   w.animating = false
-  if w.userContentManager != nil:
+  if w.imeContext != nil:
+    gtk_im_context_set_client_window(w.imeContext, nil)
+    g_object_unref(w.imeContext)
+    w.imeContext = nil
+  if w.userContentManager != nil and w.ownsUserContentManager:
     g_object_unref(w.userContentManager)
-    w.userContentManager = nil
+  w.userContentManager = nil
+  w.ownsUserContentManager = false
+  if w.webContext != nil:
+    g_object_unref(w.webContext)
+    w.webContext = nil
   w.webview = nil
   w.drawing = nil
   w.content = nil
@@ -325,6 +449,7 @@ proc onAnimationTick(data: pointer): cint {.cdecl.} =
     except CatchableError:
       discard
   if not w.closed:
+    updateImeCursor(w)
     if w.drawing != nil:
       gtk_widget_queue_draw(w.drawing)
     elif w.webview != nil:
@@ -417,13 +542,18 @@ proc onSchemeRequest(request, data: pointer) {.cdecl.} =
                                    served.mime.cstring)
   g_object_unref(stream)
 
-proc ensureScheme(scheme, fileRoot: string) =
-  if scheme.len == 0 or fileRoot.len == 0 or registeredSchemes.hasKey(scheme):
+proc ensureScheme(context: pointer, scheme, fileRoot: string) =
+  if scheme.len == 0 or fileRoot.len == 0:
     return
-  let context = webkit_web_context_get_default()
-  if context == nil:
+  let target =
+    if context != nil: context
+    else: webkit_web_context_get_default()
+  if target == nil:
     raise newException(BackendError, "WebKitGTK context is unavailable")
-  let security = webkit_web_context_get_security_manager(context)
+  let key = $cast[uint](target) & ":" & scheme
+  if registeredSchemes.hasKey(key):
+    return
+  let security = webkit_web_context_get_security_manager(target)
   if security != nil:
     webkit_security_manager_register_uri_scheme_as_secure(security,
                                                           scheme.cstring)
@@ -432,19 +562,43 @@ proc ensureScheme(scheme, fileRoot: string) =
   let info = SchemeRoot(scheme: scheme,
                         server: newFileServer(fileRoot, scheme))
   schemeRoots.add info
-  webkit_web_context_register_uri_scheme(context, scheme.cstring,
+  webkit_web_context_register_uri_scheme(target, scheme.cstring,
                                          cast[pointer](onSchemeRequest),
                                          cast[pointer](info), nil)
-  registeredSchemes[scheme] = true
+  registeredSchemes[key] = true
 
 proc createWebView(w: LinuxWindow, opts: PlatformWindowOptions) =
   if not ensureWebKit():
     raise newException(BackendError,
       "WebKitGTK 4.1/4.0 runtime is not installed")
-  let manager = webkit_user_content_manager_new()
-  if manager == nil:
-    raise newException(BackendError, "Cannot create a WebKit user content manager")
-  w.userContentManager = manager
+  var context, manager, view: pointer
+  if opts.ephemeral:
+    context = webkit_web_context_new_ephemeral()
+    if context == nil:
+      raise newException(BackendError,
+        "Cannot create a private WebKit context")
+    w.webContext = context
+    view = webkit_web_view_new_with_context(context)
+    if view == nil:
+      raise newException(BackendError, "Cannot create a WebKit web view")
+    manager = webkit_web_view_get_user_content_manager(view)
+    if manager == nil:
+      raise newException(BackendError,
+        "WebKit view has no user content manager")
+    w.userContentManager = manager
+    w.ownsUserContentManager = false
+  else:
+    manager = webkit_user_content_manager_new()
+    if manager == nil:
+      raise newException(BackendError,
+        "Cannot create a WebKit user content manager")
+    w.userContentManager = manager
+    w.ownsUserContentManager = true
+    view = webkit_web_view_new_with_user_content_manager(manager)
+    if view == nil:
+      raise newException(BackendError, "Cannot create a WebKit web view")
+    w.webview = view
+
   discard g_signal_connect_data(manager,
     ("script-message-received::" & NimiMessageHandlerName).cstring,
     cast[pointer](onWebMessage), cast[pointer](w), nil, 0)
@@ -460,9 +614,6 @@ proc createWebView(w: LinuxWindow, opts: PlatformWindowOptions) =
   if script != nil:
     webkit_user_content_manager_add_script(manager, script)
     webkit_user_script_unref(script)
-  let view = webkit_web_view_new_with_user_content_manager(manager)
-  if view == nil:
-    raise newException(BackendError, "Cannot create a WebKit web view")
   w.webview = view
   discard g_signal_connect_data(view, "notify::title".cstring,
                                 cast[pointer](onWebTitle),
@@ -472,7 +623,7 @@ proc createWebView(w: LinuxWindow, opts: PlatformWindowOptions) =
                                 cast[pointer](w), nil, 0)
   gtk_box_pack_start(w.box, view, 1, 1, 0)
   if opts.scheme.len > 0 and opts.fileRoot.len > 0:
-    ensureScheme(opts.scheme, opts.fileRoot)
+    ensureScheme(context, opts.scheme, opts.fileRoot)
   if opts.html.len > 0:
     webkit_web_view_load_html(view, opts.html.cstring, nil)
   elif opts.url.len > 0:
@@ -597,12 +748,33 @@ proc createLinuxWindow*(opts: PlatformWindowOptions,
       discard g_signal_connect_data(drawing, "scroll-event".cstring,
                                     cast[pointer](onScroll),
                                     cast[pointer](w), nil, 0)
+      if opts.ime:
+        w.imeContext = gtk_im_multicontext_new()
+        if w.imeContext != nil:
+          gtk_im_context_set_use_preedit(w.imeContext, 1)
+          discard g_signal_connect_data(w.imeContext, "commit".cstring,
+            cast[pointer](onImeCommit), cast[pointer](w), nil, 0)
+          discard g_signal_connect_data(w.imeContext, "preedit-changed".cstring,
+            cast[pointer](onImePreeditChanged), cast[pointer](w), nil, 0)
+          discard g_signal_connect_data(w.imeContext, "preedit-end".cstring,
+            cast[pointer](onImePreeditEnd), cast[pointer](w), nil, 0)
+          discard g_signal_connect_data(w.imeContext,
+            "retrieve-surrounding".cstring,
+            cast[pointer](onImeRetrieveSurrounding), cast[pointer](w), nil, 0)
+          discard g_signal_connect_data(w.imeContext,
+            "delete-surrounding".cstring,
+            cast[pointer](onImeDeleteSurrounding), cast[pointer](w), nil, 0)
+          discard g_signal_connect_data(drawing, "realize".cstring,
+            cast[pointer](onRealize), cast[pointer](w), nil, 0)
       gtk_box_pack_start(box, drawing, 1, 1, 0)
 
     gtk_widget_show_all(window)
     gtk_window_present(window)
     if w.drawing != nil:
       gtk_widget_grab_focus(w.drawing)
+      if w.imeContext != nil:
+        gtk_im_context_set_client_window(w.imeContext,
+                                         gtk_widget_get_window(w.drawing))
     elif w.webview != nil:
       gtk_widget_grab_focus(w.webview)
     lastFocusedWindow = w

@@ -12,11 +12,11 @@ const
   GtkAccelVisible = 1'u32
 
 type
-  ParsedAccelerator = object
-    keyval, modifiers: cuint
-    ok: bool
+  ParsedAccelerator* = object
+    keyval*, modifiers*: cuint
+    ok*: bool
 
-proc parseAccelerator(text: string): ParsedAccelerator =
+proc parseAccelerator*(text: string): ParsedAccelerator =
   var found = false
   for token in text.toLowerAscii.split('+'):
     let part = token.strip
@@ -140,13 +140,16 @@ proc invokeRole(w: LinuxWindow, role: string) =
   else:
     discard
 
-proc dispatchAction(action: MenuAction) =
+proc dispatchAction*(action: MenuAction) =
   if action == nil:
     return
   let owner = linuxWindows.getOrDefault(action.owner)
   if action.role.len == 0:
-    if action.callbackId != 0 and currentMenuHandler.select != nil:
-      currentMenuHandler.select(action.callbackId)
+    var handler = action.handler
+    if handler.select == nil:
+      handler = currentMenuHandler
+    if action.callbackId != 0 and handler.select != nil:
+      handler.select(action.callbackId)
   else:
     invokeRole(owner, action.role)
 
@@ -164,7 +167,10 @@ proc onToggled(item, data: pointer) {.cdecl.} =
   except CatchableError:
     discard
 
-proc makeItem(w: LinuxWindow, item: PlatformMenuItem): pointer =
+proc makeMenuItem(owner: pointer, accelGroup: pointer,
+                  handler: MenuHandler,
+                  actions: var seq[MenuAction],
+                  item: PlatformMenuItem): pointer =
   if item.kind == pmiSeparator:
     return gtk_separator_menu_item_new()
   if item.kind == pmiSubmenu:
@@ -172,7 +178,7 @@ proc makeItem(w: LinuxWindow, item: PlatformMenuItem): pointer =
     if submenu == nil:
       return nil
     for child in item.submenu:
-      let childItem = makeItem(w, child)
+      let childItem = makeMenuItem(owner, accelGroup, handler, actions, child)
       if childItem != nil:
         gtk_menu_shell_append(submenu, childItem)
     let holder = gtk_menu_item_new_with_label(item.label.cstring)
@@ -192,7 +198,7 @@ proc makeItem(w: LinuxWindow, item: PlatformMenuItem): pointer =
   let action = MenuAction(label: item.label, role: item.role,
                           callbackId: item.id, enabled: item.enabled,
                           checkable: item.kind == pmiCheckbox,
-                          owner: w.window)
+                          owner: owner, handler: handler)
   if item.kind == pmiCheckbox:
     gtk_check_menu_item_set_active(widget, cint(item.checked))
     discard g_signal_connect_data(widget, "toggled".cstring,
@@ -209,12 +215,20 @@ proc makeItem(w: LinuxWindow, item: PlatformMenuItem): pointer =
     if accel.ok:
       action.accelKey = accel.keyval
       action.accelMods = accel.modifiers
-      if w.accelGroup != nil:
-        gtk_widget_add_accelerator(widget, "activate".cstring, w.accelGroup,
+      if accelGroup != nil:
+        gtk_widget_add_accelerator(widget, "activate".cstring, accelGroup,
                                    accel.keyval, accel.modifiers,
                                    GtkAccelVisible)
-  w.menuActions.add action
+  actions.add action
   widget
+
+proc appendMenuItems*(shell: pointer, items: seq[PlatformMenuItem],
+                      owner: pointer, accelGroup: pointer,
+                      handler: MenuHandler, actions: var seq[MenuAction]) =
+  for item in items:
+    let widget = makeMenuItem(owner, accelGroup, handler, actions, item)
+    if widget != nil:
+      gtk_menu_shell_append(shell, widget)
 
 proc installMenu*(w: LinuxWindow) =
   ## Rebuild one window's menu bar from the application menu.
@@ -237,10 +251,8 @@ proc installMenu*(w: LinuxWindow) =
   let bar = gtk_menu_bar_new()
   if bar == nil:
     return
-  for item in currentMenu.items:
-    let widget = makeItem(w, item)
-    if widget != nil:
-      gtk_menu_shell_append(bar, widget)
+  appendMenuItems(bar, currentMenu.items, w.window, w.accelGroup,
+                  currentMenuHandler, w.menuActions)
   gtk_box_pack_start(w.box, bar, 0, 0, 0)
   gtk_box_reorder_child(w.box, bar, 0)
   gtk_widget_show_all(bar)

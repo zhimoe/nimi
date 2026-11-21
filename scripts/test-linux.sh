@@ -35,6 +35,7 @@ test_desktop
 test_fileserver
 test_document
 test_shred
+test_audio
 test_queue
 test_music_session
 test_virtual_list
@@ -44,6 +45,8 @@ test_linux_render
 test_linux_backend
 test_linux_app
 test_linux_webview
+test_linux_mpris
+test_linux_instance
 "
 
 failed=""

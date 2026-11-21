@@ -15,6 +15,7 @@ type
     accelKey*: cuint
     accelMods*: cuint
     owner*: pointer
+    handler*: MenuHandler
 
   LinuxWindow* = ref object
     id*: uint64
@@ -27,6 +28,9 @@ type
     handler*: WindowHandler
     webview*: pointer
     userContentManager*: pointer
+    ownsUserContentManager*: bool
+    webContext*: pointer
+    imeContext*: pointer
     scheme*: string
     fileRoot*: string
     usesWebView*: bool

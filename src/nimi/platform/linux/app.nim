@@ -9,7 +9,8 @@ import std/[tables]
 
 import ../contract
 import ../unsupported
-import ./[clipboard, cookie, desktop, dialogs, ffi, menu, state, watch, window]
+import ./[clipboard, cookie, desktop, dialogs, ffi, instance, menu, nowplaying,
+           shortcuts, state, tray, watch, window]
 
 proc dispatchIdle(data: pointer): cint {.cdecl.} =
   if linuxState != nil and linuxState.handler.dispatch != nil:
@@ -40,6 +41,7 @@ proc initLinuxBackend(state: LinuxState, h: AppHandler, opts: AppOptions) =
   linuxState = state
   initNotifications(opts.name)
   hookDesktopChanges()
+  discard initInstance(h)
 
 proc shutdownLinux() =
   if linuxState == nil or not linuxState.initialized or linuxState.shuttingDown:
@@ -49,6 +51,10 @@ proc shutdownLinux() =
       "Shutdown must run on the initializing thread")
   linuxState.shuttingDown = true
   try:
+    shutdownInstance()
+    unregisterAllShortcuts()
+    shutdownNowPlaying()
+    closeTray()
     var remaining: seq[LinuxWindow]
     for window in linuxWindows.values:
       remaining.add window
@@ -78,6 +84,8 @@ proc newLinuxBackend*(): Backend =
   result.name = "linux/gtk"
   result.clipboard = newLinuxClipboard()
   result.dialogs = newLinuxDialogs()
+  installShortcutBackend(result)
+  installNowPlayingBackend(result)
 
   result.init = proc(h: AppHandler, opts: AppOptions) =
     if linuxState != nil and linuxState.initialized:
@@ -95,8 +103,13 @@ proc newLinuxBackend*(): Backend =
       raise newException(BackendError, "Run must execute on its owning thread")
     linuxState.running = true
     try:
+      if isSecondaryInstance():
+        return
       if linuxState.handler.ready != nil:
         linuxState.handler.ready()
+      if linuxState.handler.openURL != nil:
+        for url in initialURLs():
+          linuxState.handler.openURL(url)
       # Smoke tests and tiny apps may quit from ready() before gtk_main
       # starts; gtk_main_quit without a running loop only prints a critical.
       if not linuxState.quitRequested:
@@ -146,6 +159,9 @@ proc newLinuxBackend*(): Backend =
         "Install menus on the initialized main thread")
     installMenuForAll(platformMenu, h)
 
+  result.newTray = proc(opts: PlatformTrayOptions): NativeTray =
+    createTray(opts)
+
   result.notify = proc(notification: PlatformNotification) =
     sendNotification(notification)
 
@@ -177,15 +193,6 @@ proc newLinuxBackend*(): Backend =
 
   result.clearCookies = proc(cb: proc()) =
     clearCookies(cb)
-
-  # GTK3 alone has no portable global-hotkey API (X11 grabs and the XDG
-  # portal are separate integrations). Report failure instead of throwing.
-  result.registerShortcut = proc(accel: string, fn: proc()): bool =
-    false
-  result.unregisterShortcut = proc(accel: string): bool =
-    false
-  result.unregisterAllShortcuts = proc() =
-    discard
 
   result.shutdown = proc() =
     shutdownLinux()
