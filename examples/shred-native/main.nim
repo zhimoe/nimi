@@ -10,7 +10,10 @@ import std/[math, os]
 
 import nimi
 import nimi/ui
-import nimi/render/cg
+when defined(linux):
+  import nimi/render/cairo
+else:
+  import nimi/render/cg
 import nimi/text/measure
 
 const

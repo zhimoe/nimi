@@ -33,9 +33,17 @@ when defined(linux):
                                               position: float64) =
             commands.add cmd
             positions.add position)
+          var artwork: seq[byte]
+          let iconPath = "examples/notes/resources/icon.png"
+          if fileExists(iconPath):
+            let iconData = readFile(iconPath)
+            artwork = newSeq[byte](iconData.len)
+            if artwork.len > 0:
+              copyMem(addr artwork[0], unsafeAddr iconData[0], artwork.len)
           backend.setNowPlaying(PlatformNowPlayingInfo(
             title: "Song", artist: "Artist", album: "Album",
             duration: 180.0, position: 12.0, playing: true,
+            artwork: artwork,
             commands: {pmcPlay, pmcPause, pmcTogglePlayPause, pmcStop,
                        pmcNext, pmcPrevious, pmcSeek}))
           check mprisActive()
@@ -65,6 +73,8 @@ when defined(linux):
           check "Song" in metadata
           check "Artist" in metadata
           check "Album" in metadata
+          if artwork.len > 0:
+            check "file://" in metadata
 
           let play = gdbusCall(base & @["org.mpris.MediaPlayer2.Player.Play"])
           check play.len >= 0

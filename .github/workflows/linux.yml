@@ -59,6 +59,7 @@ jobs:
           ./nimi build examples/desktop-native
           ./nimi build examples/hello
           ./nimi build examples/notes
+          ./nimi build examples/shred-native
           dpkg-deb --info examples/counter-native/dist/linux-*/counter_*.deb
 
       - name: Upload Linux demo builds

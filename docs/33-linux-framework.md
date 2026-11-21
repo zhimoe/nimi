@@ -187,7 +187,7 @@ xvfb-run -a dbus-run-session -- ./scripts/test-linux.sh
 - `test_linux_backend`：窗口绘制、输入、菜单快捷键、剪贴板、屏幕/主题/通知/托盘/X11 快捷键、inotify；
 - `test_linux_app`：`app.run` 完整生命周期、ready、原生窗口、动画帧、退出清理；
 - `test_linux_webview`：WebKitGTK 页面消息、eval、`nimitest://` scheme、Cookie 查询/清理、ephemeral session；
-- `test_linux_mpris`：通过 `gdbus` 查询 PlaybackStatus/Metadata、调用 Play/Seek（含 seek 位置）、清理后变为 Stopped；
+- `test_linux_mpris`：通过 `gdbus` 查询 PlaybackStatus/Metadata（含 `mpris:artUrl`）、调用 Play/Seek（含 seek 位置）、清理后变为 Stopped；
 - `test_linux_instance`：通过 `gdbus` 调用 `OpenURL`，验证深链回调；
 - `test_audio`：Linux GStreamer 解码 WAV、duration/seek/pause/close、错误文件与完成回调（`fakesink`）；
 - Subsonic fixture（Linux 下同时验证下载文件可被 GStreamer 解码）。
@@ -206,8 +206,10 @@ xvfb-run -a dbus-run-session -- ./scripts/test-linux.sh
 - `test_linux_webview`：WebKitGTK 页面消息、eval、自定义 scheme、Cookie 查询/清理、ephemeral session 通过。
 - `test_linux_mpris`：MPRIS 元数据/媒体命令/Seek 位置通过。
 - `test_linux_instance`：D-Bus 深链 OpenURL 通过。
+- 两次启动冒烟：第二个进程把 `nimi-test://hello` 转发给第一个进程后退出，第一个进程输出 `OPEN nimi-test://hello`。
 - `test_audio`：Linux GStreamer 解码/暂停/跳转/完成回调通过。
 - `nimi build examples/counter-native` 生成可安装 `.deb`，`dpkg-deb -I/-c` 检查通过。
+- `shred-native` 在 Linux 上使用 Cairo 渲染纹理四边形，`NIMI_SMOKE=shred` 快照通过；`shred-metal` 仍仅 macOS。
 - `desktop-native`：screens/theme/tray/global shortcut 全部输出预期值（`tray: true`、`global shortcut: true`）。
 - `form-native`（`ime: true`）启动无崩溃。
 - `counter-native` 在 Xvfb 下持续运行，无启动崩溃。
@@ -234,7 +236,7 @@ xvfb-run -a dbus-run-session -- ./scripts/test-linux.sh
 | 本地音频 | GStreamer 已实现（WAV/MP3/FLAC 取决于已安装插件） | 自带/推荐插件集、播放列表预加载 |
 | IME | GtkIMContext 基本接入；`delete-surrounding` 未实现 | 共享 engine 范围删除、实机候选窗验证 |
 | 无障碍 | 无 ATK provider | ATK/AT-SPI |
-| GL surface | 仅 Cairo CPU 路径 | GtkGLArea / EGL |
+| GL surface | 仅 Cairo CPU 路径；`shred-native` 可用，Metal mask/LayerEffect 示例仅 macOS | GtkGLArea / EGL |
 | 拖放 | 未接 | GtkSelection |
 | 打包 | 目录 + `.desktop` + `.deb` | PKGBUILD/AppImage/签名/更新 |
 | WebView 高级 | 无下载/权限/context menu/新窗口；ephemeral session 已隔离 | WebKitGTK policy/download 回调 |

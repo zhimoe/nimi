@@ -108,10 +108,9 @@ proc requestName(connection: pointer, name: string): uint32 =
   var children = [stringVariant(name), uint32Variant(RequestNameDoNotQueue)]
   let parameters = g_variant_new_tuple(addr children[0], 2)
   let replyType = g_variant_type_new("(u)".cstring)
-  var error: pointer
   let reply = g_dbus_connection_call_sync(connection, DbusBusName.cstring,
     DbusObjectPath.cstring, DbusInterface.cstring, "RequestName".cstring,
-    parameters, replyType, 0, 5000, nil, addr error)
+    parameters, replyType, 0, 5000, nil, nil)
   g_variant_type_free(replyType)
   if reply == nil:
     return 0

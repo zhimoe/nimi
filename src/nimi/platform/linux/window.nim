@@ -113,6 +113,17 @@ proc utf16Prefix(text: string, characters: int): int =
     inc seen
     result += (if int(rune) > 0xffff: 2 else: 1)
 
+proc byteOffsetForUtf16(text: string, units: int): int =
+  var seen = 0
+  for rune in text.runes:
+    if seen >= units:
+      break
+    let code = int(rune)
+    seen += (if code > 0xffff: 2 else: 1)
+    result += (if code < 0x80: 1 elif code < 0x800: 2
+               elif code < 0x10000: 3 else: 4)
+  result = min(result, text.len)
+
 proc onImeCommit(context: pointer, text: cstring, data: pointer) {.cdecl.} =
   let w = cast[LinuxWindow](data)
   if w == nil or w.closed or text == nil:
@@ -177,11 +188,12 @@ proc onImeRetrieveSurrounding(context, data: pointer): cint {.cdecl.} =
   let text = surface.attributedSubstring(TextRange(location: 0, length: length))
   if text.len == 0:
     return 0
-  var caret = length
+  var caretUnits = length
   if surface.selectedRange != nil:
-    caret = max(0, min(surface.selectedRange().location, length))
+    caretUnits = max(0, min(surface.selectedRange().location, length))
+  let caretBytes = byteOffsetForUtf16(text, caretUnits)
   gtk_im_context_set_surrounding(context, text.cstring, cint(text.len),
-                                 cint(caret))
+                                 cint(caretBytes))
   1
 
 proc onImeDeleteSurrounding(context, offset, nChars: cint,
