@@ -198,7 +198,7 @@ xvfb-run -a dbus-run-session -- ./scripts/test-linux.sh
 
 ## 4. 已验证 / 待验证
 
-已验证（2026-11-22，Ubuntu 24.04 arm64 容器 + Xvfb；Linux 套件 36 个程序、200 项检查全部通过）：
+已验证（2026-11-22，Ubuntu 24.04 arm64 容器 + Xvfb；Linux 套件 36 个程序、200 个测试用例全部通过）：
 
 - `test_linux_render`：6 项通过（像素/裁剪/圆角/Pango/PNG/图片与纹理四边形方向）。
 - `test_linux_backend`：5 项通过（窗口/绘制/输入/菜单、ready 前退出、剪贴板、桌面 API、inotify）。
