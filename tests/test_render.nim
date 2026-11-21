@@ -1,7 +1,10 @@
 import std/[os, unittest]
 
 import nimi/ui
-import nimi/render/cg
+when defined(linux):
+  import nimi/render/cairo
+else:
+  import nimi/render/cg
 
 suite "render":
   test "offscreen png":

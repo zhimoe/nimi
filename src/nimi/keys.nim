@@ -6,4 +6,5 @@ const
   KeyAlt* = 1'u32 shl 2
   KeyCommand* = 1'u32 shl 3
 
-const KeyShortcut* = when defined(windows): KeyControl else: KeyCommand
+const KeyShortcut* = when defined(windows) or defined(linux): KeyControl
+                     else: KeyCommand

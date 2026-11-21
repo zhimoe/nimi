@@ -1,0 +1,68 @@
+name: Linux framework
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "examples/**"
+      - "scripts/**"
+      - "config.nims"
+      - "nimi.nimble"
+      - ".github/workflows/linux.yml"
+  pull_request:
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "examples/**"
+      - "scripts/**"
+      - "config.nims"
+      - "nimi.nimble"
+      - ".github/workflows/linux.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Nim
+        uses: jiro4989/setup-nim-action@v2.3.1
+        with:
+          nim-version: "2.4.0"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install GTK, WebKitGTK and headless test tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libgtk-3-dev libwebkit2gtk-4.1-dev libnotify-dev \
+            xvfb dbus dbus-x11 fonts-dejavu-core
+
+      - name: Run the Linux test suite
+        run: xvfb-run -a dbus-run-session -- ./scripts/test-linux.sh
+
+      - name: Build CLI and demo apps
+        run: |
+          nim c -d:release --hints:off -o:nimi src/nimi/cli.nim
+          ./nimi version
+          ./nimi build examples/counter-native
+          ./nimi build examples/widgets-native
+          ./nimi build examples/desktop-native
+          ./nimi build examples/hello
+          ./nimi build examples/notes
+
+      - name: Upload Linux demo builds
+        uses: actions/upload-artifact@v7
+        with:
+          name: nimi-linux-demos
+          path: examples/*/dist/linux-*/**
+          if-no-files-found: error
+          retention-days: 7

@@ -2,6 +2,8 @@
 
 > 状态:草案 · 日期:2026-11-04 · 关联:[架构](01-architecture.md)、[macOS 后端](02-macos-backend.md)、[路线图](05-roadmap.md)
 > 参考:MyGo `internal/windows`(20.5k 行非测试)、`internal/linux`(15.8k 行)、`internal/gpu/{d3d11,gl}`、`cmd/mygo` 打包
+>
+> **2026-11-22 更新**：Linux 第一切片已实现，包括 GTK3 dlopen、Cairo/Pango 原生 UI、WebKitGTK、菜单/对话框/剪贴板/inotify/通知、`nimi build` 与 Linux CI。实际实现、限制与测试见 [Linux 后端](33-linux-framework.md)。
 
 ---
 

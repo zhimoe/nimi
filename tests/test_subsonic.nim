@@ -1,5 +1,6 @@
 import std/[unittest, uri, strutils, md5, os, json, tempfiles]
-import nimi/audio
+when defined(macosx):
+  import nimi/audio
 import ../examples/music/services/subsonic
 
 suite "Subsonic adapter":
@@ -40,12 +41,17 @@ suite "Subsonic adapter":
     let tracks = config.searchTracks("中文")
     let path = config.downloadTrack(tracks[0].id, directory)
     check fileExists(path)
-    let audio = openAudio(path)
-    defer: audio.close()
-    check abs(audio.duration - 1.0) < 0.01
-    audio.setVolume(0)
-    check audio.play()
-    audio.pause()
+    when defined(macosx):
+      let audio = openAudio(path)
+      defer: audio.close()
+      check abs(audio.duration - 1.0) < 0.01
+      audio.setVolume(0)
+      check audio.play()
+      audio.pause()
+    else:
+      # Audio playback is not implemented on this platform yet; the download
+      # and cache contract is still exercised.
+      check getFileSize(path) > 0
     check config.downloadTrack(tracks[0].id, directory) == path
     check getFileSize(path) == 16044
 

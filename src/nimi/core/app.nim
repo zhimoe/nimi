@@ -13,6 +13,10 @@ elif defined(windows):
   import ../platform/windows/app as windowsApp
   import ../render/gdi
   import ../scene/scene
+elif defined(linux):
+  import ../platform/linux/app as linuxApp
+  import ../render/cairo
+  import ../scene/scene
 
 type
   QuitEvent* = object
@@ -156,21 +160,25 @@ proc run*(a: App) =
       writeFile(generatePath, generateTypeScript())
     return
 
-  when defined(macosx) or defined(windows):
+  when defined(macosx) or defined(windows) or defined(linux):
     if currentBackend != nil:
       raise newException(BackendError, "An application backend is already active")
     defaultContentRenderer = proc(ctx: pointer, scene: Scene) =
       drawScene(ctx, scene)
     when defined(macosx):
       let backend = darwinApp.newDarwinBackend()
-    else:
+    elif defined(windows):
       let backend = windowsApp.newWindowsBackend()
+    else:
+      let backend = linuxApp.newLinuxBackend()
     currentBackend = backend
     setLoopHooks(backend.signal, backend.isMainThread)
     when defined(macosx):
       setWakeHook(darwinApp.wakeMain)
-    else:
+    elif defined(windows):
       setWakeHook(windowsApp.wakeWindowsMain)
+    else:
+      setWakeHook(linuxApp.wakeLinuxMain)
     allClosedHook = proc() =
       if not a.quitting:
         discard a.requestQuit()

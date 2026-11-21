@@ -1,6 +1,9 @@
 #!/bin/sh
 set -eu
 cd "$(dirname "$0")/.."
+if [ "$(uname -s)" = "Linux" ]; then
+  exec ./scripts/test-linux.sh "$@"
+fi
 nim c -r --hints:off --path:src -o:/tmp/nimi_test_windows_input tests/test_windows_input.nim
 nim c -r --hints:off --path:src -o:/tmp/nimi_test_windows_menu_plan tests/test_windows_menu_plan.nim
 nim c -r --hints:off --path:src -o:/tmp/nimi_test_menu_callbacks tests/test_menu_callbacks.nim

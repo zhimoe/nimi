@@ -1,7 +1,7 @@
 ## The M1 `nimi` CLI. Kept intentionally small: generate, dev, build, init,
 ## doctor. Packaging/signing/updater land in M7.
 
-import std/[algorithm, json, os, osproc, strtabs, strutils, times]
+import std/[algorithm, dynlib, json, os, osproc, strtabs, strutils, times]
 
 const
   Version = "0.1.0"
@@ -459,13 +459,58 @@ proc runBuildMacos(dir: string) =
       discard runChecked("xcrun stapler staple " & quoteShell(appPath))
       echo "Notarized and stapled."
 
+proc runBuildLinux(dir: string) =
+  let cfg = loadConfig(dir)
+  let mainPath = cfg.projectDir / cfg.main
+  if not fileExists(mainPath):
+    raise fail("main not found: " & mainPath)
+  const arch =
+    when defined(arm64): "arm64"
+    else: "amd64"
+  let outRoot = cfg.projectDir / cfg.outDir / ("linux-" & arch)
+  createDir(outRoot)
+  let resourcesDir = outRoot / "resources"
+  createDir(resourcesDir)
+  copyResources(cfg, resourcesDir)
+  let iconSource =
+    if isAbsolute(cfg.icon): cfg.icon
+    else: cfg.projectDir / cfg.icon
+  if fileExists(iconSource):
+    copyFile(iconSource, outRoot / lastPathPart(iconSource))
+  let exeName = if cfg.slug.len > 0: cfg.slug else: "app"
+  let exe = outRoot / exeName
+  echo "Building " & cfg.name & "…"
+  discard runChecked("nim c -d:release --hints:off --mm:atomicArc --threads:on " &
+    "--path:" & quoteShell(libraryPath()) & " --out:" & quoteShell(exe) & " " &
+    quoteShell(mainPath))
+
+  var desktop = "[Desktop Entry]\nType=Application\n" &
+    "Name=" & cfg.name & "\n" &
+    "Comment=" & cfg.name & "\n" &
+    "Exec=" & exeName & "\n" &
+    "Terminal=false\n" &
+    "Categories=Utility;\n"
+  if fileExists(iconSource):
+    desktop.add "Icon=" & lastPathPart(iconSource) & "\n"
+  if cfg.urlSchemes.len > 0:
+    var mime = ""
+    for scheme in cfg.urlSchemes:
+      if mime.len > 0:
+        mime.add ";"
+      mime.add "x-scheme-handler/" & scheme
+    desktop.add "MimeType=" & mime & ";\n"
+  writeFile(outRoot / (exeName & ".desktop"), desktop)
+  echo "Built " & exe
+
 proc runBuild(dir: string) =
   when defined(windows):
     runBuildWindows(dir)
   elif defined(macosx):
     runBuildMacos(dir)
+  elif defined(linux):
+    runBuildLinux(dir)
   else:
-    raise fail("nimi build supports macOS and Windows")
+    raise fail("nimi build does not support this platform")
 
 proc sourceSignature(cfg: Config): string =
   var parts: seq[string]
@@ -551,14 +596,36 @@ proc runDev(dir: string) =
       except CatchableError:
         discard
 
+proc haveLib(names: openArray[string]): bool =
+  for name in names:
+    if loadLib(name) != nil:
+      return true
+
 proc runDoctor() =
   echo "nimi " & Version
-  for cmd in ["nim --version", "clang --version", "xcrun --show-sdk-version"]:
+  when defined(linux):
+    let commands = ["nim --version", "cc --version"]
+  elif defined(windows):
+    let commands = ["nim --version", "gcc --version"]
+  else:
+    let commands = ["nim --version", "clang --version",
+                    "xcrun --show-sdk-version"]
+  for cmd in commands:
     let (output, code) = execCmdEx(cmd)
     if code == 0:
       echo "\n$ " & cmd & "\n" & output.splitLines()[0]
     else:
       echo "\n$ " & cmd & "\n  not available"
+  when defined(linux):
+    proc status(label: string, names: openArray[string]) =
+      echo label & ": " & (if haveLib(names): "available" else: "missing")
+    status("gtk3", ["libgtk-3.so.0", "libgtk-3.so"])
+    status("webkitgtk", ["libwebkit2gtk-4.1.so.0", "libwebkit2gtk-4.0.so.37"])
+    status("libnotify", ["libnotify.so.4", "libnotify.so"])
+    echo "display: " & (
+      if getEnv("DISPLAY").len > 0: "X11 " & getEnv("DISPLAY")
+      elif getEnv("WAYLAND_DISPLAY").len > 0: "Wayland " & getEnv("WAYLAND_DISPLAY")
+      else: "missing (set DISPLAY/WAYLAND_DISPLAY or use xvfb-run)")
 
 proc runInit(dir: string, native: bool) =
   let root = absolutePath(dir)
