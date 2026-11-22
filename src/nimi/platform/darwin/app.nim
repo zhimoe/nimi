@@ -1,7 +1,7 @@
 ## NSApplication lifecycle and the macOS Backend implementation.
 
 import ../contract
-import ./[clipboard, cookie, desktop, dialogs, menu, nowplaying, objc, shortcuts, tray, types, watch, window]
+import ./[clipboard, cookie, desktop, dialogs, login, menu, nowplaying, objc, shortcuts, tray, types, watch, window]
 
 const
   NimiAppDelegateClass = "NimiAppDelegate"
@@ -33,6 +33,9 @@ proc stopApp(state: DarwinState) =
 # --- app delegate ----------------------------------------------------------
 
 proc appDidFinishLaunching(self: Id, cmd: SEL, notification: Id) {.cdecl.} =
+  # AppKit handles the launch Apple Event while it sends this notification,
+  # so this is the first point where the login-item marker is readable.
+  detectOpenedAtLogin()
   if gState != nil and gState.handler.ready != nil:
     gState.handler.ready()
 
@@ -173,3 +176,9 @@ proc newDarwinBackend*(): Backend =
   result.newWindow = proc(opts: PlatformWindowOptions,
                           h: WindowHandler): NativeWindow =
     createWindow(state, opts, h)
+  result.setOpenAtLogin = proc(enabled: bool) =
+    login.setOpenAtLogin(enabled)
+  result.openAtLogin = proc(): bool =
+    login.openAtLogin()
+  result.wasOpenedAtLogin = proc(): bool =
+    login.wasOpenedAtLogin()

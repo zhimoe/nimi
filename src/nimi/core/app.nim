@@ -3,7 +3,7 @@
 import std/[os, tables]
 
 import ./[content, ipc, ipcpool, loop, menu, window]
-import ../platform/contract
+import ../platform/[contract, loginargs]
 
 when defined(macosx):
   import ../platform/darwin/app as darwinApp
@@ -60,6 +60,30 @@ proc onBeforeQuit*(a: App, fn: proc(e: var QuitEvent)) =
 
 proc onOpenURL*(a: App, fn: proc(url: string)) =
   a.openURLListeners.add fn
+
+proc setOpenAtLogin*(a: App, enabled: bool) =
+  ## Add or remove the app as a login item. On macOS this needs an app
+  ## bundle; without one the backend raises BackendError. Call it after
+  ## App.Run has started, from ready or a main-thread callback.
+  if currentBackend == nil or currentBackend.setOpenAtLogin == nil:
+    raise newException(BackendError,
+      "setOpenAtLogin requires a running application")
+  currentBackend.setOpenAtLogin(enabled)
+
+proc openAtLogin*(a: App): bool =
+  ## Whether the app starts when the user logs in. False before App.Run.
+  currentBackend != nil and currentBackend.openAtLogin != nil and
+    currentBackend.openAtLogin()
+
+proc wasOpenedAtLogin*(a: App): bool =
+  ## Whether the system started this process as a login item, e.g. to open
+  ## it in the background. Call it from ready or later: macOS learns the
+  ## answer from the launch Apple Event while it finishes launching. The
+  ## command-line marker is recognized even when the platform has no
+  ## login-item backend.
+  hasOpenedAtLoginArg(commandLineParams()) or
+    (currentBackend != nil and currentBackend.wasOpenedAtLogin != nil and
+     currentBackend.wasOpenedAtLogin())
 
 proc toPlatform(k: MenuItemKind): PlatformMenuItemKind =
   case k

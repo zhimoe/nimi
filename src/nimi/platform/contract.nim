@@ -42,6 +42,9 @@ type
     fileRoot*: string
     ephemeral*: bool
     ime*: bool
+    # Withhold the click that makes a non-key window key from its content
+    # (macOS). Other platforms ignore it.
+    consumeActivationClick*: bool
 
   SurfaceHandler* = object
     windowId*: uint64
@@ -232,6 +235,11 @@ type
     registerShortcut*: proc(accel: string, fn: proc()): bool {.closure.}
     unregisterShortcut*: proc(accel: string): bool {.closure.}
     unregisterAllShortcuts*: proc() {.closure.}
+    # Start at login. setOpenAtLogin raises BackendError when the platform
+    # cannot register the app; the queries return false instead.
+    setOpenAtLogin*: proc(enabled: bool) {.closure.}
+    openAtLogin*: proc(): bool {.closure.}
+    wasOpenedAtLogin*: proc(): bool {.closure.}
     screens*: proc(): seq[PlatformDisplay] {.closure.}
     cursorPosition*: proc(): PlatformPoint {.closure.}
     themeInfo*: proc(): PlatformTheme {.closure.}

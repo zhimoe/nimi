@@ -50,7 +50,11 @@ proc windowWillClose(self: Id, cmd: SEL, notification: Id) {.cdecl.} =
     h.closed(id)
   gState.windowHandlers.del(id)
   gState.delegateToId.del(self)
+  let webView = gState.webViews.getOrDefault(id)
+  if webView != nil:
+    gState.webViewToId.del(webView)
   gState.webViews.del(id)
+  gState.consumeActivationClicks.del(id)
   gState.userContentControllers.del(id)
   gState.windowDelegates.del(id)
   if surfaceView != nil:
@@ -167,7 +171,21 @@ proc surfaceMouseEvent(self: Id, event: Id, kind: int) =
     if h.mouseMoved != nil: h.mouseMoved(x, y)
 
 proc surfaceAcceptsFirstMouse(self: Id, cmd: SEL, event: Id): bool {.cdecl.} =
-  result = true
+  if gState == nil:
+    return true
+  let id = gState.surfaceToId.getOrDefault(self, 0'u64)
+  result = id == 0 or
+    not gState.consumeActivationClicks.getOrDefault(id, false)
+
+proc webViewAcceptsFirstMouse(self: Id, cmd: SEL, event: Id): bool {.cdecl.} =
+  ## The page follows its host window: by default the activation click is
+  ## the page's, as it is native UI's; consumeActivationClick withholds it
+  ## so it only brings the window forward.
+  if gState == nil:
+    return true
+  let id = gState.webViewToId.getOrDefault(self, 0'u64)
+  result = id == 0 or
+    not gState.consumeActivationClicks.getOrDefault(id, false)
 
 proc surfaceMouseDown(self: Id, cmd: SEL, event: Id) {.cdecl.} =
   if gState == nil:
@@ -482,6 +500,11 @@ proc surfaceClass(): Id =
     ("inputContext", cast[pointer](surfaceInputContext), "@@:"),
   ])
 
+proc webViewClass(): Id =
+  registerClass("NimiWebView", loadClass("WKWebView"), [
+    ("acceptsFirstMouse:", cast[pointer](webViewAcceptsFirstMouse), "c@:@"),
+  ])
+
 proc delegateClass(): Id =
   registerClass(NimiWindowDelegateClass, loadClass("NSObject"), [
     ("windowShouldClose:", cast[pointer](windowShouldClose), "c@:@"),
@@ -552,6 +575,7 @@ proc createWindow*(state: DarwinState, opts: PlatformWindowOptions,
   let delegate = send0(delegateClass(), sel("new"))
   state.windowHandlers[id] = h
   state.imeWindows[id] = opts.ime
+  state.consumeActivationClicks[id] = opts.consumeActivationClick
   state.delegateToId[delegate] = id
   state.windowDelegates[id] = delegate
 
@@ -597,7 +621,7 @@ proc createWindow*(state: DarwinState, opts: PlatformWindowOptions,
     release(userScript)
 
     webView = cast[MsgSendInitWebView](msgSend)(
-      send0(loadClass("WKWebView"), sel("alloc")),
+      send0(webViewClass(), sel("alloc")),
       sel("initWithFrame:configuration:"),
       NSRect(x: 0, y: 0, w: frame.w, h: frame.h), config)
     if webView == nil:
@@ -607,6 +631,7 @@ proc createWindow*(state: DarwinState, opts: PlatformWindowOptions,
                  NSViewWidthSizable or NSViewHeightSizable)
     sendVoidId(win, sel("setContentView:"), webView)
     state.webViews[id] = webView
+    state.webViewToId[webView] = id
     state.userContentControllers[id] = ucc
 
     if opts.html.len > 0:

@@ -22,6 +22,9 @@ type
     webViews*: Table[uint64, Id]
     userContentControllers*: Table[uint64, Id]
     windowDelegates*: Table[uint64, Id]
+    webViewToId*: Table[pointer, uint64]
+    consumeActivationClicks*: Table[uint64, bool]
+    openedAtLogin*: bool
     menuTargets*: Table[pointer, MenuHandler]
     appMenuTarget*: Id
     trays*: Table[uint64, Id]

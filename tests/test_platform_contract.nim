@@ -15,6 +15,9 @@ suite "partial platform contract":
       when field isnot string and field isnot uint64: check field != nil
     expect UnsupportedBackendError: discard backend.dialogs.open("", "", false, false)
     expect UnsupportedBackendError: discard backend.newTray(PlatformTrayOptions())
+    expect UnsupportedBackendError: backend.setOpenAtLogin(true)
+    check not backend.openAtLogin()
+    check not backend.wasOpenedAtLogin()
     expect UnsupportedBackendError: window.toggleFullScreen()
     expect UnsupportedBackendError: window.eval("1 + 1")
     expect UnsupportedBackendError: backend.clipboard.writeHTML("<b>text</b>")

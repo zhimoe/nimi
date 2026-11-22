@@ -216,7 +216,7 @@ xvfb-run -a dbus-run-session -- ./scripts/test-linux.sh
 - `hello` 在 Xvfb + WebKitGTK 下完成真实页面 IPC：`Greeter.greet` 与 `AppControl.emitPing` 都由页面调用成功。
 - `notes` 使用 `nimi://app/index.html` 启动，未出现加载失败。
 - `nimi build` 已构建 `counter-native`、`widgets-native`、`desktop-native`、`hello`、`notes`、`music`。
-- 共享 `test_render`、`test_ui` 在 Linux 上通过；macOS 全量回归 186 项仍通过。
+- 共享 `test_render`、`test_ui` 在 Linux 上通过；macOS 全量回归 192 项仍通过（2026-11-22）。
 
 仍需人工复核：
 

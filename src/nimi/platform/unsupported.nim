@@ -146,6 +146,12 @@ proc newUnsupportedBackend*(platform: string): Backend =
     unsupported(platform, "Backend.unregisterShortcut")
   result.unregisterAllShortcuts = proc() =
     unsupported(platform, "Backend.unregisterAllShortcuts")
+  result.setOpenAtLogin = proc(enabled: bool) =
+    unsupported(platform, "Backend.setOpenAtLogin")
+  result.openAtLogin = proc(): bool =
+    false
+  result.wasOpenedAtLogin = proc(): bool =
+    false
   result.screens = proc(): seq[PlatformDisplay] =
     unsupported(platform, "Backend.screens")
   result.cursorPosition = proc(): PlatformPoint =

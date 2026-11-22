@@ -21,6 +21,7 @@ type
     files*: FileServer
     session*: SessionMode
     ime*: bool
+    consumeActivationClick*: bool
 
   CloseEvent* = object
     prevented*: bool
@@ -266,7 +267,8 @@ proc newWindow*(opts: WindowOptions): Window =
     scheme: if o.files != nil: o.files.scheme else: "",
     fileRoot: if o.files != nil: o.files.root else: "",
     ephemeral: o.session == smEphemeral,
-    ime: o.ime)
+    ime: o.ime,
+    consumeActivationClick: o.consumeActivationClick)
   win.native = currentBackend.newWindow(popts, h)
   if o.content != nil:
     let wid = win.id
