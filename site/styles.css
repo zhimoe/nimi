@@ -771,6 +771,7 @@ figcaption {
 }
 
 .milestones .done > span { color: var(--green); }
+.milestones .preview > span { color: var(--gold); }
 .milestones .partial > span { color: var(--gold); }
 .milestones .planned > span { color: var(--faint); }
 

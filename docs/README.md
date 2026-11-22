@@ -1,6 +1,9 @@
 # Nimi 设计文档
 
-> 状态:持续更新 · 日期:2026-11-09
+> 状态:持续更新 · 日期:2026-11-22
+>
+> Preview 阶段的版本范围、平台差距与后续计划集中在 [backlog](backlog/README.md)；
+> 本索引保留设计、实现记录与验证文档。
 
 ## 索引
 
@@ -17,7 +20,7 @@
 | [08 M1 实现状态](08-m1-notes.md) | 已实现内容、崩溃修复、已知限制、下一步 | 实现者、评审者 |
 | [09 Nim 实践参考](09-nim-practices.md) | planetis-m/skills 的采用/偏离与落点 | 实现者 |
 | [10 M2 实现状态](10-m2-notes.md) | 原生 Surface + 布局/控件/输入/焦点/换行 + Tester/PNG + counter、决策、限制 | 实现者、评审者 |
-| [11 M3–M7 状态](11-m3-m7-status.md) | 控件/菜单/对话框/TextInput/DMG;M5 与剩余项 | 实现者、评审者 |
+| [11 M3–M7 状态](11-m3-m7-status.md) | 控件/菜单/对话框/TextInput/DMG 实现记录;剩余项见 backlog | 实现者、评审者 |
 | [12 Nimi Notes 验收](12-notes-demo.md) | WebView-first 笔记应用、IPC、菜单、导入导出、自动保存、打包 | 实现者、评审者 |
 | [13 官网与 Pages](13-website.md) | 静态官网、`nimi.zhi.moe` 自定义域名、Cloudflare DNS、GitHub Actions 部署 | 实现者、评审者 |
 | [14 macOS 桌面 API](14-macos-desktop-apis.md) | 屏幕/主题/窗口/托盘/通知/快捷键/对话框/登录项/首次激活点击;决策、验证与限制 | 实现者、评审者 |
@@ -34,12 +37,13 @@
 | [25 碎纸效果](25-shredder.md) | MyGo shader 来源、Nim Verlet 物理、WebGL 纸带渲染、限制 | 实现者、评审者 |
 | [26 原生碎纸](26-native-shred.md) | NSTimer 帧驱动、scene 纹理四边形、Metal mask/LayerEffect | 实现者、评审者 |
 | [27 项目回检](27-project-review.md) | 2026-11-05 架构/文档/测试回检、已修复项与剩余债务 | 实现者、评审者 |
-| [28 整改基线](28-remediation-status.md) | 当前限制、优先级、验收门槛;整改与音乐进展 | 所有人 |
+| [28 整改基线](28-remediation-status.md) | 当前限制、优先级、验收门槛;整改与音乐进展;入口见 backlog | 所有人 |
 | [29 异步 IPC](29-async-ipc.md) | UI 线程同步 dispatch、后台工作池、背压与关闭 | 实现者、评审者 |
 | [30 MyGo 能力对照](30-mygo-alignment.md) | v0.10.0/本地快照能力差异、计划校准、examples 回检 | 决策者、评审者 |
 | [31 Windows 环境变量工具](31-windows-environment.md) | EnvMan 对等界面、HKCU/系统变量、导入导出 | 实现者、评审者 |
 | [32 Windows 框架状态](32-windows-framework.md) | Win32/WebView2/GDI/IME/菜单/打包与验证记录 | 实现者、评审者 |
 | [33 Linux 后端](33-linux-framework.md) | GTK3/Cairo/Pango、WebKitGTK、桌面 API、测试与未实现项 | 实现者、评审者 |
+| [Backlog](backlog/README.md) | Preview 版本范围、平台差距、里程碑状态与后续版本 | 所有人 |
 
 ## 阅读顺序
 
@@ -48,6 +52,7 @@
 3. **UI/渲染**:03 + 02 的渲染/文本部分。
 4. **工具链**:04 + 01 §7/§9。
 5. **Windows/Linux**:06 + 01/02。
+6. **Preview 未完成项**:[backlog](backlog/README.md)。
 6. **API 迁移**:07。
 
 ## 约定
@@ -72,6 +77,7 @@
 | 2026-11-09 | 对齐 MyGo v0.8.3/本地快照能力、examples 回检;新增 30 |
 | 2026-11-22 | Linux 第一切片：GTK3/Cairo/Pango、WebKitGTK、桌面 API、Linux CI;新增 33 |
 | 2026-11-22 | macOS 增量：SMAppService/LaunchAgent 登录项、首次激活点击、MyGo `9b0ae9ef` 回检;同步 README、00/02/03/04/05/07/11/14/18/24/28/30/32/33 的状态、规模与测试计数 |
+| 2026-11-22 | 官网与 README 改为三平台 Preview;未完成项集中到 `docs/backlog/`，新增 backlog 索引与平台清单 |
 
 当前整改和开发入口：[28 整改基线](28-remediation-status.md)。
 

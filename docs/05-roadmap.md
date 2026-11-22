@@ -2,6 +2,8 @@
 
 > 2026-11-06：当前执行顺序调整为 **正确性 → 异步核心 → 虚拟列表/缓存/音频 → macOS 集成 → 发布验收**，见 [整改与开发基线](28-remediation-status.md)。下列 M0–M10 保留为范围分解；旧工期不是剩余排期，切片落地不代表整项验收完成。
 >
+> 2026-11-22：Preview 未完成项与平台差距的集中入口是 [backlog](backlog/README.md)；本文保留完整范围与验收标准。
+>
 > 2026-11-22：本地 MyGo 快照更新到 `9b0ae9ef`（v0.10.0+121）。其能力面仍远超 Nimi 已实现范围（编辑器/富文本/图表/视频、原生模块、完整音频引擎、自动化、三平台分发等）；这些进入 M6/M10/P2，不改变 1.0 的 macOS-first 范围。详见 [MyGo 能力对照](30-mygo-alignment.md)。
 
 > 状态:草案 · 日期:2026-11-04 · 关联:[可行性](00-feasibility.md)、[架构](01-architecture.md)、[macOS 后端](02-macos-backend.md)、[原生 UI](03-native-ui.md)
