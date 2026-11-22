@@ -8,6 +8,8 @@ nim c -r --hints:off --path:src -o:/tmp/nimi_test_windows_input tests/test_windo
 nim c -r --hints:off --path:src -o:/tmp/nimi_test_windows_menu_plan tests/test_windows_menu_plan.nim
 nim c -r --hints:off --path:src -o:/tmp/nimi_test_menu_callbacks tests/test_menu_callbacks.nim
 nim c -r --hints:off --path:src -o:/tmp/nimi_test_platform_contract tests/test_platform_contract.nim
+nim c -r --hints:off --path:src -o:/tmp/nimi_test_window_options tests/test_window_options.nim
+nim c -r --hints:off --path:src -o:/tmp/nimi_test_darwin_login tests/test_darwin_login.nim
 nim c -r --hints:off --path:src -o:/tmp/nimi_test_cli_windows tests/test_cli_windows.nim
 nim c -r --hints:off --path:src -o:/tmp/nimi_test_environment tests/test_environment.nim
 nim c -r --hints:off --path:src -o:/tmp/nimi_test_environment_model tests/test_environment_model.nim

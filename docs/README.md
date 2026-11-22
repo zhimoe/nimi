@@ -55,7 +55,7 @@
 - "必须" = 设计约束;"建议" = 推荐但可调整;"待定" = 需要评审决定。
 - 工期为规划量级(±50%),不是承诺。
 - 所有原型结果来自 `spikes/` 的实际运行,命令见根 README。
-- 参考仓库 `mygo/` 的稳定基线是 MyGo v0.8.3(`5add3817`);当前能力盘点快照是 `f234638d`(2026-11-09)。行数与能力差异见 [30](30-mygo-alignment.md)。
+- 参考仓库 `mygo/` 的稳定基线是 MyGo v0.10.0(`ebde9399`);当前能力盘点快照是 `9b0ae9ef`(2026-11-22)。行数与能力差异见 [30](30-mygo-alignment.md);旧文档中的 v0.8.3 条目保留为历史设计基线。
 
 ## 变更
 
@@ -71,6 +71,7 @@
 | 2026-11-07 | grapheme/IME range、关闭生命周期、异步 IPC 工作池;新增 29 |
 | 2026-11-09 | 对齐 MyGo v0.8.3/本地快照能力、examples 回检;新增 30 |
 | 2026-11-22 | Linux 第一切片：GTK3/Cairo/Pango、WebKitGTK、桌面 API、Linux CI;新增 33 |
+| 2026-11-22 | macOS 增量：SMAppService/LaunchAgent 登录项、首次激活点击、MyGo `9b0ae9ef` 回检;更新 14/30 |
 
 当前整改和开发入口：[28 整改基线](28-remediation-status.md)。
 

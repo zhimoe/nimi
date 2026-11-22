@@ -1,5 +1,7 @@
 # MyGo 当前能力对照与计划校准
 
+> 2026-11-22 macOS 增量回检使用本地 `mygo/main` `9b0ae9ef`（`v0.10.0-121-g9b0ae9ef`），比 `400ba3b1` 前进 91 个提交。本轮只跟进 Darwin 后端和跨平台窗口选项；Linux 首切片另见 [33](33-linux-framework.md)，增量结论见本文 §7。
+
 > 2026-11-19 Windows 回检使用本地 `mygo/main` `400ba3b1`，比此前本地 `46c97276` 前进 96 个提交。本轮直接跟进目录选择器的 WSL 共享路径兼容性，并复检 WebView2 生命周期、GDI 和桌面 API。实现与验收状态见 [Windows 框架状态](32-windows-framework.md)。
 
 > 日期：2026-11-09
@@ -112,3 +114,50 @@
 - 本文的规模统计基于本地 `mygo/` HEAD `f234638d`，排除 `_test.go`、`testdata`、`.git`、`node_modules`、`dist`。
 - Nimi 当前测试：`./scripts/test.sh` 107 个测试通过（2026-11-08 基线）。
 - MyGo 能力以 `mygo/docs/` 和源码为准；本文只做映射，不替代逐项源码核对。
+
+---
+
+## 7. 2026-11-22 macOS 后端增量
+
+参考本地 `mygo/main` `9b0ae9ef`。逐项检查 `400ba3b1..9b0ae9ef` 中接触
+`internal/darwin`、`window.go`、`page.go`、`internal/platform` 的提交后，
+本切片落地以下能力。
+
+### 7.1 已对齐
+
+| 上游提交 | 能力 | Nimi 实现 |
+|---|---|---|
+| `66963e44` | `WindowOptions.ConsumeActivationClick` | `WindowOptions.consumeActivationClick` → `PlatformWindowOptions`；Darwin 运行时子类 `NimiWebView` 和 `NimiSurfaceView` 的 `acceptsFirstMouse:` 按窗口选项返回；默认把首次点击交给页面/原生 UI，开启后只激活窗口 |
+| `9bfaa2c4` 等 | 登录项 / `WasOpenedAtLogin` | `app.setOpenAtLogin`、`app.openAtLogin`、`app.wasOpenedAtLogin`；macOS 13+ 用 `SMAppService`，macOS 12 回退 `~/Library/LaunchAgents`；`applicationDidFinishLaunching:` 中读取 launch Apple Event，并识别 `--nimi-opened-at-login` 标记 |
+
+### 7.2 已复核、无需改动的上游修复
+
+| 上游提交 | 行为 | 结论 |
+|---|---|---|
+| `edf2ac39` | Character Viewer 在窗口非 key 时插入文本 | Nimi 的 `surfaceInsertText` 直接调用 core 的 `insertText`，没有 MyGo 修复前的 `input.Active` 前置门槛；窗口失焦不清除文本输入状态 |
+| `ceb1b992` | 韩文输入法用 Backspace 取回一个字母 | Nimi 的 `surfaceKeyDown` 先调用 `interpretKeyEvents:`，`doCommandBySelector:` 的 `deleteBackward:` 再交给 core；不会先删除整个音节 |
+| `96dcfd62` | 页面离开时挂起的 Eval 返回错误 | Nimi `NativeWindow.eval` 是单向发送，没有返回 Promise，不存在该挂起状态 |
+| `e1a96e8e` | 自定义协议处理程序看到请求体长度 | Nimi 的 scheme 目前只提供静态文件读取，不接收请求体 |
+
+### 7.3 未进入本切片
+
+| 上游提交 | 能力 | 原因 |
+|---|---|---|
+| `6284bd92` | Dock 图标在激活策略切换时保留 | Nimi 尚未提供 Dock API（图标/徽标/弹跳/菜单），激活策略也固定为 Regular |
+| `49c8bc4c`、`84c83bb7`、`641de152` | 常开菜单的徽标对齐、宽度与局部重排 | Nimi 菜单只有普通 NSMenu 项，无常开菜单/徽标模型 |
+| `f7076071` | 托盘 flyout 开在图标下方 | Nimi 托盘使用 NSMenu，由 AppKit 定位，没有自绘 NSPopover flyout |
+| `3a6ad8db` | Panel 在显示时取得键盘 | Nimi 尚无 Panel/Flyout 窗口类型 |
+| `9d250927` | `PageOptions.ZoomControl` | macOS 的 WKWebView 没有该用户缩放，上游也只在 Windows 生效 |
+| `f8a45e37` | panic 写入 `crash.log` | 跨平台运行时能力，不属于 Darwin 后端；Nimi 的异常退出日志另行设计 |
+
+### 7.4 验证
+
+- 新增 `tests/test_window_options.nim`：窗口选项透传到平台契约。
+- 新增 `tests/test_darwin_login.nim`：LaunchAgent plist、登录标记参数、未打包进程的失败路径。
+- `nim check`：`core/app`、`darwin/app` 通过。
+- 真实窗口冒烟：`NIMI_SMOKE=quit examples/hello`（NimiWebView）与 `NIMI_SMOKE=appkit examples/counter-native`（NimiSurfaceView）通过。
+- `./scripts/test.sh` 全量通过（192 个测试用例，2026-11-22）。
+
+登录项的 Linux/Windows 后端仍走显式不支持：`setOpenAtLogin` 抛
+`UnsupportedBackendError`，两个查询返回 false；`wasOpenedAtLogin` 仍能识别
+命令行标记，供外部自启动配置使用。
