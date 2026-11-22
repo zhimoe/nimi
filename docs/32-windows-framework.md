@@ -33,6 +33,8 @@
 
 待验证：真实菜单与快捷键、WSL 目录导航和 Shell 库选择、自定义对话框交互、窗口状态 API 的完整统一。
 
+登录项：Windows 后端尚未实现；`app.setOpenAtLogin` 抛 `UnsupportedBackendError`，`openAtLogin`/后端 `wasOpenedAtLogin` 返回 false，core 的 `app.wasOpenedAtLogin` 仍能识别命令行标记。
+
 ## 3. 输入完整性
 
 已接入失焦/捕获丢失取消：SurfaceHandler 增加 cancelInput，Windows 的 WM_CAPTURECHANGED / WM_CANCELMODE 取消按压与拖动，WM_KILLFOCUS 还清除残留 UTF-16 高代理项和未提交组合文本。正文和原输入焦点位置保留；正常 mouse-up 先提交点击再释放捕获，避免释放事件误取消点击。共享引擎测试已验证不会产生幽灵点击、不会提交被取消的组合文本。
@@ -151,5 +153,5 @@ HTML 剪贴板通过 `CF_HTML` 读写 UTF-8 片段，使用字节偏移，区分
 - 不换行的 `textArea` 根据全文宽度显示横向滚动条。拖动滑块保留抓取位置，光标移动或编辑时恢复跟随。文本及行号在滑条上方裁剪，模态对话框拦截背景滚动。
 - Win32 从 `WM_MOUSEHWHEEL` 和 Shift+`WM_MOUSEWHEEL` 接收横向滚动。普通滚轮仍走纵向路径，缺少横向滚动区域时 Shift+滚轮沿用纵向滚动。
 - 环境变量应用恢复窗口位置时，使用最近显示器的工作区限制物理窗口边框。窄窗口的批量页面采用上下布局，并提供滚动变量选择器。
-- macOS 全量回归 186 项通过，Windows x64 和 ARM64 各交叉构建 25 个测试程序、CLI 和环境变量 GUI。
+- macOS 全量回归 192 项通过，Windows x64 和 ARM64 各交叉构建 25 个测试程序、CLI 和环境变量 GUI。
 - Windows 11 ARM64（UTM，22631.2861）通过 `test_windows_input_native`、`test_windows_host`、`test_environment_ui` 和 `test_environment_app_windows`，覆盖原生滚轮路由、窗口工作区、640×480 布局、脏草稿保护和 HKCU 集成。`test_ui` 中新增的横向滚动场景也通过，原有撤销和剪贴板用例已改为使用平台快捷键。

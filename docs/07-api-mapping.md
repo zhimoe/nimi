@@ -2,7 +2,7 @@
 
 > 2026-11-06 重评：本文包含目标设计，不能作为当前 API/线程安全/兼容性承诺。实现边界与后续验收以 [整改基线](28-remediation-status.md) 为准；历史工期不作为剩余工期。
 >
-> 2026-11-09：本映射以 MyGo 0.7.4 为基线。v0.8.3 之后新增的 Audio/Video、Now Playing、Power/Network/Secrets、Native Modules、Downloads/Permissions、Automation、WASM 浏览器等未逐项展开，见 [MyGo 能力对照](30-mygo-alignment.md)。
+> 2026-11-22：命名对照仍以 0.7.4 的公开面为基础，当前上游快照为 `9b0ae9ef`（v0.10.0+121）。表中包含尚未实现的规划项，不能直接当作当前 API；已实现范围以源码、[整改基线](28-remediation-status.md) 和 [MyGo 能力对照](30-mygo-alignment.md) 为准。本轮新增的 `consumeActivationClick`、`openAtLogin`/`wasOpenedAtLogin` 已标在对应表中。
 
 > 状态:草案 · 日期:2026-11-04 · 关联:[架构](01-architecture.md)、[工具链](04-tooling-and-ipc.md)
 > 目标:给实现者和迁移者一张"Go API 在 Nim 里长什么样"的对照表。不是逐方法完整清单,而是命名/语义/常用面的映射。
@@ -58,7 +58,9 @@
 | `App.RegisterURLScheme(s)` | `app.registerURLScheme(s)` |
 | `App.RequestSingleInstanceLock() bool` | `app.requestSingleInstanceLock(): bool` |
 | `App.OnSecondInstance(fn)` | `app.onSecondInstance(fn)` |
-| `App.SetOpenAtLogin(b)` | `app.setOpenAtLogin(b)` |
+| `App.SetOpenAtLogin(b)` | `app.setOpenAtLogin(b)`（macOS 已实现） |
+| `App.OpenAtLogin() bool` | `app.openAtLogin(): bool`（macOS 已实现） |
+| `App.WasOpenedAtLogin() bool` | `app.wasOpenedAtLogin(): bool`（macOS 与命令行标记） |
 | `App.OnReady(fn)` | `app.onReady(fn)` |
 | `App.OnWindowAllClosed(fn)` | `app.onWindowAllClosed(fn)` |
 | `App.OnBeforeQuit(fn)` | `app.onBeforeQuit(fn)` |
@@ -168,7 +170,8 @@ proc close*[T](c: Channel[T])
 | `MinWidth` / `MinHeight` | `minWidth` / `minHeight` |
 | `MaxWidth` / `MaxHeight` | `maxWidth` / `maxHeight` |
 | `FitContent` | `fitContent` |
-| `Hidden` | `hidden` |
+| `Hidden` | `hidden`（规划） |
+| `ConsumeActivationClick` | `consumeActivationClick`（macOS 已实现） |
 | `Frameless` | `frameless` |
 | `TitleBarStyle` | `titleBarStyle` |
 | `TrafficLightPosition` | `trafficLightPosition` |

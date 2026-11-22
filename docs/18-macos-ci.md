@@ -46,6 +46,8 @@ for dmg in examples/*/dist/*/*.dmg; do hdiutil verify "$dmg"; done
 
 GitHub Actions 结果在仓库 **Actions → macOS CI** 查看。
 
+2026-11-22 本地等价运行：macOS 套件 192 个测试用例通过；新增的 `test_window_options.nim` 与 `test_darwin_login.nim` 随 `scripts/test.sh` 进入 CI。Linux 套件在 Ubuntu 24.04 容器中 200 个用例通过，由独立的 `linux.yml` 运行。
+
 ## 3. 已知限制
 
 - 没有 release 发布 workflow(标签触发、上传 GitHub Release、更新 feed)

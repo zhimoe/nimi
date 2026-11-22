@@ -1,9 +1,11 @@
 # macOS 后端设计
 
 > 2026-11-06 重评：本文包含目标设计，不能作为当前 API/线程安全/兼容性承诺。实现边界与后续验收以 [整改基线](28-remediation-status.md) 为准；历史工期不作为剩余工期。
+>
+> 2026-11-22 实现备注：`NimiWebView`（含 `acceptsFirstMouse:` / `consumeActivationClick`）与登录项（`SMAppService` / LaunchAgent）已落地，见 [macOS 桌面 API](14-macos-desktop-apis.md) §8；本文其余内容仍是目标设计。
 
 > 状态:草案 · 日期:2026-11-04 · 关联:[架构](01-architecture.md)、[原生 UI](03-native-ui.md)、[路线图](05-roadmap.md)
-> 参考:MyGo `internal/darwin`(14.5k 行)、`internal/gpu/metal`(6.1k 行)、`internal/text/coretext_darwin.go`(1.6k 行)
+> 参考:MyGo `internal/darwin`(18.3k 行)、`internal/gpu/metal`(13.1k 行)、`internal/text/coretext_darwin.go`(1.8k 行)
 > 原型:`spikes/objc_hello`、`spikes/wkwebview`、`spikes/coretext`、`spikes/metal`、`spikes/blocks`
 
 ---
@@ -326,7 +328,7 @@ quit()
 | `NimiWindow` | `NSWindow` | 普通窗口;允许 key/main;`orderWindow` 处理显示时机 |
 | `NimiPanel` | `NSPanel` | 浮动面板;`canBecomeKey` true,`canBecomeMain` false |
 | `NimiFlyout` | `NSPanel` | 父窗口拥有的浮层;仅 focusable 时成为 key |
-| `NimiWebView` | `WKWebView` | 记录 mouseDown、拖拽、右键、滚轮、无障碍父节点 |
+| `NimiWebView` | `WKWebView` | 记录 mouseDown、拖拽、右键、滚轮、无障碍父节点;`acceptsFirstMouse:` 跟随 `consumeActivationClick` |
 | `NimiSurfaceView` | `NSView` | 原生 UI 绘制面 + 输入 + IME |
 | `NimiWindowDelegate` | `NSObject` | 窗口/导航/UI/脚本消息/下载 delegate |
 

@@ -3,7 +3,7 @@
 > 2026-11-06 重评：本文包含目标设计，不能作为当前 API/线程安全/兼容性承诺。实现边界与后续验收以 [整改基线](28-remediation-status.md) 为准；历史工期不作为剩余工期。
 
 > 状态:草案 · 日期:2026-11-04 · 关联:[架构](01-architecture.md)、[macOS 后端](02-macos-backend.md)、[路线图](05-roadmap.md)
-> 参考:MyGo v0.8.3。`ui/` 根包 68.0k 行(非测试)、`ui/editor` 16.7k、`ui/richtext` 6.6k、`ui/markdown` 8.4k、`ui/chart` 1.7k、`ui/video` 2.5k、`ui/shader` 0.8k。
+> 参考:MyGo v0.10.0（本地快照 `9b0ae9ef`）。`ui/` 根包 77.5k 行(非测试)、`ui/editor` 21.1k、`ui/richtext` 7.4k、`ui/markdown` 8.7k、`ui/chart` 1.9k、`ui/video` 2.6k、`ui/shader` 1.0k。
 > 公开面:旧快照为 120 个顶层入口;当前 MyGo 入口更多,需重新盘点。本文的控件清单是 Nimi 的目标子集,不是 MyGo 当前全量清单。完整差异见 [MyGo 能力对照](30-mygo-alignment.md)。
 
 ---
