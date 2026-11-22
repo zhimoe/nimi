@@ -86,17 +86,18 @@ open -b com.example.nimi-protocol "nimiprotocol://hello?from=cli"
 
 - 自定义 scheme 的多 root/多 scheme、CORS、分块/范围请求、缓存
 - SPA fallback、dev server URL、内置 VFS
-- Cookie 列表/设置/删除/清空
-- ClearData/站点数据清理策略 UI
+- 站点数据清理策略 UI;Cookie 写入/删除见 [M5 Cookies](17-m5-cookies.md)
 - 内容规则、认证、证书错误处理
-- 文件监视(FSEvents/去抖/限额)
-- 文档控制器(自动保存/冲突/最近文档/退出询问)
-- 启动文件/文件关联、单实例边界情况
+- 启动文件/文件关联、macOS 单实例边界情况
 - i18n
+
+FSEvents 文件监视与 Document 控制器已在后续切片落地，见
+[M5 文件监视](16-m5-file-watching.md) 与 [M5 文档](23-m5-document.md)。
 
 ## 5. 下一步
 
 1. 把 FileServer 改成异步、支持流式响应与 `Range`。
 2. 增加 `WindowOptions` 的多 scheme/多 root 配置。
+3. 补文件关联/启动文件与 macOS 单实例边界。
 3. 实现 Cookie 查询/设置/清理与站点数据清理。
 4. 文件监视与文档控制器优先服务真实笔记/IDE 类应用。

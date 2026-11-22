@@ -20,7 +20,7 @@
 | [11 M3–M7 状态](11-m3-m7-status.md) | 控件/菜单/对话框/TextInput/DMG;M5 与剩余项 | 实现者、评审者 |
 | [12 Nimi Notes 验收](12-notes-demo.md) | WebView-first 笔记应用、IPC、菜单、导入导出、自动保存、打包 | 实现者、评审者 |
 | [13 官网与 Pages](13-website.md) | 静态官网、`nimi.zhi.moe` 自定义域名、Cloudflare DNS、GitHub Actions 部署 | 实现者、评审者 |
-| [14 macOS 桌面 API](14-macos-desktop-apis.md) | 屏幕/主题/窗口/托盘/通知/快捷键/对话框;决策、验证与限制 | 实现者、评审者 |
+| [14 macOS 桌面 API](14-macos-desktop-apis.md) | 屏幕/主题/窗口/托盘/通知/快捷键/对话框/登录项/首次激活点击;决策、验证与限制 | 实现者、评审者 |
 | [15 M5 FileServer](15-m5-file-server.md) | 自定义 `nimi://` scheme、FileServer、深链、Session、资源打包 | 实现者、评审者 |
 | [16 M5 文件监视](16-m5-file-watching.md) | FSEvents、文件事件、关闭与后续去抖/忽略规则 | 实现者、评审者 |
 | [17 M5 Cookies](17-m5-cookies.md) | WKHTTPCookieStore 查询/清理、异步 block、限制 | 实现者、评审者 |
@@ -36,7 +36,7 @@
 | [27 项目回检](27-project-review.md) | 2026-11-05 架构/文档/测试回检、已修复项与剩余债务 | 实现者、评审者 |
 | [28 整改基线](28-remediation-status.md) | 当前限制、优先级、验收门槛;整改与音乐进展 | 所有人 |
 | [29 异步 IPC](29-async-ipc.md) | UI 线程同步 dispatch、后台工作池、背压与关闭 | 实现者、评审者 |
-| [30 MyGo 能力对照](30-mygo-alignment.md) | v0.8.3/本地快照能力差异、计划校准、examples 回检 | 决策者、评审者 |
+| [30 MyGo 能力对照](30-mygo-alignment.md) | v0.10.0/本地快照能力差异、计划校准、examples 回检 | 决策者、评审者 |
 | [31 Windows 环境变量工具](31-windows-environment.md) | EnvMan 对等界面、HKCU/系统变量、导入导出 | 实现者、评审者 |
 | [32 Windows 框架状态](32-windows-framework.md) | Win32/WebView2/GDI/IME/菜单/打包与验证记录 | 实现者、评审者 |
 | [33 Linux 后端](33-linux-framework.md) | GTK3/Cairo/Pango、WebKitGTK、桌面 API、测试与未实现项 | 实现者、评审者 |
@@ -71,7 +71,7 @@
 | 2026-11-07 | grapheme/IME range、关闭生命周期、异步 IPC 工作池;新增 29 |
 | 2026-11-09 | 对齐 MyGo v0.8.3/本地快照能力、examples 回检;新增 30 |
 | 2026-11-22 | Linux 第一切片：GTK3/Cairo/Pango、WebKitGTK、桌面 API、Linux CI;新增 33 |
-| 2026-11-22 | macOS 增量：SMAppService/LaunchAgent 登录项、首次激活点击、MyGo `9b0ae9ef` 回检;更新 14/30 |
+| 2026-11-22 | macOS 增量：SMAppService/LaunchAgent 登录项、首次激活点击、MyGo `9b0ae9ef` 回检;同步 README、00/02/03/04/05/07/11/14/18/24/28/30/32/33 的状态、规模与测试计数 |
 
 当前整改和开发入口：[28 整改基线](28-remediation-status.md)。
 

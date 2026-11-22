@@ -74,6 +74,15 @@ nim c -r -d:nimiImeDebug --path:src examples/form-native/main.nim
   - Escape 是否正确取消组合
   - 连续重转换/替换选中文本是否与原生控件一致
 
+### 3.1 上游 IME 修复复核（2026-11-22）
+
+对照 MyGo `9b0ae9ef` 的两个 Darwin 输入修复，Nimi 当前路径已满足：
+
+- Character Viewer 在窗口非 key 时插入文本：`surfaceInsertText` 直接调用 core 的 `insertText`，没有“输入必须仍处于 active”的前置判断；失焦通知也不会清空 core 的文本输入状态。
+- 韩文输入法用 Backspace 取回一个字母：`surfaceKeyDown` 先调用 `interpretKeyEvents:`；IME 提交的替换走 `insertText:replacementRange:`，未消费的 Backspace 只经 `doCommandBySelector:` 的 `deleteBackward:` 进入 core 一次，不会先删整个音节。
+
+这两项仍需真实韩文/Character Viewer 人工验收，合成事件通过不等于系统输入法通过。
+
 ## 4. 已知限制
 
 - 未在真实拼音/日文输入法下完成端到端人工验证

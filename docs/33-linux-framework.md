@@ -221,7 +221,7 @@ xvfb-run -a dbus-run-session -- ./scripts/test-linux.sh
 仍需人工复核：
 
 - 真实 GNOME/KDE 桌面下的窗口装饰、最大化/全屏、HiDPI 多屏、Wayland 行为。
-- 中文/日文输入法的组合窗与候选窗（当前未接 GtkIMContext）。
+- 中文/日文输入法的组合窗与候选窗（GtkIMContext 已接入，仍需实机验收）。
 - 系统托盘、全局快捷键、媒体键、音频。
 - WebKitGTK 真实页面的下载、权限请求、context menu 与多窗口 `window.open`。
 - `.deb`/PKGBUILD 与桌面菜单安装。
@@ -240,6 +240,8 @@ xvfb-run -a dbus-run-session -- ./scripts/test-linux.sh
 | 拖放 | 未接 | GtkSelection |
 | 打包 | 目录 + `.desktop` + `.deb` | PKGBUILD/AppImage/签名/更新 |
 | WebView 高级 | 无下载/权限/context menu/新窗口；ephemeral session 已隔离 | WebKitGTK policy/download 回调 |
+| 登录项 | 未实现；`setOpenAtLogin` 抛 `UnsupportedBackendError` | XDG autostart + `--nimi-opened-at-login` 标记 |
+| 首次激活点击 | 暂忽略 `consumeActivationClick` | 按 GTK 焦点/激活策略补 |
 
 ## 6. 设计决策
 

@@ -2,7 +2,7 @@
 
 > 2026-11-06：当前执行顺序调整为 **正确性 → 异步核心 → 虚拟列表/缓存/音频 → macOS 集成 → 发布验收**，见 [整改与开发基线](28-remediation-status.md)。下列 M0–M10 保留为范围分解；旧工期不是剩余排期，切片落地不代表整项验收完成。
 >
-> 2026-11-09：已对照 MyGo v0.8.3/本地 `f234638d` 盘点能力。MyGo 当前远超 Nimi 已实现范围（编辑器/富文本/图表/视频、原生模块、完整音频引擎、自动化、三平台分发等）；这些进入 M6/M10/P2，不改变 1.0 的 macOS-first 范围。详见 [MyGo 能力对照](30-mygo-alignment.md)。
+> 2026-11-22：本地 MyGo 快照更新到 `9b0ae9ef`（v0.10.0+121）。其能力面仍远超 Nimi 已实现范围（编辑器/富文本/图表/视频、原生模块、完整音频引擎、自动化、三平台分发等）；这些进入 M6/M10/P2，不改变 1.0 的 macOS-first 范围。详见 [MyGo 能力对照](30-mygo-alignment.md)。
 
 > 状态:草案 · 日期:2026-11-04 · 关联:[可行性](00-feasibility.md)、[架构](01-architecture.md)、[macOS 后端](02-macos-backend.md)、[原生 UI](03-native-ui.md)
 > 估算口径:1 名资深工程师全职 + AI 辅助;复用 MyGo 的 JS/协议/模板/示例;不移植着色器编译器;系统文本引擎。工期为规划量级(±50%)。
@@ -25,15 +25,15 @@
 | 里程碑 | 内容 | 工期 | 累计 | 状态 |
 |---|---|---|---:|---|
 | M0 | 可行性原型 | 1–2 天 | 1–2 天 | ✅ 已完成 |
-| M1 | 仓库骨架 + core + macOS WebView + IPC + `hello` | 6–10 周 | 2–3 月 | 进行中(核心切片已跑通) |
-| M2 | 原生 UI 基础 + CoreText + `counter-native` | 8–12 周 | 4–6 月 | |
+| M1 | 仓库骨架 + core + macOS WebView + IPC + `hello` | 6–10 周 | 2–3 月 | 切片(WebView/IPC/TS/CLI 已跑通;Channel/preload/下载权限未完成) |
+| M2 | 原生 UI 基础 + CoreText + `counter-native` | 8–12 周 | 4–6 月 | 切片(布局/文本/输入/渲染/Tester 已跑通;完整控件/动画/无障碍未完成) |
 | M3 | 控件/布局/滚动 + Metal 起步 + `gallery` 子集 | 10–16 周 | 7–10 月 | 切片(控件/ScrollView/Image/纹理四边形/NSTimer;Metal 专用效果/其余控件未完成) |
-| M4 | 桌面 API:菜单/托盘/通知/快捷键/对话框/剪贴板 | 8–12 周 | 9–13 月 | 切片(macOS 桌面 API 大部分;剪贴板图片/通知点击/托盘图标未完成) |
-| M5 | 文档/会话/Cookie/协议/文件监视/深链/单实例 | 8–12 周 | 11–16 月 | 切片(协议/FileServer/深链/Session/FSEvents/Cookie/文档;其余未开始) |
+| M4 | 桌面 API:菜单/托盘/通知/快捷键/对话框/剪贴板/登录项 | 8–12 周 | 9–13 月 | 切片(macOS 桌面 API 大部分;登录项与首次激活点击已落地;剪贴板图片/通知点击/托盘图标未完成) |
+| M5 | 文档/会话/Cookie/协议/文件监视/深链/单实例 | 8–12 周 | 11–16 月 | 切片(协议/FileServer/深链/Session/FSEvents/Cookie/文档;Linux 单实例已落地;其余未开始) |
 | M6 | 文本编辑/IME/可访问性 + Metal 完整 | 12–20 周 | 14–21 月 | 切片(TextInput/TextArea 含内部滚动/滚动条/选择/剪贴板/Undo/ScrollView/滚动条/IME;通用 Metal/可访问性/虚拟列表未开始) |
 | M7 | 打包/签名/公证/DMG/更新/CI | 6–10 周 | 16–23 月 | 切片(.app/DMG/签名/图标/CI 构建;更新/release/公证验证未完成) |
-| M8 | Windows:Win32 + WebView2 + D3D11 + 打包 | 4–8 月 | 20–31 月 | |
-| M9 | Linux:GTK3 + WebKitGTK + GL + 打包 | 4–8 月 | 24–39 月 | |
+| M8 | Windows:Win32 + WebView2 + D3D11 + 打包 | 4–8 月 | 20–31 月 | 切片(Win32/WebView2/GDI/菜单/IME/打包已落地;D3D11/实机验收待补) |
+| M9 | Linux:GTK3 + WebKitGTK + GL + 打包 | 4–8 月 | 24–39 月 | 切片(GTK3/WebKitGTK/Cairo/Pango/桌面 API/.deb 已落地;GL/ATK/Wayland 待补) |
 | M10 | 插件/i18n/音频/自动化/浏览器后端 | 持续 | | |
 
 > "累计"从 M1 开始按单人全职估算。3 人并行可压缩 macOS 阶段约 30–40%。
@@ -285,7 +285,7 @@ mask/LayerEffect 原型;List/Table/Tabs/Select、通用 Metal scene 合成器仍
 
 ## 6. M4:桌面 API(8–12 周)
 
-**当前状态(2026-11-09)**:Clipboard、菜单/NSMenu/role、动态菜单、Open/Save/Message/Confirm 对话框、屏幕/光标、明暗主题/强调色、窗口控制/焦点、NSStatusItem 托盘、NSUserNotification 通知、Carbon 全局快捷键、Now Playing/媒体键基础已实现。`examples/desktop-native` 是验收示例;`examples/notes` 是 WebView-first 应用,`examples/music` 是原生-first 应用。剩余:通知权限/点击、托盘图标、快捷键冲突提示、剪贴板图片/文件、Now Playing artwork 与真实媒体键验收,见 [macOS 桌面 API](14-macos-desktop-apis.md)。
+**当前状态(2026-11-22)**:Clipboard、菜单/NSMenu/role、动态菜单、Open/Save/Message/Confirm 对话框、屏幕/光标、明暗主题/强调色、窗口控制/焦点、NSStatusItem 托盘、NSUserNotification 通知、Carbon 全局快捷键、Now Playing/媒体键/artwork、登录项（SMAppService/LaunchAgent）与窗口首次激活点击已实现。`examples/desktop-native` 是验收示例;`examples/notes` 是 WebView-first 应用,`examples/music` 是原生-first 应用。剩余:通知权限/点击、托盘图标、快捷键冲突提示、剪贴板图片/文件、真实媒体键与登录项审批验收,见 [macOS 桌面 API](14-macos-desktop-apis.md)。
 
 - 菜单完整:role/动态更新/上下文菜单/Dock 菜单。
 - 托盘:图标/菜单/点击/深浅色。
@@ -296,7 +296,8 @@ mask/LayerEffect 原型;List/Table/Tabs/Select、通用 Metal scene 合成器仍
 - 剪贴板完整:文件/自定义格式/延迟提供。
 - Shell:回收站/文件图标/已安装应用。
 - 窗口高级:标题栏样式/traffic lights/vibrancy/透明度/全屏/多屏/状态持久化。
-- 单实例/深链/文件关联/最近文档/登录项。
+- 登录项:macOS 已实现;Linux/Windows 后端待补。
+- 单实例/深链/文件关联/最近文档。
 
 ### 验收
 
@@ -308,7 +309,7 @@ mask/LayerEffect 原型;List/Table/Tabs/Select、通用 Metal scene 合成器仍
 
 ## 7. M5:文档、会话、协议、监视(8–12 周)
 
-**当前状态(2026-11-05)**:自定义 `nimi://` scheme、FileServer、安全路径/MIME、`resources` 打包复制、URL scheme 深链、持久/临时 Session、FSEvents 文件监视、默认 Cookie 查询/清理、Document 控制器和 `examples/protocol-native`/`watch-native`/`document-native` 已实现。Cookie 写入/删除、自动保存/最近文档/单实例边界未开始,见 [M5 FileServer](15-m5-file-server.md) 与 [M5 文件监视](16-m5-file-watching.md)。
+**当前状态(2026-11-22)**:自定义 `nimi://` scheme、FileServer、安全路径/MIME、`resources` 打包复制、URL scheme 深链、持久/临时 Session、FSEvents 文件监视、默认 Cookie 查询/清理、Document 控制器和 `examples/protocol-native`/`watch-native`/`document-native` 已实现；Linux 已有 D-Bus 单实例/深链。Cookie 写入/删除、自动保存/最近文档、macOS 单实例边界未开始,见 [M5 FileServer](15-m5-file-server.md)、[M5 文件监视](16-m5-file-watching.md) 与 [Linux 后端](33-linux-framework.md)。
 
 - 自定义协议 + FileServer + CORS + 分块。
 - 内置前端 VFS / `nimi://` / dev URL。
@@ -482,8 +483,8 @@ mask/LayerEffect 原型;List/Table/Tabs/Select、通用 Metal scene 合成器仍
 
 ## 15. 上游同步
 
-- 稳定基线锁定 MyGo v0.8.3(commit `5add3817`,2026-11-07)。
-- 本地 `mygo/` HEAD `f234638d`(2026-11-09)用于能力盘点和新特性跟踪;不要把它等同于 Nimi 已实现范围。
+- 稳定基线锁定 MyGo v0.10.0(commit `ebde9399`,2026-11-17)。
+- 本地 `mygo/` HEAD `9b0ae9ef`(2026-11-22)用于能力盘点和新特性跟踪;不要把它等同于 Nimi 已实现范围。
 - 每季度对照 `docs/architecture.md` 和 `internal/platform` 变更,更新本设计;当前差异见 [30](30-mygo-alignment.md)。
 - 协议/TS 生成变更优先同步;平台细节按需。
 - 保留差异清单(`01-architecture.md` §10),避免无意识分叉。
@@ -492,4 +493,4 @@ mask/LayerEffect 原型;List/Table/Tabs/Select、通用 Metal scene 合成器仍
 
 ## 16. 当前下一步
 
-按 [整改基线](28-remediation-status.md) 的验收门槛执行。grapheme 编辑、IME UTF-16 range、窗口关闭失效、任务取消/超时、固定行高虚拟列表、缓存条目上限、本地音频与队列会话均已落地并有自动测试；后台 IPC 已有工作池。真实拼音/日文输入法仍需人工验收。下一阶段是后台 IPC 的流式返回、音乐封面 artwork/缓存管理与流式播放、macOS 集成和发布验证。实际性能与音频原型完成后重新排期；不以原型通过推算完整框架交付日期。
+按 [整改基线](28-remediation-status.md) 的验收门槛执行。grapheme 编辑、IME UTF-16 range、窗口关闭失效、任务取消/超时、固定行高虚拟列表、缓存条目上限、本地音频与队列会话、Now Playing/artwork、macOS 登录项与窗口首次激活点击均已落地并有自动测试；后台 IPC 已有工作池，Linux 已有独立后端。真实拼音/日文输入法、媒体键和登录项系统审批仍需人工验收。下一阶段是后台 IPC 的流式返回、音乐缓存管理与流式播放、通知/拖放、macOS 发布验证。实际性能与音频原型完成后重新排期；不以原型通过推算完整框架交付日期。

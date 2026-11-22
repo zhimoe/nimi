@@ -13,6 +13,7 @@
 | `watch-native` | FSEvents 文件监视 | 保留 |
 | `document-native` | Document 控制器 | 保留 |
 | `desktop-native` | M4 桌面 API（菜单/托盘/通知/快捷键/对话框等） | 保留 |
+| `environment` | Windows 环境变量工具/桌面集成 | 保留 |
 | `notes` | WebView-first 完整应用：IPC、Markdown、导入导出 | 保留 |
 | `music` | 原生 UI + 音频 + 队列/会话 + Subsonic | 保留（主 dogfood） |
 | `shredder` | WebView/WebGL 碎纸效果 | 保留（唯一 WebView 效果路径） |

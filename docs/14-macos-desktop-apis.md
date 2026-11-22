@@ -2,7 +2,7 @@
 
 > 日期:2026-11-05 · 对应 M4 剩余项
 >
-> 2026-11-09：MyGo v0.8.3 的桌面面已扩展到 Now Playing/媒体键、Power、Network/Proxy、Secrets、Downloads、权限、拖放、最近文档、Jump List、窗口状态、vibrancy、SetInputRegion 等。本文只记录 Nimi 已实现切片，差距与优先级见 [MyGo 能力对照](30-mygo-alignment.md)。
+> 2026-11-22：本地 MyGo 快照更新到 `9b0ae9ef`（v0.10.0+121）。其桌面面还包括 Power、Network/Proxy、Secrets、Downloads、权限、拖放、最近文档、Jump List、窗口状态、vibrancy、SetInputRegion 等。本文只记录 Nimi 已实现切片，差距与优先级见 [MyGo 能力对照](30-mygo-alignment.md)。
 
 ---
 
@@ -90,12 +90,12 @@ global shortcut: true
 6. 继续 M5/M6/M7:协议/文件监视、TextArea/IME、更新/公证(其中
    协议/文件监视/TextArea/IME 已在后续切片落地)。
 
-## 6. 与 MyGo v0.8.3 的后续差距
+## 6. 与 MyGo 当前快照的后续差距
 
-按对 Nimi 当前目标的价值排序，尚未实现：
+按对 Nimi 当前目标的价值排序，尚未实现（截至 `9b0ae9ef`）：
 
 1. Keychain/Secrets（Subsonic 凭据）。
-2. Cookie 写入/删除、Session 隔离。
+2. Cookie 写入/删除、按 Session 指定 store。
 3. 通知权限、点击回调、移除。
 4. 拖放（文件/文本/URL）、窗口输入区域。
 5. Power/App Nap、Network 状态与代理。
@@ -111,12 +111,12 @@ global shortcut: true
 - Darwin 后端懒加载 `MediaPlayer.framework`，使用 `MPNowPlayingInfoCenter` 显示状态、`MPRemoteCommandCenter` 接收媒体键/系统媒体控制。
 - 命令回调仍在主线程；`setNowPlaying`/`clearNowPlaying` 可在 `whenReady` 后调用。
 - Music 已接入：切歌、播放/暂停、seek、下一首/上一首和停止会更新系统状态；退出/关窗清除。
-- 已接入封面 artwork（PNG/JPEG bytes → `MPMediaItemArtwork`）。未做：真实媒体键人工验收、Windows/Linux 媒体控制。
+- 已接入封面 artwork（PNG/JPEG bytes → `MPMediaItemArtwork`）。Linux 已接入 MPRIS2（见 [Linux 后端](33-linux-framework.md)）；未做：真实媒体键人工验收、Windows 媒体控制。
 
 ## 8. 登录项与首次激活点击（2026-11-22）
 
 - 新增 `app.setOpenAtLogin(enabled)`、`app.openAtLogin()`、`app.wasOpenedAtLogin()`。macOS 13+ 使用 `SMAppService`；macOS 12 回退到 `~/Library/LaunchAgents/<bundle-id>.plist`，启动参数带 `--nimi-opened-at-login`。两者都要求应用在 `.app` 包内运行；未打包进程调用 `setOpenAtLogin` 会抛出 `BackendError`。
 - `wasOpenedAtLogin` 在 `applicationDidFinishLaunching:` 中读取 launch Apple Event，这是 AppKit 唯一仍持有该事件的时机；同时识别 LaunchAgent 标记。应用可在 `whenReady` 中据此决定是否创建窗口。
 - 新增 `WindowOptions.consumeActivationClick`：默认首次点击会同时激活窗口并交给页面/原生 UI；设为 true 时只激活窗口。Darwin 后端用运行时子类 `NimiWebView`（WKWebView）和 `NimiSurfaceView` 覆盖 `acceptsFirstMouse:`。Linux/Windows 暂忽略该选项。
-- Linux/Windows 的 `setOpenAtLogin` 仍显式不支持，`openAtLogin`/`wasOpenedAtLogin` 查询返回 false；后者仍能识别命令行标记。
+- Linux/Windows 的 `setOpenAtLogin` 仍显式不支持，`openAtLogin`/后端 `wasOpenedAtLogin` 查询返回 false；core 的 `app.wasOpenedAtLogin` 仍能识别命令行标记。
 - 验证：`tests/test_window_options.nim`、`tests/test_darwin_login.nim`；`NIMI_SMOKE=quit examples/hello` 与 `NIMI_SMOKE=appkit examples/counter-native` 冒烟通过。

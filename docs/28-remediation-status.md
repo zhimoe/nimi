@@ -1,6 +1,6 @@
 # 框架整改与后续开发基线
 
-日期：2026-11-06（2026-11-09 更新）。参考：MyGo v0.8.3 `5add3817`；本地能力盘点快照 `f234638d`。本文是当前状态入口；旧设计中的接口和工期不代表已交付承诺。MyGo 能力差异见 [30](30-mygo-alignment.md)。
+日期：2026-11-06（2026-11-22 更新）。参考：MyGo v0.10.0 `ebde9399`；本地能力盘点快照 `9b0ae9ef`。本文是当前状态入口；旧设计中的接口和工期不代表已交付承诺。MyGo 能力差异见 [30](30-mygo-alignment.md)。
 
 ## 已实施的整改
 
@@ -26,7 +26,7 @@ CG renderer 新增 clearImageCache、setImageCacheLimit、imageCacheStats。原�
 1. 正确性：grapheme 编辑、IME UTF-16/range、保存失败恢复、窗口关闭回调失效。验收：中日韩/emoji 编辑、关闭期间任务完成、失败保存不丢原文件。代码与合成测试已完成；真实拼音/日文输入法人工验收仍待执行。
 2. 异步核心：明确主线程契约，任务标识/取消/关闭清理，再实现工作池；补错误返回与复杂类型生成。验收：慢请求期间 UI 可交互、旧结果不污染新页面。当前 TaskExecutor 支持协作取消、超时和有限等待关闭；后台 IPC 已有有界工作池、per-call 超时和窗口关闭取消，同步 `bindService` 仍按 UI 线程契约执行。
 3. 音乐应用基础：固定行高虚拟列表、有限容量封面缓存、音频后端原型。验收：一万行仅构建视口及 overscan；播放/暂停/seek/切歌/结束/关闭可重复验证。
-4. macOS 完善：Session Cookie、凭据存储、Now Playing（基础已接入，需真实媒体键验收）、通知与拖放。每项需要打包应用实测。
+4. macOS 完善：凭据存储、通知权限/点击、拖放、Cookie 写入/删除、真实媒体键与登录项审批。Session 隔离、Now Playing 与登录项已接入。每项需要打包应用实测。
 5. 发布：真实签名公证、干净机器启动、升级回滚；再拓展通用 Metal 和其他平台。
 
 不把以上工作压成一个“框架完成百分比”。每项分别记录：设计目标、已实现、自动测试、真实场景验收。工期待异步和音频原型完成后重新估算。
@@ -96,11 +96,19 @@ Music 新增后台 Subsonic token 认证和 search3 曲库搜索。系统 curl �
 - 本地标题取文件名（去扩展名）；远程下载完成后保留搜索结果的标题/歌手/专辑/封面 ID，队列不再显示缓存哈希。
 - 会话升级到版本 2，保存完整 Track 元数据；仍读取版本 1 的纯路径会话并迁移为本地曲目。损坏会话保留原文件并回退安全默认值。
 - 测试：`tests/test_queue.nim`（本地/远程身份与去重）、`tests/test_music_session.nim`（v2 往返、v1 迁移、损坏文件）。
-- 封面已通过 `getCoverArt` 后台下载、独立缓存并在当前播放区显示；Now Playing/媒体键基础已接入；仍待缓存淘汰 UI、流式播放、真实媒体键与 Subsonic 账号验收。
+- 封面已通过 `getCoverArt` 后台下载、独立缓存并在当前播放区显示；Now Playing/媒体键/artwork 已接入；仍待缓存淘汰 UI、流式播放、真实媒体键与 Subsonic 账号验收。
 
 ## Now Playing / 媒体键（2026-11-09）
 
 - 新增 `core/nowplaying` 和 `platform/darwin/nowplaying`：懒加载 MediaPlayer.framework，接入 MPNowPlayingInfoCenter 与 MPRemoteCommandCenter。
 - 支持标题/歌手/专辑/时长/位置/播放状态，以及 play/pause/toggle/stop/next/previous/seek 命令。
 - Music 已接入切歌、播放/暂停、seek、上一首/下一首与停止；关窗/退出清除系统状态。
-- 已接入封面 artwork（`MPMediaItemArtwork`）。未做：真实媒体键/控制中心人工验收、Windows/Linux 媒体控制。
+- 已接入封面 artwork（`MPMediaItemArtwork`）。未做：真实媒体键/控制中心人工验收、Windows 媒体控制；Linux 已接入 MPRIS2。
+
+## macOS 登录项与首次激活点击（2026-11-22）
+
+- 新增 `app.setOpenAtLogin(enabled)`、`app.openAtLogin()`、`app.wasOpenedAtLogin()`。macOS 13+ 使用 `SMAppService`，macOS 12 回退到 `~/Library/LaunchAgents`；要求应用运行在 `.app` 内。
+- `wasOpenedAtLogin` 在 `applicationDidFinishLaunching:` 读取 launch Apple Event，并识别 `--nimi-opened-at-login` 标记。
+- 新增 `WindowOptions.consumeActivationClick`；Darwin 的 `NimiWebView`/`NimiSurfaceView` 按窗口选项覆盖 `acceptsFirstMouse:`。Linux/Windows 暂忽略该选项。
+- Linux/Windows 的 `setOpenAtLogin` 抛 `UnsupportedBackendError`；两个查询返回 false，命令行标记仍由共享层识别。
+- 测试：`tests/test_window_options.nim`、`tests/test_darwin_login.nim`；macOS 套件 192 项通过。真实 `.app` 的登录项注册/系统审批仍需人工验收。

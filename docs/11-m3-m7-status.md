@@ -2,7 +2,7 @@
 
 > 2026-11-06：整改、当前限制与验收级别见 [最新基线](28-remediation-status.md)。历史验证记录不代表完整能力已经验收。
 >
-> 2026-11-09：MyGo v0.8.3 的能力面远大于本文记录（编辑器/富文本/图表/视频、原生模块、完整音频、自动化等）。本文只记录 Nimi 已落地切片；差异见 [MyGo 能力对照](30-mygo-alignment.md)。
+> 2026-11-22：本地 MyGo 快照更新到 `9b0ae9ef`（v0.10.0+121）。其能力面仍远大于本文记录（编辑器/富文本/图表/视频、原生模块、完整音频、自动化等）。本文只记录 Nimi 已落地切片；差异见 [MyGo 能力对照](30-mygo-alignment.md)。
 
 > 日期:2026-11-05 · 对应路线图 M3–M7
 >
@@ -18,8 +18,8 @@
 | 里程碑 | 状态 | 已实现 | 未实现 |
 |---|---|---|---|
 | M3 | 🟡 切片 | Checkbox/Switch/Slider/Progress/Divider、Image(ImageIO)、文本换行、焦点/键盘、纹理四边形、NSTimer 帧驱动、Metal 专用 mask/LayerEffect | 通用 Metal scene 合成器;其余控件(List/Table/Tabs/Select…);完整动画/可访问性 |
-| M4 | 🟡 切片 | Clipboard、菜单/对话框、屏幕/主题、窗口控制/焦点、托盘、通知、全局快捷键、动态菜单、Now Playing/媒体键基础 | 剪贴板图片/文件、通知权限/点击、托盘图标、快捷键冲突提示、Now Playing artwork/真实媒体键验收 |
-| M5 | 🟡 切片 | `nimi://`/FileServer、资源复制、深链、Session、FSEvents、Cookie 查询、Document 控制器、protocol/watch/document 示例 | Cookie 写入/删除/并发、内容规则、单实例边界 |
+| M4 | 🟡 切片 | Clipboard、菜单/对话框、屏幕/主题、窗口控制/焦点、托盘、通知、全局快捷键、动态菜单、Now Playing/媒体键/artwork、登录项、首次激活点击 | 剪贴板图片/文件、通知权限/点击、托盘图标、快捷键冲突提示、真实媒体键与登录项审批验收 |
+| M5 | 🟡 切片 | `nimi://`/FileServer、资源复制、深链、Session、FSEvents、Cookie 查询、Document 控制器、protocol/watch/document 示例 | Cookie 写入/删除/并发、内容规则、macOS 单实例边界 |
 | M6 | 🟡 切片 | TextInput/TextArea(含内部滚动)、选择/剪贴板、Undo/Redo、ScrollView/滚动条、IME range、grapheme 编辑、固定行高虚拟列表 | 真实 IME 人工验收、可访问性、通用 Metal 合成、可变行高 |
 | M7 | 🟡 切片 | `.app`、DMG、ad-hoc/Developer ID 签名、entitlements、图标(icns)、notarize 钩子、macOS CI 构建/测试/artifact | 自动更新(Ed25519/delta)、release workflow、DMG 背景/布局、公证实际执行验证、Sparkle 风格更新窗口 |
 
@@ -75,8 +75,10 @@ M2 的 Tester、离屏 PNG、焦点/键盘、文本换行继续作为 M3–M7 �
 - 通知:`notify(title, body)` → NSUserNotification
 - 全局快捷键:Carbon `RegisterEventHotKey`
 - 对话框:扩展名过滤、默认扩展名、多按钮、`dialog.confirm`
+- 登录项:`app.setOpenAtLogin/openAtLogin/wasOpenedAtLogin`;macOS 13+ `SMAppService`,macOS 12 LaunchAgent
+- 窗口首次激活点击:`WindowOptions.consumeActivationClick`;`NimiWebView`/`NimiSurfaceView` 覆盖 `acceptsFirstMouse:`
 
-详细设计与限制见 [macOS 桌面 API](14-macos-desktop-apis.md)。
+详细设计与限制见 [macOS 桌面 API](14-macos-desktop-apis.md)、[登录项与首次激活点击](14-macos-desktop-apis.md#8-登录项与首次激活点击2026-11-22)。
 
 ### M4 Clipboard
 
@@ -209,6 +211,8 @@ hdiutil attach -nobrowse -readonly .../counter-0.1.0.dmg
 - `test_shred` 纸带物理
 - `test_metal` mask/LayerEffect 离屏渲染
 - `test_ui` 的 `Window.startAnimation` 语义与 `SceneRenderer` 注入
+- `test_window_options` 的首次激活点击选项透传与登录 API 委派
+- `test_darwin_login` 的 LaunchAgent plist、登录标记与未打包失败路径
 
 其他:
 
@@ -231,6 +235,7 @@ hdiutil attach -nobrowse -readonly .../counter-0.1.0.dmg
 1. 用 UNUserNotificationCenter 替换 NSUserNotification,补权限/点击回调
 2. 托盘图标、快捷键冲突提示、多屏窗口迁移
 3. 剪贴板图片/文件与拖放
+4. 真实 `.app` 中的登录项注册/系统审批验收;Windows/Linux 登录项后端
 
 ### M3 剩余
 1. 通用 Metal scene 合成器(当前 `render/metal.nim` 是碎纸专用
@@ -249,7 +254,7 @@ hdiutil attach -nobrowse -readonly .../counter-0.1.0.dmg
 1. FileServer 异步/流式/Range、多 scheme/多 root
 2. Cookie 写入/删除/并发、内容规则
 3. 自动保存/最近文档/冲突 diff
-4. 单实例边界/文件关联
+4. macOS 单实例边界/文件关联（Linux 已有 D-Bus 单实例）
 
 ### M7 剩余
 1. 自动更新(Ed25519 manifest/delta)
