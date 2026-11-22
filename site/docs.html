@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <title>文档 — Nimi</title>
-  <meta name="description" content="Nimi 文档:安装、快速开始、IPC、原生 UI、平台架构与路线图。">
+  <meta name="description" content="Nimi 文档:安装、快速开始、IPC、原生 UI、三平台架构与 Preview 状态。">
   <link rel="canonical" href="https://nimi.zhi.moe/docs.html">
   <link rel="icon" type="image/png" href="assets/icon.png">
   <script>document.documentElement.classList.add("js");</script>
@@ -44,8 +44,8 @@
         <p class="eyebrow"><span class="pulse"></span> Documentation</p>
         <h1>Nimi 文档<span class="accent">.</span></h1>
         <p class="lede">
-          从源码运行第一个窗口,到 WebView IPC、原生 UI、平台后端与打包。
-          当前状态以 macOS 为主,Windows/Linux 在路线图中。
+          从源码运行第一个窗口,到 WebView IPC、原生 UI、三平台后端与打包。
+          macOS、Windows、Linux 均已进入 Preview;API 仍可能调整。
         </p>
       </div>
     </section>
@@ -58,7 +58,7 @@
         <a href="#ipc">WebView 与 IPC</a>
         <a href="#native-ui">原生 UI</a>
         <a href="#structure">项目结构</a>
-        <a href="#platforms">平台与路线图</a>
+        <a href="#platforms">平台与 Preview</a>
         <a href="#examples">示例</a>
         <a href="#more">完整文档</a>
       </aside>
@@ -67,8 +67,9 @@
         <section id="install">
           <h2>安装</h2>
           <p>
-            当前从源码使用,尚未发布到 Nimble。需要 <strong>Nim 2.4+</strong>、
-            <strong>macOS 12+</strong> 和 Xcode Command Line Tools。
+            Nimi 以源码 Preview 形式使用。需要 <strong>Nim 2.4+</strong>;
+            macOS 12+ / Xcode Command Line Tools,Windows WebView2 Runtime,
+            Linux GTK3 与可选 WebKitGTK。
           </p>
           <pre><code>git clone https://github.com/zhimoe/nimi.git
 cd nimi
@@ -76,8 +77,9 @@ nim c -o:nimi src/nimi/cli.nim
 ./nimi doctor
 ./nimi version</code></pre>
           <div class="docs-callout">
-            <strong>提示:</strong> 本仓库包含只读的 <code>mygo/</code> 参考副本;
-            实际构建只需要 <code>src/</code>、<code>examples/</code> 和 <code>config.nims</code>。
+            <strong>提示:</strong> 公开仓库不包含 <code>mygo/</code>;
+            本地开发可放置只读参考副本。实际构建只需要 <code>src/</code>、
+            <code>examples/</code> 和 <code>config.nims</code>。
           </div>
         </section>
 
@@ -184,40 +186,46 @@ app.run()</code></pre>
             </thead>
             <tbody>
               <tr><td><code>src/nimi/core/</code></td><td>app、window、IPC、loop、events、bridge、menu、dialog、clipboard</td></tr>
-              <tr><td><code>src/nimi/platform/</code></td><td>平台契约与 Darwin 后端(AppKit/WKWebView/CoreGraphics/CoreText)</td></tr>
+              <tr><td><code>src/nimi/platform/</code></td><td>平台契约与 Darwin / Windows / Linux 后端</td></tr>
               <tr><td><code>src/nimi/ui/</code></td><td>原生 UI 布局、控件、输入、焦点与 Tester</td></tr>
               <tr><td><code>src/nimi/scene/</code></td><td>rect/text display list</td></tr>
-              <tr><td><code>src/nimi/render/</code></td><td>CoreGraphics 场景渲染与离屏 PNG</td></tr>
-              <tr><td><code>src/nimi/text/</code></td><td>CoreText 测量与换行</td></tr>
+              <tr><td><code>src/nimi/render/</code></td><td>CoreGraphics / Cairo / GDI / Metal 场景渲染</td></tr>
+              <tr><td><code>src/nimi/text/</code></td><td>CoreText / Pango / GDI 测量与换行</td></tr>
               <tr><td><code>src/nimi/cli.nim</code></td><td>init / generate / dev / build / doctor</td></tr>
-              <tr><td><code>docs/</code></td><td>可行性、架构、平台后端、路线图、里程碑状态</td></tr>
+              <tr><td><code>docs/</code></td><td>可行性、架构、平台后端、路线图与实现记录</td></tr>
+              <tr><td><code>docs/backlog/</code></td><td>Preview 版本范围与平台差异</td></tr>
               <tr><td><code>examples/notes/</code></td><td>Nimi Notes:WebView-first 完整应用</td></tr>
             </tbody>
           </table>
         </section>
 
         <section id="platforms">
-          <h2>平台与路线图</h2>
+          <h2>平台与 Preview</h2>
           <p>
-            core 只依赖 <code>platform/contract</code>。macOS 后端已经打通;
-            Windows 与 Linux 复用同一 Backend / NativeWindow / SurfaceHandler 模型。
+            core 只依赖 <code>platform/contract</code>。macOS、Windows、Linux
+            Preview 后端复用同一 Backend / NativeWindow / SurfaceHandler 模型。
           </p>
           <table class="docs-table">
             <thead>
               <tr><th>平台</th><th>状态</th><th>实现</th></tr>
             </thead>
             <tbody>
-              <tr><td>macOS</td><td>可用(切片)</td><td>AppKit、WKWebView、CoreGraphics、CoreText、NSMenu、NSOpenPanel/NSSavePanel</td></tr>
-              <tr><td>Windows</td><td>规划(M8)</td><td>Win32、WebView2、D3D11</td></tr>
-              <tr><td>Linux</td><td>规划(M9)</td><td>GTK3、WebKitGTK、OpenGL</td></tr>
+              <tr><td>macOS</td><td>Preview</td><td>AppKit、WKWebView、CoreGraphics、CoreText、NSMenu、NSOpenPanel/NSSavePanel</td></tr>
+              <tr><td>Windows</td><td>Preview</td><td>Win32、WebView2、GDI、原生菜单/IME/托盘</td></tr>
+              <tr><td>Linux</td><td>Preview</td><td>GTK3、WebKitGTK、Cairo/Pango、X11/MPRIS/GStreamer</td></tr>
             </tbody>
           </table>
           <ul>
-            <li><strong>M1:</strong> WebView + 类型化 IPC + TS 生成 + CLI + .app。</li>
-            <li><strong>M2:</strong> 原生 Surface、布局、CoreText、焦点、Tester。</li>
-            <li><strong>M3–M7:</strong> 控件/Image/ScrollView、菜单/对话框/剪贴板、Document、TextArea/选择/IME、DMG/签名、Metal 效果原型。</li>
-            <li><strong>剩余:</strong> 更多控件、通用 Metal scene 合成、可访问性、自动更新/公证、Windows/Linux。</li>
+            <li><strong>WebView:</strong> 系统 WebView + 类型化 IPC + TS 生成 + 自定义协议。</li>
+            <li><strong>原生 UI:</strong> Surface、布局、控件、IME、滚动、Tester。</li>
+            <li><strong>桌面:</strong> 菜单、对话框、剪贴板、托盘、通知、快捷键、Now Playing。</li>
+            <li><strong>打包:</strong> macOS .app/DMG,Windows exe/manifest,Linux .desktop/.deb。</li>
           </ul>
+          <p>
+            平台差异、真实设备验收与后续计划集中在
+            <a href="https://github.com/zhimoe/nimi/blob/main/docs/backlog/README.md" target="_blank" rel="noreferrer">项目 backlog ↗</a>,
+            不占用首页。
+          </p>
         </section>
 
         <section id="examples">
@@ -245,8 +253,9 @@ hdiutil verify examples/notes/dist/darwin-arm64/nimi-notes-0.1.0.dmg</code></pre
 
         <section id="more">
           <h2>完整文档</h2>
-          <p>设计与实现细节在仓库 <code>docs/</code> 下持续更新:</p>
+          <p>设计与实现细节在仓库 <code>docs/</code> 下持续更新;版本范围见 backlog:</p>
           <div class="docs-links">
+            <a href="https://github.com/zhimoe/nimi/blob/main/docs/backlog/README.md" target="_blank" rel="noreferrer">Backlog · Preview 版本范围 ↗</a>
             <a href="https://github.com/zhimoe/nimi/blob/main/docs/00-feasibility.md" target="_blank" rel="noreferrer">00 · 可行性分析 ↗</a>
             <a href="https://github.com/zhimoe/nimi/blob/main/docs/01-architecture.md" target="_blank" rel="noreferrer">01 · 架构设计 ↗</a>
             <a href="https://github.com/zhimoe/nimi/blob/main/docs/02-macos-backend.md" target="_blank" rel="noreferrer">02 · macOS 后端 ↗</a>
@@ -274,7 +283,7 @@ hdiutil verify examples/notes/dist/darwin-arm64/nimi-notes-0.1.0.dmg</code></pre
       <div class="footer-links">
         <a href="index.html">首页</a>
         <a href="https://github.com/zhimoe/nimi" target="_blank" rel="noreferrer">GitHub</a>
-        <a href="https://github.com/zhimoe/nimi/blob/main/docs/05-roadmap.md" target="_blank" rel="noreferrer">路线图</a>
+        <a href="https://github.com/zhimoe/nimi/blob/main/docs/backlog/README.md" target="_blank" rel="noreferrer">Backlog</a>
       </div>
       <p class="footer-note">Built with Nim. Inspired by MyGo (MIT).</p>
     </div>

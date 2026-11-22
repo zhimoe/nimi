@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <title>Nimi — 用 Nim 构建原生桌面应用</title>
-  <meta name="description" content="Nimi 是 MyGo 的 Nim 重实现:系统 WebView + 类型化 IPC + 自绘原生 UI + 一套桌面 API。编译为原生代码,无 VM,无 cgo。">
+  <meta name="description" content="Nimi 是 MyGo 的 Nim 重实现:系统 WebView + 类型化 IPC + 自绘原生 UI + 一套桌面 API。当前为三平台 Preview。">
   <meta property="og:title" content="Nimi — 用 Nim 构建原生桌面应用">
-  <meta property="og:description" content="系统 WebView + 类型化 IPC + 自绘原生 UI。用 Nim 写桌面应用。">
+  <meta property="og:description" content="系统 WebView + 类型化 IPC + 自绘原生 UI。macOS、Windows、Linux Preview。">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://nimi.zhi.moe/">
   <meta property="og:image" content="https://nimi.zhi.moe/assets/nimi-notes.png">
@@ -48,7 +48,7 @@
       <div class="hero-glow" aria-hidden="true"></div>
       <div class="wrap hero-grid">
         <div class="hero-copy reveal">
-          <p class="eyebrow"><span class="pulse"></span> Nim 2.4 · macOS 已可运行</p>
+          <p class="eyebrow"><span class="pulse"></span> Nim 2.4 · Preview · macOS / Windows / Linux</p>
           <h1>用 <em>Nim</em> 构建<br>原生桌面应用。</h1>
           <p class="lede">
             Nimi 是 MyGo 的 Nim 重实现:系统 WebView + 类型化 IPC +
@@ -62,9 +62,9 @@
             </a>
           </div>
           <ul class="hero-facts" aria-label="项目要点">
-            <li>编译为 C</li>
-            <li>ARC / atomicArc</li>
-            <li>WKWebView + AppKit</li>
+            <li>三平台 Preview</li>
+            <li>编译为 C / ARC</li>
+            <li>系统 WebView + 原生 UI</li>
             <li>类型化 JSON IPC</li>
           </ul>
         </div>
@@ -286,7 +286,7 @@ app.run()</code></pre>
           <h2>core 不依赖具体平台。</h2>
           <p>
             应用策略、窗口、IPC、菜单和 UI 场景在上;平台契约在中;
-            AppKit/WebView 或未来的 Win32/GTK 在下。
+            AppKit/WebView、Win32/WebView2 或 GTK/WebKitGTK 在下。
           </p>
         </div>
 
@@ -315,16 +315,16 @@ app.run()</code></pre>
           <div class="arch-arrow" aria-hidden="true">↓</div>
           <div class="arch-row backends">
             <div class="arch-box mac">
-              <span>macOS · 已实现</span>
+              <span>macOS · Preview</span>
               <strong>AppKit · WKWebView · CoreGraphics · CoreText</strong>
             </div>
-            <div class="arch-box planned">
-              <span>Windows · 规划</span>
-              <strong>Win32 · WebView2 · D3D11</strong>
+            <div class="arch-box">
+              <span>Windows · Preview</span>
+              <strong>Win32 · WebView2 · GDI</strong>
             </div>
-            <div class="arch-box planned">
-              <span>Linux · 规划</span>
-              <strong>GTK3 · WebKitGTK · OpenGL</strong>
+            <div class="arch-box">
+              <span>Linux · Preview</span>
+              <strong>GTK3 · WebKitGTK · Cairo / Pango</strong>
             </div>
           </div>
         </div>
@@ -334,20 +334,19 @@ app.run()</code></pre>
     <section class="section status" id="status">
       <div class="wrap status-grid">
         <div class="section-head reveal">
-          <p class="eyebrow">Status</p>
-          <h2>诚实的进度,而不是“即将完成”。</h2>
+          <p class="eyebrow">Preview</p>
+          <h2>三平台预览,持续迭代。</h2>
           <p>
-            macOS 的垂直切片已经可以构建真实应用。完整 MyGo 对齐仍是长期工程,
-            文档会明确标出每个里程碑的实现与缺口。
+            Nimi 现在是开发者预览版。系统 WebView、类型化 IPC、自绘原生 UI 和
+            桌面 API 已在 macOS、Windows、Linux 落地;API 仍可能调整。
           </p>
-          <a class="text-link" href="https://github.com/zhimoe/nimi/blob/main/docs/05-roadmap.md" target="_blank" rel="noreferrer">阅读完整路线图 ↗</a>
+          <a class="text-link" href="https://github.com/zhimoe/nimi/blob/main/docs/backlog/README.md" target="_blank" rel="noreferrer">查看项目 backlog ↗</a>
         </div>
         <ol class="milestones reveal">
-          <li class="done"><span>M1</span><div><strong>WebView + 类型化 IPC</strong><small>窗口、bridge、TS 生成、CLI、.app</small></div></li>
-          <li class="done"><span>M2</span><div><strong>原生 UI 基础</strong><small>Surface、布局、CoreText、焦点、Tester</small></div></li>
-          <li class="partial"><span>M3–M7</span><div><strong>桌面能力切片</strong><small>控件、菜单/对话框、Document、IME、DMG、Metal 效果原型</small></div></li>
-          <li class="partial"><span>M6</span><div><strong>文本编辑</strong><small>TextArea/选择/滚动/IME 已落地;真实 IME 验证与可访问性待补</small></div></li>
-          <li class="planned"><span>M8–M9</span><div><strong>Windows / Linux</strong><small>Win32/WebView2,D3D11;GTK3/WebKitGTK/GL</small></div></li>
+          <li class="done"><span>macOS</span><div><strong>AppKit + WKWebView</strong><small>CoreGraphics/CoreText、桌面 API、.app / DMG</small></div></li>
+          <li class="done"><span>Windows</span><div><strong>Win32 + WebView2</strong><small>GDI、原生菜单/IME/托盘、exe / manifest</small></div></li>
+          <li class="done"><span>Linux</span><div><strong>GTK3 + WebKitGTK</strong><small>Cairo/Pango、桌面 API、.deb / CI</small></div></li>
+          <li class="preview"><span>Preview</span><div><strong>API 可能调整</strong><small>平台差异与后续计划在 backlog 维护</small></div></li>
         </ol>
       </div>
     </section>
@@ -357,7 +356,7 @@ app.run()</code></pre>
         <div class="section-head reveal">
           <p class="eyebrow">Quick start</p>
           <h2>几分钟内跑起来。</h2>
-          <p>需要 Nim 2.4+、macOS 12+ 和 Xcode Command Line Tools。</p>
+          <p>需要 Nim 2.4+。macOS 12+ / Xcode CLT,Windows WebView2 Runtime,Linux GTK3 / WebKitGTK。</p>
           <a class="text-link" href="docs.html">查看完整文档 ↗</a>
         </div>
         <div class="terminal reveal">
@@ -382,8 +381,8 @@ app.run()</code></pre>
       <div class="wrap cta-card reveal">
         <div>
           <p class="eyebrow">Documentation</p>
-          <h2>从可行性到平台后端,全部公开。</h2>
-          <p>架构、macOS 实现、原生 UI、IPC、路线图和 Nimi Notes 验收都有记录。</p>
+          <h2>从架构到三平台后端,全部公开。</h2>
+          <p>架构、macOS/Windows/Linux 实现、原生 UI、IPC 和 Nimi Notes 验收都有记录。</p>
         </div>
         <div class="cta-actions">
           <a class="button primary" href="docs.html">阅读文档</a>
@@ -404,7 +403,7 @@ app.run()</code></pre>
         <a href="docs.html">文档</a>
         <a href="https://github.com/zhimoe/nimi" target="_blank" rel="noreferrer">GitHub</a>
         <a href="https://github.com/zhimoe/nimi/blob/main/docs/00-feasibility.md" target="_blank" rel="noreferrer">可行性分析</a>
-        <a href="https://github.com/zhimoe/nimi/blob/main/docs/05-roadmap.md" target="_blank" rel="noreferrer">路线图</a>
+        <a href="https://github.com/zhimoe/nimi/blob/main/docs/backlog/README.md" target="_blank" rel="noreferrer">Backlog</a>
       </div>
       <p class="footer-note">Built with Nim. Inspired by MyGo (MIT).</p>
     </div>

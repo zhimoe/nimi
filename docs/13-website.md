@@ -1,14 +1,15 @@
 # 官网与 GitHub Pages
 
-> 日期:2026-11-04 · 源目录 `site/` · 目标域名 `nimi.zhi.moe`
+> 日期:2026-11-04（2026-11-22 更新）· 源目录 `site/` · 目标域名 `nimi.zhi.moe`
 
 ---
 
 ## 1. 目标
 
 - 一个不依赖前端框架的静态官网,直接由 GitHub Pages 托管。
-- 首页介绍 Nimi、Nim 语言优势、框架能力、架构、状态和 Nimi Notes 截图。
-- `docs.html` 提供安装、IPC、原生 UI、平台状态与完整文档入口。
+- 首页介绍 Nimi、Nim 语言优势、框架能力、三平台 Preview 状态和 Nimi Notes 截图。
+- `docs.html` 提供安装、IPC、原生 UI、平台 Preview 与完整文档入口。
+- 未完成项与平台差距不放在首页，统一链接到 `docs/backlog/`。
 - 使用自定义域名 `https://nimi.zhi.moe/`;同时保留
   `https://zhimoe.github.io/nimi/` 作为 GitHub Pages 默认地址。
 
@@ -42,7 +43,7 @@ site/
 | 暗色暖色主题 | 与 Nimi Notes 应用视觉一致 |
 | 首页先用 Nimi Notes 截图 | 用真实应用证明框架可用,而不是只放抽象图形 |
 | “为什么 Nim”独立章节 | 明确项目不是 Go 兼容层,而是选择 Nim 的执行模型与 FFI |
-| 状态区诚实标注切片 | 避免把 M3–M7 的部分实现写成完整完成 |
+| 首页只展示 Preview 能力 | 未完成项集中到 `docs/backlog/`，避免首页堆叠“待补/剩余”状态 |
 | 标题英文使用 Bricolage Grotesque | 品牌/标题更有辨识度;中文自动回退到系统中文字体 |
 | 字体自托管,不请求 Google Fonts | 无第三方请求、无隐私/可用性依赖;OFL 允许分发 |
 | 文档链接指向 GitHub markdown | 文档持续更新,不在站点重复维护全文 |
@@ -61,14 +62,14 @@ open http://127.0.0.1:8765/
 http://127.0.0.1:8765/?reveal=1
 ```
 
-## 5. 当前状态(2026-11-04)
+## 5. 当前状态(2026-11-22)
 
 - 仓库已创建并公开:<https://github.com/zhimoe/nimi>。
 - `Deploy website` workflow 已成功运行,artifact 从 `site/` 部署。
-- Pages 已启用,Source 为 GitHub Actions,custom domain 已设为 `nimi.zhi.moe`。
-- **DNS 仍待添加**:`nimi.zhi.moe` 目前为 NXDOMAIN,需要在 Cloudflare
-  添加下面的 CNAME;添加前默认 Pages 地址会 301 到该域名。
-- HTTPS 证书由 GitHub Pages 在 DNS 生效后自动签发,之后可开启 Enforce HTTPS。
+- Pages 已启用,Source 为 GitHub Actions,custom domain 为 `nimi.zhi.moe`。
+- DNS 与 HTTPS 已生效:`https://nimi.zhi.moe/` 返回 200。
+- 首页与 `docs.html` 已更新为 macOS / Windows / Linux Preview；
+  未完成项统一链接到 `docs/backlog/`。
 
 ## 6. GitHub Pages 部署
 
@@ -123,11 +124,8 @@ curl -I https://zhimoe.github.io/nimi/
 - 文档页侧边栏在桌面端 sticky,移动端折叠为顶部目录。
 - 自定义域名 HTTPS 证书有效。
 
-## 9. 已知限制 / 下一步
+## 9. 限制与后续
 
-- 站点目前是中文单页 + 单文档页;后续可拆成多页文档与搜索。
-- 截图是 macOS 暗色主题;可补浅色主题和原生 UI 示例截图。
-- 没有 analytics;保持零第三方脚本。
-- 自定义域名 DNS 由域名所有者配置;仓库侧已添加 CNAME 并配置 Pages。
-- 未接入自动检查(链接检查、HTML 校验)。后续可在 Pages workflow 前加
-  `lychee`/`html-validate`。
+站点保持零第三方脚本、无构建步骤;自定义域名由仓库内 `CNAME` 与 Pages 设置维护。
+多页文档、站内搜索、其他平台截图以及链接检查/HTML 校验列入
+[backlog](backlog/README.md)。
