@@ -37,6 +37,9 @@
 | [28 整改基线](28-remediation-status.md) | 当前限制、优先级、验收门槛;整改与音乐进展 | 所有人 |
 | [29 异步 IPC](29-async-ipc.md) | UI 线程同步 dispatch、后台工作池、背压与关闭 | 实现者、评审者 |
 | [30 MyGo 能力对照](30-mygo-alignment.md) | v0.8.3/本地快照能力差异、计划校准、examples 回检 | 决策者、评审者 |
+| [31 Windows 环境变量工具](31-windows-environment.md) | EnvMan 对等界面、HKCU/系统变量、导入导出 | 实现者、评审者 |
+| [32 Windows 框架状态](32-windows-framework.md) | Win32/WebView2/GDI/IME/菜单/打包与验证记录 | 实现者、评审者 |
+| [33 Linux 后端](33-linux-framework.md) | GTK3/Cairo/Pango、WebKitGTK、桌面 API、测试与未实现项 | 实现者、评审者 |
 
 ## 阅读顺序
 
@@ -67,6 +70,7 @@
 | 2026-11-05 | 项目回检:renderer 注入、Metal 可移植性、动画语义、可移植测试;新增 27 |
 | 2026-11-07 | grapheme/IME range、关闭生命周期、异步 IPC 工作池;新增 29 |
 | 2026-11-09 | 对齐 MyGo v0.8.3/本地快照能力、examples 回检;新增 30 |
+| 2026-11-22 | Linux 第一切片：GTK3/Cairo/Pango、WebKitGTK、桌面 API、Linux CI;新增 33 |
 
 当前整改和开发入口：[28 整改基线](28-remediation-status.md)。
 

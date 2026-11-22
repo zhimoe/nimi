@@ -399,6 +399,8 @@ mask/LayerEffect 原型;List/Table/Tabs/Select、通用 Metal scene 合成器仍
 
 **目标**:`hello` 与 `counter-native` 在 GTK3/WebKitGTK 运行;`.deb`/PKGBUILD/install.sh。
 
+> **2026-11-22 进度**：`hello`、`counter-native`、`notes`、`music` 已在 GTK3/WebKitGTK 运行；阶段 1、阶段 2 的主体（脚本消息/scheme/cookie/ephemeral session）、IME、托盘、X11 全局快捷键、MPRIS2、GStreamer 音频、D-Bus 单实例/深链、`.deb` 与 Xvfb+dbus+CI 已落地。尚未做 GL surface、ATK、Wayland portal、下载/权限、PKGBUILD/签名。详见 [Linux 后端](33-linux-framework.md)。
+
 ### 阶段
 
 1. **GTK3 dlopen + 主循环**(3–5 周):GLib/GObject/GTK/GDK/cairo 绑定、Init/Run/Step/Signal、窗口、菜单、对话框。

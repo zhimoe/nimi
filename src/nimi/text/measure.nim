@@ -8,7 +8,7 @@
 
 import std/[strutils, tables, unicode]
 
-when not defined(windows):
+when defined(macosx):
   import std/dynlib
 
 type
@@ -30,7 +30,9 @@ const
 proc monoFamily*(): string =
   ## The platform monospace face. Measurement and rendering both map the
   ## "mono" family marker to this face (and to CJK-capable fallbacks).
-  when defined(windows): "Consolas" else: "Menlo"
+  when defined(windows): "Consolas"
+  elif defined(linux): "Monospace"
+  else: "Menlo"
 
 when defined(windows):
   import ../platform/windows/graphics
@@ -56,7 +58,7 @@ when defined(windows):
     if measureCache.len >= measureCacheLimit:
       measureCache.clear()
     measureCache[key] = result
-else:
+elif defined(macosx):
   type CFRef = pointer
 
   let
@@ -140,6 +142,32 @@ else:
       ascent: float32(ascent),
       descent: float32(descent),
       leading: float32(leading))
+    if cache.len >= measureCacheLimit:
+      cache.clear()
+    cache[key] = result
+
+else:
+  import ../platform/linux/pangohelper
+
+  var cache: Table[string, TextMetrics]
+
+  proc measureKey(text: string, size: float32, bold: bool,
+                  family: string): string =
+    text & "\x00" & $size & "\x00" & $bold & "\x00" & family
+
+  proc measureText*(text: string, size: float32, bold: bool,
+                    family: string = ""): TextMetrics =
+    ## Advance width and line metrics for one line.
+    let key = measureKey(text, size, bold, family)
+    if cache.hasKey(key):
+      return cache[key]
+    let metrics = measurePango(text, size, bold, family)
+    result = TextMetrics(
+      width: metrics.width,
+      height: metrics.height,
+      ascent: metrics.ascent,
+      descent: metrics.descent,
+      leading: 0)
     if cache.len >= measureCacheLimit:
       cache.clear()
     cache[key] = result

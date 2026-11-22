@@ -10,7 +10,10 @@ import std/[os, tables]
 
 import nimi
 import nimi/ui
-import nimi/render/cg
+when defined(linux):
+  import nimi/render/cairo
+else:
+  import nimi/render/cg
 
 proc iconPath(): string =
   let cwd = getCurrentDir()

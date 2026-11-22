@@ -1,7 +1,7 @@
 ## The M1 `nimi` CLI. Kept intentionally small: generate, dev, build, init,
 ## doctor. Packaging/signing/updater land in M7.
 
-import std/[algorithm, json, os, osproc, strtabs, strutils, times]
+import std/[algorithm, dynlib, json, os, osproc, strtabs, strutils, times]
 
 const
   Version = "0.1.0"
@@ -459,13 +459,166 @@ proc runBuildMacos(dir: string) =
       discard runChecked("xcrun stapler staple " & quoteShell(appPath))
       echo "Notarized and stapled."
 
+proc desktopEntry(cfg: Config, execPath, iconName: string): string =
+  result = "[Desktop Entry]\nType=Application\n" &
+    "Name=" & cfg.name & "\n" &
+    "Comment=" & cfg.name & "\n" &
+    "Exec=" & execPath & "\n" &
+    "Terminal=false\n" &
+    "Categories=Utility;\n"
+  if iconName.len > 0:
+    result.add "Icon=" & iconName & "\n"
+  if cfg.urlSchemes.len > 0:
+    var mime = ""
+    for scheme in cfg.urlSchemes:
+      if mime.len > 0:
+        mime.add ";"
+      mime.add "x-scheme-handler/" & scheme
+    result.add "MimeType=" & mime & ";\n"
+
+proc packageName(value: string): string =
+  for ch in value.toLowerAscii:
+    if ch in {'a'..'z', '0'..'9', '+', '-', '.'}:
+      result.add ch
+    else:
+      result.add '-'
+
+proc normalizePackageTree(root, executable: string) =
+  setFilePermissions(root, {fpUserRead, fpUserWrite, fpUserExec,
+                            fpGroupRead, fpGroupExec,
+                            fpOthersRead, fpOthersExec})
+  for path in walkDirRec(root, yieldFilter = {pcDir, pcFile}):
+    if dirExists(path):
+      setFilePermissions(path, {fpUserRead, fpUserWrite, fpUserExec,
+                                fpGroupRead, fpGroupExec,
+                                fpOthersRead, fpOthersExec})
+    elif path == executable:
+      setFilePermissions(path, {fpUserRead, fpUserWrite, fpUserExec,
+                                fpGroupRead, fpGroupExec,
+                                fpOthersRead, fpOthersExec})
+    else:
+      setFilePermissions(path, {fpUserRead, fpUserWrite,
+                                fpGroupRead, fpOthersRead})
+
+proc buildDeb(cfg: Config, outRoot, exeName: string, arch: string,
+              iconSource: string): string =
+  let dpkgDeb = findExe("dpkg-deb")
+  if dpkgDeb.len == 0:
+    echo "deb: dpkg-deb not found; skipping package"
+    return ""
+  let pkg = packageName(if cfg.slug.len > 0: cfg.slug else: cfg.name)
+  if pkg.len == 0:
+    echo "deb: empty package name; skipping package"
+    return ""
+  let stage = outRoot / ".deb-stage"
+  if dirExists(stage):
+    removeDir(stage)
+  let appDir = stage / "opt" / exeName
+  let binDir = stage / "usr" / "bin"
+  let applicationsDir = stage / "usr" / "share" / "applications"
+  let debianDir = stage / "DEBIAN"
+  createDir(appDir)
+  createDir(binDir)
+  createDir(applicationsDir)
+  createDir(debianDir)
+  setFilePermissions(debianDir, {fpUserRead, fpUserWrite, fpUserExec,
+                                 fpGroupRead, fpGroupExec,
+                                 fpOthersRead, fpOthersExec})
+  copyFile(outRoot / exeName, appDir / exeName)
+  setFilePermissions(appDir / exeName, {fpUserRead, fpUserWrite, fpUserExec,
+                                        fpGroupRead, fpGroupExec,
+                                        fpOthersRead, fpOthersExec})
+  let resources = outRoot / "resources"
+  if dirExists(resources):
+    copyDir(resources, appDir / "resources")
+  var iconName = ""
+  if fileExists(iconSource):
+    iconName = packageName(pkg) & splitFile(iconSource).ext
+    copyFile(iconSource, appDir / iconName)
+    if splitFile(iconSource).ext.toLowerAscii == ".png":
+      let iconDir = stage / "usr" / "share" / "icons" / "hicolor" /
+        "256x256" / "apps"
+      createDir(iconDir)
+      copyFile(iconSource, iconDir / iconName)
+  createSymlink("/opt/" & exeName & "/" & exeName, binDir / exeName)
+  let desktopPath = applicationsDir / (pkg & ".desktop")
+  let debExec = "/opt/" & exeName & "/" & exeName &
+    (if cfg.urlSchemes.len > 0: " %u" else: "")
+  writeFile(desktopPath, desktopEntry(cfg, debExec, iconName))
+  setFilePermissions(desktopPath, {fpUserRead, fpUserWrite,
+                                   fpGroupRead, fpOthersRead})
+  let control = "Package: " & pkg & "\n" &
+    "Version: " & cfg.version & "\n" &
+    "Section: utils\n" &
+    "Priority: optional\n" &
+    "Architecture: " & arch & "\n" &
+    "Maintainer: Nimi contributors <noreply@nimi.zhi.moe>\n" &
+    "Depends: libgtk-3-0t64 | libgtk-3-0, libnotify4, libgstreamer1.0-0, " &
+    "gstreamer1.0-plugins-base, gstreamer1.0-plugins-good, " &
+    "libwebkit2gtk-4.1-0 | libwebkit2gtk-4.0-37\n" &
+    "Recommends: gstreamer1.0-plugins-ugly, gstreamer1.0-libav\n" &
+    "Description: " & cfg.name & "\n" &
+    " A desktop application built with Nimi.\n"
+  let controlPath = debianDir / "control"
+  writeFile(controlPath, control)
+  setFilePermissions(controlPath, {fpUserRead, fpUserWrite,
+                                   fpGroupRead, fpOthersRead})
+  normalizePackageTree(stage, appDir / exeName)
+  let debPath = outRoot / (pkg & "_" & cfg.version & "_" & arch & ".deb")
+  if fileExists(debPath):
+    removeFile(debPath)
+  try:
+    discard runChecked(quoteShell(dpkgDeb) & " --root-owner-group --build " &
+      quoteShell(stage) & " " & quoteShell(debPath))
+  finally:
+    removeDir(stage)
+  result = debPath
+
+proc runBuildLinux(dir: string) =
+  let cfg = loadConfig(dir)
+  let mainPath = cfg.projectDir / cfg.main
+  if not fileExists(mainPath):
+    raise fail("main not found: " & mainPath)
+  const arch =
+    when defined(arm64): "arm64"
+    else: "amd64"
+  let outRoot = cfg.projectDir / cfg.outDir / ("linux-" & arch)
+  createDir(outRoot)
+  let resourcesDir = outRoot / "resources"
+  createDir(resourcesDir)
+  copyResources(cfg, resourcesDir)
+  let iconSource =
+    if isAbsolute(cfg.icon): cfg.icon
+    else: cfg.projectDir / cfg.icon
+  if fileExists(iconSource):
+    copyFile(iconSource, outRoot / lastPathPart(iconSource))
+  let exeName = if cfg.slug.len > 0: cfg.slug else: "app"
+  let exe = outRoot / exeName
+  echo "Building " & cfg.name & "…"
+  discard runChecked("nim c -d:release --hints:off --mm:atomicArc --threads:on " &
+    "--path:" & quoteShell(libraryPath()) & " --out:" & quoteShell(exe) & " " &
+    quoteShell(mainPath))
+
+  var iconName = ""
+  if fileExists(iconSource):
+    iconName = lastPathPart(iconSource)
+  let execArg = if cfg.urlSchemes.len > 0: exeName & " %u" else: exeName
+  writeFile(outRoot / (exeName & ".desktop"),
+    desktopEntry(cfg, execArg, iconName))
+  echo "Built " & exe
+  let deb = buildDeb(cfg, outRoot, exeName, arch, iconSource)
+  if deb.len > 0:
+    echo "Built " & deb
+
 proc runBuild(dir: string) =
   when defined(windows):
     runBuildWindows(dir)
   elif defined(macosx):
     runBuildMacos(dir)
+  elif defined(linux):
+    runBuildLinux(dir)
   else:
-    raise fail("nimi build supports macOS and Windows")
+    raise fail("nimi build does not support this platform")
 
 proc sourceSignature(cfg: Config): string =
   var parts: seq[string]
@@ -551,14 +704,38 @@ proc runDev(dir: string) =
       except CatchableError:
         discard
 
+proc haveLib(names: openArray[string]): bool =
+  for name in names:
+    if loadLib(name) != nil:
+      return true
+
 proc runDoctor() =
   echo "nimi " & Version
-  for cmd in ["nim --version", "clang --version", "xcrun --show-sdk-version"]:
+  when defined(linux):
+    let commands = ["nim --version", "cc --version"]
+  elif defined(windows):
+    let commands = ["nim --version", "gcc --version"]
+  else:
+    let commands = ["nim --version", "clang --version",
+                    "xcrun --show-sdk-version"]
+  for cmd in commands:
     let (output, code) = execCmdEx(cmd)
     if code == 0:
       echo "\n$ " & cmd & "\n" & output.splitLines()[0]
     else:
       echo "\n$ " & cmd & "\n  not available"
+  when defined(linux):
+    proc status(label: string, names: openArray[string]) =
+      echo label & ": " & (if haveLib(names): "available" else: "missing")
+    status("gtk3", ["libgtk-3.so.0", "libgtk-3.so"])
+    status("webkitgtk", ["libwebkit2gtk-4.1.so.0", "libwebkit2gtk-4.0.so.37"])
+    status("libnotify", ["libnotify.so.4", "libnotify.so"])
+    status("gstreamer", ["libgstreamer-1.0.so.0", "libgstreamer-1.0.so"])
+    status("x11", ["libX11.so.6", "libX11.so"])
+    echo "display: " & (
+      if getEnv("DISPLAY").len > 0: "X11 " & getEnv("DISPLAY")
+      elif getEnv("WAYLAND_DISPLAY").len > 0: "Wayland " & getEnv("WAYLAND_DISPLAY")
+      else: "missing (set DISPLAY/WAYLAND_DISPLAY or use xvfb-run)")
 
 proc runInit(dir: string, native: bool) =
   let root = absolutePath(dir)

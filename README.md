@@ -10,6 +10,7 @@ Nimi 的目标是保留 MyGo 的架构与开发体验——系统 WebView + 类�
 > **M2 核心切片已跑通**(原生 NSView Surface + CoreGraphics/CoreText + 布局/Text/Button + 鼠标/键盘/焦点 + 多行换行 + `Tester`/离屏 PNG + `counter-native`)。
 > **M3 控件/Image/ScrollView/纹理四边形/NSTimer/Metal 效果原型、M4 macOS 桌面 API(菜单/对话框/剪贴板/屏幕/主题/窗口/托盘/通知/全局快捷键)、M5 FileServer/深链/Session/文件监视/Cookie/Document、M6 TextInput/TextArea(内部滚动/滚动条)/选择/剪贴板/Undo/ScrollView/滚动条/IME、M7 `.app`/DMG/签名/CI**已落地;`examples/desktop-native` 是桌面 API 验收,`examples/form-native` 是原生 GUI 验收,`examples/notes` 是 WebView-first 的完整笔记应用,`examples/protocol-native` 是自定义协议验收,`examples/shredder` 是 WebGL 碎纸效果/物理切片验收,`examples/shred-native` 是 CoreGraphics 纹理四边形/原生帧驱动验收,`examples/shred-metal` 是 Metal mask + LayerEffect 验收。其余差距见 [M3–M7 状态](docs/11-m3-m7-status.md)。
 > Windows/Linux 在 M8/M9。Windows 已接入原生 GUI、WebView2/IPC/`nimi://`、GDI 动画、显示/主题/全局快捷键，以及 exe/资源/manifest 打包。2026-11-19 回检补上自定义按钮消息框、HTML 剪贴板、GDI 纹理四边形和文字透明度、文件监视、系统托盘和气泡通知、默认 WebView2 Cookie 查询与清理。本轮 Windows 实机验收待完成。框架差距见 [Windows 框架状态](docs/32-windows-framework.md)，验收应用见 [Windows 环境变量工具](docs/31-windows-environment.md)。
+> Linux 已落地(2026-11-22)：GTK3 + GtkDrawingArea + Cairo/Pango 原生 UI、WebKitGTK 页面/`nimi://` scheme/Cookie/ephemeral session、菜单/对话框/剪贴板/inotify 文件监视/libnotify 通知、GtkStatusIcon 托盘、X11 全局快捷键、MPRIS2、GStreamer 本地音频、GtkIMContext 输入法、D-Bus 单实例/深链、`nimi build`(.deb) 与 Linux CI。ATK/GL surface/Wayland portal/PKGBUILD/签名仍待补。详见 [Linux 后端](docs/33-linux-framework.md)。
 > 参考实现:MyGo v0.8.3(`5add3817`,MIT License);本地能力盘点快照 `f234638d`。差异与计划校准见 [MyGo 能力对照](docs/30-mygo-alignment.md)。
 
 ---
@@ -60,6 +61,7 @@ Nimi 的目标是保留 MyGo 的架构与开发体验——系统 WebView + 类�
 | [项目回检](docs/27-project-review.md) | 2026-11-05 架构/文档/测试回检、已修复项与剩余债务 |
 | [Nimi Notes 验收](docs/12-notes-demo.md) | WebView-first 笔记应用:IPC/菜单/导入导出/自动保存/打包 |
 | [官网与 Pages](docs/13-website.md) | 静态站点结构、自定义域名 `nimi.zhi.moe`、DNS 与部署工作流 |
+| [Linux 后端](docs/33-linux-framework.md) | GTK3/Cairo/Pango、WebKitGTK、dlopen、桌面 API、测试与未实现项 |
 
 建议阅读顺序:`00 → 01 → 05 → 02/03 → 04 → 06 → 07`。
 
@@ -89,7 +91,7 @@ MyGo 非测试 Go 代码约 **32.3 万行**,测试约 **13.9 万行**。完整 1
 
 ## 快速开始(M1)
 
-需要 Nim 2.4+、macOS 12+、Xcode Command Line Tools。
+需要 Nim 2.4+。macOS 需要 12+ 与 Xcode Command Line Tools；Linux 需要 GTK3 运行时（原生 UI）与可选 WebKitGTK 4.1（页面窗口），构建机不需要 GTK 头文件。
 
 ```sh
 # 构建 CLI
@@ -141,8 +143,20 @@ nim c -r --path:src examples/shred-metal/main.nim
 ./nimi build examples/hello
 open "examples/hello/dist/darwin-arm64/Hello Nimi.app"
 
-# 单元测试
+# 单元测试(macOS)
 ./scripts/test.sh
+
+# Linux 测试(无桌面 CI 用 xvfb + dbus)
+xvfb-run -a dbus-run-session -- ./scripts/test-linux.sh
+```
+
+Linux 桌面运行原生示例(需要 GTK3；页面示例另需 WebKitGTK 4.1)：
+
+```sh
+sudo apt install libgtk-3-0 libwebkit2gtk-4.1-0 \
+  gstreamer1.0-plugins-base gstreamer1.0-plugins-good
+nim c -r --path:src examples/counter-native/main.nim
+nim c -r --path:src examples/hello/main.nim
 ```
 
 `NIMI_SMOKE=quit|calls|close` 是 hello 示例的测试开关,分别测试单次调用后退出、50 次连续调用后退出、关窗退出。`nimi dev` 会监听项目源文件,修改后自动重建重启。
@@ -159,9 +173,12 @@ nimi/
 │   ├── core/              # app/window/page/ipc/loop/events/bridge/content/menu/dialog/clipboard
 │   ├── platform/
 │   │   ├── contract.nim   # 平台契约
-│   │   └── darwin/        # objc/app/window/types/menu/dialogs/clipboard
+│   │   ├── darwin/        # objc/app/window/types/menu/dialogs/clipboard
+│   │   ├── windows/       # win32/host/webview2/gdi/menu/ime/tray/watch
+│   │   └── linux/         # gtk3/cairo/pango/webkitgtk/menu/clipboard/watch
 │   ├── scene/             # rect/text/clip/image/imageQuad/polygon display list
 │   ├── render/cg.nim      # CoreGraphics + CoreText
+│   ├── render/cairo.nim   # Cairo + Pango(Linux)
 │   ├── render/metal.nim   # Metal mask/LayerEffect(macOS)
 │   ├── text/measure.nim   # CoreText 测量/换行
 │   ├── effects/           # 可复用效果(碎纸物理等)
@@ -248,7 +265,7 @@ nim c -r --threads:on --mm:atomicArc spike_threads.nim
 | M6 | 文本编辑/IME/可访问性/Metal 完整 | 12–20 周 |
 | M7 | 打包/签名/公证/更新 | 6–10 周 |
 | M8 | Windows | 4–8 月 |
-| M9 | Linux | 4–8 月 |
+| M9 | Linux | 4–8 月(第一切片已落地) |
 
 macOS 可用版本约 4–6 个月;广泛兼容约 14–21 个月;三平台约 2–3 年。
 

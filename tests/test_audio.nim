@@ -1,6 +1,10 @@
 import std/[unittest, os, tempfiles, monotimes, times]
 import nimi/audio
-import nimi/platform/darwin/objc
+when defined(macosx):
+  import nimi/platform/darwin/objc
+when defined(linux):
+  # Decode without a physical audio device in CI/containers.
+  putEnv("NIMI_AUDIO_SINK", "fakesink")
 
 proc wav(): string =
   # One second of silent mono PCM, no audio fixture dependency.
@@ -58,9 +62,13 @@ suite "local audio":
     check p.play()
     let deadline = getMonoTime() + initDuration(seconds = 10)
     while completions == 0 and getMonoTime() < deadline:
-      withPool(proc() =
-        let date = sendIdDouble(loadClass("NSDate"), sel("dateWithTimeIntervalSinceNow:"), 0.01)
-        sendVoidId(send0(loadClass("NSRunLoop"), sel("currentRunLoop")), sel("runUntilDate:"), date)
-      )
+      when defined(macosx):
+        withPool(proc() =
+          let date = sendIdDouble(loadClass("NSDate"), sel("dateWithTimeIntervalSinceNow:"), 0.01)
+          sendVoidId(send0(loadClass("NSRunLoop"), sel("currentRunLoop")), sel("runUntilDate:"), date)
+        )
+      else:
+        discard p.position()
+        sleep(10)
     check completions == 1
     check not p.playing
