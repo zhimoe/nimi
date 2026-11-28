@@ -1,19 +1,29 @@
-## Worker pool for background IPC methods. Requests and responses cross the
-## thread boundary as JSON strings; the UI thread only receives completed
-## results through postMain(). The pool is bounded by maxInflight, cancels
-## calls when their window closes, and rejects calls that pass their deadline.
+## Worker pool for background IPC methods.
+##
+## Requests and responses cross the thread boundary as `SharedBytes` (raw
+## `allocShared` UTF-8 buffers) inside `SharedQueue`, completely avoiding
+## GC/ARC heap sharing across threads.
+
 import std/[atomics, monotimes, os, tables, times]
 
-import ./[ipc, loop]
+import ./[ipc, loop, sharedqueue]
 
 type
-  IpcRequest = object
+  RawIpcRequest = object
     requestId: uint64
     windowId: uint64
     callId: int64
-    args: string
+    args: SharedBytes
     work: IpcWork
     control: ptr Atomic[bool]
+
+  RawIpcResult = object
+    requestId: uint64
+    windowId: uint64
+    callId: int64
+    value: SharedBytes
+    error: SharedBytes
+    timedOut: bool
 
   IpcResult* = object
     requestId*: uint64
@@ -40,9 +50,9 @@ type
     control: ptr Atomic[bool]
 
   Shared = object
-    requests: Channel[IpcRequest]
-    results: Channel[IpcResult]
-    watch: Channel[WatchCommand]
+    requests: SharedQueue[RawIpcRequest]
+    results: SharedQueue[RawIpcResult]
+    watch: SharedQueue[WatchCommand]
     inflight: Atomic[int]
     finished: Atomic[int]
     stopping: Atomic[bool]
@@ -68,6 +78,13 @@ var
   poolStopped = false
   completion: proc(result: IpcResult) {.closure.}
 
+proc freeRawRequest(req: var RawIpcRequest) {.nimcall, gcsafe.} =
+  freeSharedBytes(req.args)
+
+proc freeRawResult(res: var RawIpcResult) {.nimcall, gcsafe.} =
+  freeSharedBytes(res.value)
+  freeSharedBytes(res.error)
+
 proc setIpcCompletion*(fn: proc(result: IpcResult) {.closure.}) =
   ## Set from the UI thread. Pass nil on shutdown to drop late completions.
   completion = fn
@@ -75,13 +92,19 @@ proc setIpcCompletion*(fn: proc(result: IpcResult) {.closure.}) =
 proc drainIpcPool*() =
   ## UI thread only. Delivers completed results; workers and the watchdog wake
   ## the main thread.
-  if pool == nil:
+  if pool == nil or pool.shared == nil:
     return
-  while pool != nil:
-    let received = pool.shared.results.tryRecv()
-    if not received.dataAvailable:
+  while pool != nil and pool.shared != nil:
+    var raw: RawIpcResult
+    if not pool.shared.results.tryRecv(raw):
       break
-    let result = received.msg
+    let result = IpcResult(
+      requestId: raw.requestId,
+      windowId: raw.windowId,
+      callId: raw.callId,
+      value: takeSharedString(raw.value),
+      error: takeSharedString(raw.error),
+      timedOut: raw.timedOut)
     if result.timedOut:
       if pool.pending.hasKey(result.requestId):
         var pending = pool.pending[result.requestId]
@@ -109,17 +132,12 @@ proc drainIpcPool*() =
       if not pending.cancelled and not pending.timedOut:
         if completion != nil:
           completion(result)
-    # A result without a pending entry is a late delivery after cancellation
-    # or shutdown; drop it.
 
 proc watchdogMain(shared: ptr Shared) {.thread.} =
   var items: Table[uint64, WatchItem]
   while true:
-    while true:
-      let received = shared.watch.tryRecv()
-      if not received.dataAvailable:
-        break
-      let command = received.msg
+    var command: WatchCommand
+    while shared.watch.tryRecv(command):
       case command.kind
       of wkAdd:
         items[command.requestId] = WatchItem(
@@ -139,18 +157,26 @@ proc watchdogMain(shared: ptr Shared) {.thread.} =
       items.del(id)
       if item.control != nil:
         item.control[].store(true)
-      shared.results.send(IpcResult(requestId: id,
-        windowId: item.windowId, callId: item.callId,
-        error: "IPC call timed out", timedOut: true))
+      shared.results.send(RawIpcResult(
+        requestId: id,
+        windowId: item.windowId,
+        callId: item.callId,
+        error: toSharedBytes("IPC call timed out"),
+        timedOut: true))
       wakeMainThread()
     sleep(20)
 
 proc workerMain(shared: ptr Shared) {.thread.} =
   while true:
-    let request = shared.requests.recv()
-    if request.work == nil:
+    var request: RawIpcRequest
+    if not shared.requests.recv(request):
       discard shared.finished.fetchAdd(1)
       break
+    if request.work == nil:
+      freeRawRequest(request)
+      discard shared.finished.fetchAdd(1)
+      break
+    let argsStr = takeSharedString(request.args)
     var value, error: string
     if shared.stopping.load():
       error = "IPC worker pool is shutting down"
@@ -158,14 +184,17 @@ proc workerMain(shared: ptr Shared) {.thread.} =
       error = "IPC call cancelled"
     else:
       try:
-        value = request.work(request.args,
-          newIpcCallContext(request.control))
+        value = request.work(argsStr,
+          newIpcCallContext(request.control, request.windowId, request.callId))
       except CatchableError as e:
         error = e.msg
     discard shared.inflight.fetchSub(1)
-    shared.results.send(IpcResult(requestId: request.requestId,
-      windowId: request.windowId, callId: request.callId,
-      value: value, error: error))
+    shared.results.send(RawIpcResult(
+      requestId: request.requestId,
+      windowId: request.windowId,
+      callId: request.callId,
+      value: toSharedBytes(value),
+      error: toSharedBytes(error)))
     wakeMainThread()
     if shared.stopping.load():
       discard shared.finished.fetchAdd(1)
@@ -178,9 +207,9 @@ proc startIpcPool*(workers = 4, maxInflight = 256) =
   let count = max(1, workers)
   let instance = Pool(maxInflight: max(1, maxInflight))
   instance.shared = cast[ptr Shared](allocShared0(sizeof(Shared)))
-  instance.shared.requests.open()
-  instance.shared.results.open()
-  instance.shared.watch.open()
+  initSharedQueue(instance.shared.requests, max(16, maxInflight))
+  initSharedQueue(instance.shared.results, max(16, maxInflight))
+  initSharedQueue(instance.shared.watch, 64)
   instance.shared.inflight.store(0)
   instance.shared.finished.store(0)
   instance.shared.stopping.store(false)
@@ -220,10 +249,35 @@ proc submitIpc*(windowId: uint64, callId: int64, methodName, args: string,
       windowId: windowId, callId: callId,
       deadline: getMonoTime() + initDuration(milliseconds = timeoutMs),
       control: control))
-  instance.shared.requests.send(IpcRequest(requestId: requestId,
-    windowId: windowId, callId: callId, args: args,
-    work: work, control: control))
+  instance.shared.requests.send(RawIpcRequest(
+    requestId: requestId,
+    windowId: windowId,
+    callId: callId,
+    args: toSharedBytes(args),
+    work: work,
+    control: control))
   true
+
+proc cancelIpcCall*(windowId: uint64, callId: int64): bool =
+  ## UI thread only. Marks one in-flight call cancelled and rejects its promise.
+  if pool == nil or not pool.byWindow.hasKey(windowId):
+    return false
+  let instance = pool
+  for id in instance.byWindow[windowId]:
+    if not instance.pending.hasKey(id):
+      continue
+    var pending = instance.pending[id]
+    if pending.callId == callId and not pending.cancelled and not pending.timedOut:
+      pending.cancelled = true
+      if pending.control != nil:
+        pending.control[].store(true)
+      instance.pending[id] = pending
+      instance.shared.watch.send(WatchCommand(kind: wkRemove, requestId: id))
+      if completion != nil:
+        completion(IpcResult(requestId: id, windowId: windowId, callId: callId,
+          error: "IPC call cancelled"))
+      return true
+  false
 
 proc cancelIpcWindow*(windowId: uint64) =
   ## UI thread only. Stops delivery and asks all in-flight work for this
@@ -267,7 +321,8 @@ proc shutdownIpcPool*(timeoutMs: int = 1000) =
   instance.shared.watch.send(WatchCommand(kind: wkStop))
   joinThread(instance.watchdog)
   for _ in 0 ..< instance.threads.len:
-    instance.shared.requests.send(IpcRequest())
+    instance.shared.requests.send(RawIpcRequest())
+  closeSharedQueue(instance.shared.requests)
   let deadline = getMonoTime() +
     initDuration(milliseconds = max(0, timeoutMs))
   while instance.shared.finished.load() < instance.threads.len and
@@ -283,11 +338,15 @@ proc shutdownIpcPool*(timeoutMs: int = 1000) =
         deallocShared(pending.control)
     instance.pending.clear()
     instance.byWindow.clear()
-    instance.shared.requests.close()
-    instance.shared.results.close()
-    instance.shared.watch.close()
+    deinitSharedQueue(instance.shared.requests, freeRawRequest)
+    deinitSharedQueue(instance.shared.results, freeRawResult)
+    deinitSharedQueue(instance.shared.watch)
     deallocShared(instance.shared)
-  # else: a worker is still inside user work. Leak the shared state rather
-  # than freeing it under the live thread; this path is for application exit.
+    instance.shared = nil
   pool = nil
   poolStopped = true
+
+proc resetIpcPoolForTests*() =
+  ## Allows test suites to restart the pool cleanly after `shutdownIpcPool()`.
+  if pool == nil:
+    poolStopped = false

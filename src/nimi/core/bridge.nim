@@ -1,11 +1,13 @@
 ## The page-side bridge injected at document start.
 ##
-## M1 protocol (a subset of MyGo's):
-##   page -> app: {t:"call", id, method, args}
+## Protocol:
+##   page -> app: {t:"call", id, k, method, args}
+##                {t:"cancel", id, k}
+##                {t:"jserror", k, message}
 ##   app -> page: window.__nimi._resolve(id, value)
 ##                window.__nimi._reject(id, message)
-##
-## Events and secret/token checks are implemented; channels and batching remain planned.
+##                window.__nimi._chunk(id, chunk)
+##                window.__nimi._event(name, payload)
 
 const bridgeJs* = """
 (function () {
@@ -15,18 +17,29 @@ const bridgeJs* = """
   var pending = new Map();
   var eventListeners = new Map();
   var next = 1;
+  function postToHost(payload) {
+    payload.k = token;
+    window.webkit.messageHandlers.nimi.postMessage(secret + JSON.stringify(payload));
+  }
   window.__nimi = {
     _resolve: function (id, value) {
       var p = pending.get(id);
       if (!p) return;
       pending.delete(id);
+      if (p.cleanup) p.cleanup();
       p.resolve(value);
     },
     _reject: function (id, message) {
       var p = pending.get(id);
       if (!p) return;
       pending.delete(id);
+      if (p.cleanup) p.cleanup();
       p.reject(new Error(message));
+    },
+    _chunk: function (id, chunk) {
+      var p = pending.get(id);
+      if (!p || !p.onChunk) return;
+      try { p.onChunk(chunk); } catch (e) { console.error(e); }
     },
     _event: function (name, payload) {
       var list = eventListeners.get(name);
@@ -42,10 +55,41 @@ const bridgeJs* = """
       return new Promise(function (resolve, reject) {
         var id = next++;
         pending.set(id, {resolve: resolve, reject: reject});
-        window.webkit.messageHandlers.nimi.postMessage(secret + JSON.stringify({
-          t: "call", id: id, k: token, method: method, args: args
-        }));
+        postToHost({t: "call", id: id, method: method, args: args});
       });
+    },
+    stream: function (method, options) {
+      var opts = options || {};
+      var args = Array.isArray(opts.args) ? opts.args : [];
+      var onChunk = typeof opts.onChunk === "function" ? opts.onChunk : null;
+      var signal = opts.signal || null;
+      return new Promise(function (resolve, reject) {
+        if (signal && signal.aborted) {
+          reject(new Error("IPC call cancelled"));
+          return;
+        }
+        var id = next++;
+        var cleanup = null;
+        if (signal && typeof signal.addEventListener === "function") {
+          var onAbort = function () {
+            if (pending.has(id)) {
+              postToHost({t: "cancel", id: id});
+            }
+          };
+          signal.addEventListener("abort", onAbort, {once: true});
+          cleanup = function () {
+            signal.removeEventListener("abort", onAbort);
+          };
+        }
+        pending.set(id, {resolve: resolve, reject: reject, onChunk: onChunk, cleanup: cleanup});
+        postToHost({t: "call", id: id, method: method, args: args});
+      });
+    },
+    cancel: function (id) {
+      postToHost({t: "cancel", id: id});
+    },
+    reportError: function (message) {
+      postToHost({t: "jserror", message: String(message || "")});
     },
     on: function (name, fn) {
       var list = eventListeners.get(name) || [];
@@ -57,7 +101,6 @@ const bridgeJs* = """
       };
     }
   };
-  // Compatibility alias for code written against MyGo.
   window.mygo = window.nimi;
 })();
 """

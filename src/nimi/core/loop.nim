@@ -3,7 +3,7 @@
 ## The platform backend installs two hooks: one that wakes the native run loop
 ## (dispatch_async on the main queue on macOS) and one that answers whether the
 ## current thread is the UI thread. Everything that touches UI state goes
-## through postMain/onMain; bound IPC methods (later) run on a worker pool.
+## through postMain/onMain; bound background IPC methods run on a worker pool.
 
 import std/[deques, locks]
 
@@ -20,15 +20,22 @@ proc initLoop*() =
   if not initialized:
     initLock(queueLock)
     initialized = true
+    shuttingDown = false
+
+# Eagerly initialize on the main module load so wakeMainThread() -> drainMain()
+# never races an uninitialized Win32 CRITICAL_SECTION before the first postMain().
+initLoop()
 
 proc setLoopHooks*(signal: proc(), isMain: proc(): bool) =
   ## Called once by the backend after it starts.
+  initLoop()
   signalHook = signal
   mainHook = isMain
 
 proc setWakeHook*(hook: proc() {.nimcall, gcsafe.}) =
-  ## Thread-safe wake primitive for workers that only touch Channels. It must
-  ## not capture GC-managed state. Called once by the backend bootstrap.
+  ## Thread-safe wake primitive for workers that only touch shared queues. It
+  ## must not capture GC-managed state. Called once by the backend bootstrap.
+  initLoop()
   wakeHook = hook
 
 proc wakeMainThread*() {.gcsafe.} =
@@ -61,7 +68,9 @@ proc postMain*(fn: proc()): bool =
 proc drainMain*() =
   ## Run queued functions on the main thread. Re-entrant: a callback may post
   ## more work, and nested native loops must keep draining.
-  while true:
+  if not initialized:
+    initLoop()
+  while initialized:
     var fn: proc() {.closure.}
     acquire(queueLock)
     if queue.len == 0:
@@ -93,6 +102,8 @@ proc onMain*(fn: proc()) =
         w.done = true
         signal(w.cond)
         release(w.lock)):
+    deinitCond(w.cond)
+    deinitLock(w.lock)
     raise newException(CatchableError, "nimi: main loop is shut down")
 
   acquire(w.lock)
@@ -103,7 +114,8 @@ proc onMain*(fn: proc()) =
   deinitLock(w.lock)
 
 proc shutdownLoop*() =
-  initLoop()
+  if not initialized:
+    return
   acquire(queueLock)
   shuttingDown = true
   queue.clear()

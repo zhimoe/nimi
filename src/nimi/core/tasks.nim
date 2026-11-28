@@ -1,9 +1,14 @@
-## Bounded background executor. Workers exchange owned strings through
-## Channels; UI callbacks stay on the owning thread and run only from poll().
-## Cancellation is cooperative: work receives a TaskContext and should stop at
+## Bounded background executor built on `SharedQueue` (ARC/atomicArc safe).
+##
+## Workers exchange raw `SharedBytes` buffers rather than GC/ARC strings; UI
+## callbacks stay on the owning thread and run only from `poll()`.
+## Cancellation is cooperative: work receives a `TaskContext` and should stop at
 ## the next safe point. A close with a timeout may abandon a stuck worker so
 ## application shutdown never waits indefinitely.
+
 import std/[atomics, monotimes, os, tables, times]
+
+import ./[loop, sharedqueue]
 
 type
   TaskContext* = object
@@ -16,31 +21,44 @@ type
     id*: uint64
     value*, error*: string
 
+  RawTaskRequest = object
+    id: uint64
+    input: SharedBytes
+    work: TaskWork
+    control: ptr Atomic[bool]
+
+  RawTaskResult = object
+    id: uint64
+    value: SharedBytes
+    error: SharedBytes
+
   Pending = object
     callback: proc(result: TaskResult)
     control: ptr Atomic[bool]
     deadline: MonoTime
     hasDeadline, timedOut: bool
 
-  Request = object
-    id: uint64
-    input: string
-    work: TaskWork
-    control: ptr Atomic[bool]
-
   Shared = object
-    requests: Channel[Request]
-    results: Channel[TaskResult]
-    finished: Atomic[bool]
+    requests: SharedQueue[RawTaskRequest]
+    results: SharedQueue[RawTaskResult]
+    finished: Atomic[int]
+    wakeMain: bool
 
   TaskExecutor* = ref object
     shared: ptr Shared
-    worker: Thread[ptr Shared]
+    workers: seq[Thread[ptr Shared]]
     pending: Table[uint64, Pending]
     nextId: uint64
     outstanding: int
     capacity: int
     closing: bool
+
+proc freeRawTaskRequest(req: var RawTaskRequest) {.nimcall, gcsafe.} =
+  freeSharedBytes(req.input)
+
+proc freeRawTaskResult(res: var RawTaskResult) {.nimcall, gcsafe.} =
+  freeSharedBytes(res.value)
+  freeSharedBytes(res.error)
 
 proc isCancelled*(context: TaskContext): bool {.inline.} =
   context.control != nil and context.control[].load()
@@ -51,36 +69,52 @@ proc newControl(): ptr Atomic[bool] =
 
 proc workerMain(shared: ptr Shared) {.thread.} =
   while true:
-    let request = shared.requests.recv()
-    if request.work == nil:
-      shared.finished.store(true)
+    var request: RawTaskRequest
+    if not shared.requests.recv(request):
+      discard shared.finished.fetchAdd(1)
       break
+    if request.work == nil:
+      freeRawTaskRequest(request)
+      discard shared.finished.fetchAdd(1)
+      break
+    let input = takeSharedString(request.input)
     if request.control != nil and request.control[].load():
-      shared.results.send(TaskResult(id: request.id, error: "Task cancelled"))
+      shared.results.send(RawTaskResult(
+        id: request.id,
+        error: toSharedBytes("Task cancelled")))
+      if shared.wakeMain:
+        wakeMainThread()
       continue
-    var result = TaskResult(id: request.id)
+    var value, error: string
     try:
-      result.value = request.work(
-        request.input, TaskContext(control: request.control))
-    except CatchableError as error:
-      result.error = error.msg
-    shared.results.send(result)
+      value = request.work(input, TaskContext(control: request.control))
+    except CatchableError as err:
+      error = err.msg
+    shared.results.send(RawTaskResult(
+      id: request.id,
+      value: toSharedBytes(value),
+      error: toSharedBytes(error)))
+    if shared.wakeMain:
+      wakeMainThread()
 
-proc newTaskExecutor*(capacity = 64): TaskExecutor =
+proc newTaskExecutor*(capacity = 64, workers = 1,
+                      wakeOnComplete = false): TaskExecutor =
   ## Create on the UI thread; close explicitly before application shutdown.
+  let workerCount = max(1, workers)
   result = TaskExecutor(capacity: max(1, capacity))
   result.shared = cast[ptr Shared](allocShared0(sizeof(Shared)))
-  result.shared.requests.open()
-  result.shared.results.open()
-  result.shared.finished.store(false)
-  createThread(result.worker, workerMain, result.shared)
+  initSharedQueue(result.shared.requests, max(8, capacity))
+  initSharedQueue(result.shared.results, max(8, capacity))
+  result.shared.finished.store(0)
+  result.shared.wakeMain = wakeOnComplete
+  result.workers.setLen(workerCount)
+  for i in 0 ..< workerCount:
+    createThread(result.workers[i], workerMain, result.shared)
 
 proc submit*(executor: TaskExecutor, input: string, work: TaskWork,
              callback: proc(result: TaskResult),
              timeoutMs: int = 0): uint64 =
   ## Returns zero when closed/full. No UI closure is passed to the worker.
-  ## A positive timeout reports an error from poll() and requests cooperative
-  ## cancellation; the worker is not interrupted preemptively.
   if executor == nil or executor.shared == nil or executor.closing or
       work == nil or executor.outstanding >= executor.capacity:
     return 0
@@ -95,8 +129,8 @@ proc submit*(executor: TaskExecutor, input: string, work: TaskWork,
   else:
     executor.pending[result] = Pending(callback: callback, control: control)
   inc executor.outstanding
-  executor.shared.requests.send(Request(
-    id: result, input: input, work: work, control: control))
+  executor.shared.requests.send(RawTaskRequest(
+    id: result, input: toSharedBytes(input), work: work, control: control))
 
 proc cancel*(executor: TaskExecutor, id: uint64) =
   ## Suppresses delivery and asks the worker to stop. Capacity is released
@@ -116,10 +150,13 @@ proc poll*(executor: TaskExecutor) =
   ## Owning-thread only. Safe if a callback submits, cancels, or closes executor.
   if executor == nil or executor.shared == nil: return
   while executor.shared != nil:
-    let received = executor.shared.results.tryRecv()
-    if not received.dataAvailable:
+    var raw: RawTaskResult
+    if not executor.shared.results.tryRecv(raw):
       break
-    let result = received.msg
+    let result = TaskResult(
+      id: raw.id,
+      value: takeSharedString(raw.value),
+      error: takeSharedString(raw.error))
     if executor.outstanding > 0:
       dec executor.outstanding
     if executor.pending.hasKey(result.id):
@@ -161,7 +198,7 @@ proc poll*(executor: TaskExecutor) =
       callback(TaskResult(id: id, error: "Task timed out"))
 
 proc close*(executor: TaskExecutor, timeoutMs: int = 1000) =
-  ## Drops callbacks, cancels pending work, and joins the worker. If a stuck
+  ## Drops callbacks, cancels pending work, and joins workers. If a stuck
   ## task ignores cancellation past `timeoutMs`, the executor abandons the
   ## worker (and its shared state) instead of blocking shutdown forever.
   if executor == nil or executor.shared == nil:
@@ -176,19 +213,23 @@ proc close*(executor: TaskExecutor, timeoutMs: int = 1000) =
       item.control[].store(true)
     item.callback = nil
     executor.pending[id] = item
-  executor.shared.requests.send(Request())
+  for _ in 0 ..< executor.workers.len:
+    executor.shared.requests.send(RawTaskRequest())
+  closeSharedQueue(executor.shared.requests)
   let deadline = getMonoTime() + initDuration(milliseconds = max(0, timeoutMs))
-  while executor.shared != nil and not executor.shared.finished.load() and
+  while executor.shared != nil and
+      executor.shared.finished.load() < executor.workers.len and
       getMonoTime() < deadline:
     executor.poll()
     sleep(1)
   if executor.shared == nil:
     return
-  if executor.shared.finished.load():
-    joinThread(executor.worker)
+  if executor.shared.finished.load() >= executor.workers.len:
+    for w in executor.workers:
+      joinThread(w)
     executor.poll()
-    executor.shared.requests.close()
-    executor.shared.results.close()
+    deinitSharedQueue(executor.shared.requests, freeRawTaskRequest)
+    deinitSharedQueue(executor.shared.results, freeRawTaskResult)
     deallocShared(executor.shared)
     executor.shared = nil
     for _, item in executor.pending:
@@ -196,8 +237,6 @@ proc close*(executor: TaskExecutor, timeoutMs: int = 1000) =
         deallocShared(item.control)
     executor.pending.clear()
   else:
-    # The worker may still touch Shared and its controls later. Leak them
-    # rather than freeing memory under a live thread; the process is exiting.
     executor.shared = nil
     executor.pending.clear()
   executor.outstanding = 0
