@@ -79,6 +79,8 @@ proc newUnsupportedNativeWindow*(platform: string): NativeWindow =
     unsupported(platform, "NativeWindow.setResizable")
   result.setAlwaysOnTop = proc(always: bool) =
     unsupported(platform, "NativeWindow.setAlwaysOnTop")
+  result.popupMenu = proc(menu: PlatformMenu, h: MenuHandler, x, y: int) =
+    unsupported(platform, "NativeWindow.popupMenu")
   result.loadHTML = proc(html: string, baseURL: string) =
     unsupported(platform, "NativeWindow.loadHTML")
   result.loadURL = proc(url: string) =
@@ -106,6 +108,8 @@ proc newUnsupportedNativeWindow*(platform: string): NativeWindow =
 
 proc newUnsupportedBackend*(platform: string): Backend =
   result = Backend()
+  result.capabilities = proc(): set[PlatformCapability] =
+    {}
   result.init = proc(h: AppHandler, opts: AppOptions) =
     unsupported(platform, "Backend.init")
   result.run = proc() =
@@ -167,4 +171,3 @@ proc newUnsupportedBackend*(platform: string): Backend =
   result.name = platform
   result.dialogs = newUnsupportedDialogs(platform)
   result.clipboard = newUnsupportedClipboard(platform)
-

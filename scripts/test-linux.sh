@@ -23,6 +23,7 @@ test_environment_app
 test_environment_ui
 test_ipc
 test_ipc_pool
+test_host_foundation
 test_loop
 test_unicode
 test_ui

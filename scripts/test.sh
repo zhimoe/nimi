@@ -18,6 +18,7 @@ nim c -r --hints:off --path:src -o:/tmp/nimi_test_environment_app tests/test_env
 nim c -r --hints:off --path:src -o:/tmp/nimi_test_environment_ui tests/test_environment_ui.nim
 nim c -r --hints:off --path:src -o:/tmp/nimi_test_ipc tests/test_ipc.nim
 nim c -r --hints:off --path:src -o:/tmp/nimi_test_ipc_pool tests/test_ipc_pool.nim
+nim c -r --hints:off --path:src -o:/tmp/nimi_test_host_foundation tests/test_host_foundation.nim
 nim c -r --hints:off --path:src -o:/tmp/nimi_test_loop tests/test_loop.nim
 nim c -r --hints:off --path:src -o:/tmp/nimi_test_unicode tests/test_unicode.nim
 nim c -r --hints:off --path:src -o:/tmp/nimi_test_ui tests/test_ui.nim

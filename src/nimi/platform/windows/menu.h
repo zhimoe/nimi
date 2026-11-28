@@ -11,4 +11,5 @@ int nimi_menu_install(void *window,void *menu,void *accel);
 void nimi_menu_detach(void *window);
 int nimi_menu_translate(void *message);
 void nimi_menu_test_key(void *window,unsigned key,unsigned modifiers);
+unsigned nimi_menu_popup(void *window,void *menu,int x,int y,float scale);
 #endif

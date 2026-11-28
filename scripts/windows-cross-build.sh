@@ -17,7 +17,7 @@ WRAPPER
 chmod +x "$compiler_dir/cc"
 mkdir -p "$output"
 cp "src/nimi/platform/windows/webview2/sdk/$loader/WebView2Loader.dll" "$output/"
-for test in test_windows_input test_windows_input_native test_windows_menu_plan test_menu_callbacks test_windows_menu test_platform_contract test_cli_windows test_environment test_environment_model test_environment_storage test_environment_app test_environment_ui test_environment_app_windows test_environment_windows test_windows_host test_windows_surface test_windows_webview test_windows_webview_protocol test_windows_desktop test_windows_animation test_windows_render test_layout_legacy test_ui test_ui_layout test_ui_widgets; do
+for test in test_windows_input test_windows_input_native test_windows_menu_plan test_menu_callbacks test_windows_menu test_platform_contract test_cli_windows test_host_foundation test_environment test_environment_model test_environment_storage test_environment_app test_environment_ui test_environment_app_windows test_environment_windows test_windows_host test_windows_surface test_windows_webview test_windows_webview_protocol test_windows_desktop test_windows_animation test_windows_render test_layout_legacy test_ui test_ui_layout test_ui_widgets; do
   nim c --os:windows --cpu:"$cpu" --cc:clang \
     --clang.exe:"$compiler_dir/cc" --clang.linkerexe:"$compiler_dir/cc" \
     --nimcache:"$output/nimcache/$test" --hints:off -o:"$output/$test.exe" "tests/$test.nim"

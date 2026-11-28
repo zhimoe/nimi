@@ -438,6 +438,9 @@ proc newWindowsBackend*(): Backend =
     if hostClipboardWriteHTML(payload.cstring, csize_t(payload.len)) == 0:
       raise newException(ClipboardError, "Cannot write Windows HTML clipboard")
   result.dialogs = newUnsupportedDialogs("windows")
+  result.capabilities = proc(): set[PlatformCapability] =
+    {pcWebView, pcNativeUI, pcCustomScheme, pcTray, pcNotification,
+     pcGlobalShortcut, pcFileWatch, pcPopupMenu, pcClipboardHTML}
   installFileDialogs(result.dialogs)
   result.dialogs.message = proc(title, text: string): int =
     requireDesktop()
@@ -616,7 +619,8 @@ proc newWindowsBackend*(): Backend =
     try:
       if usesWebView:
         state.webview = newWebView2(handle, handler.windowId, handler,
-          opts.scheme, opts.fileRoot, opts.secret, opts.token, opts.ephemeral)
+          opts.scheme, opts.fileRoot, opts.secret, opts.token, opts.ephemeral,
+          opts.serveScheme, opts.userDataDir)
       winMenu.installMenu(handle, currentMenuPlan)
       state.menuPlan = currentMenuPlan
       state.menuHandler = currentMenuHandler
@@ -722,6 +726,19 @@ proc newWindowsBackend*(): Backend =
     result.setAlwaysOnTop = proc(on: bool) =
       requireLive(state)
       hostTopmost(state.handle, cint(on))
+    result.popupMenu = proc(pm: PlatformMenu, pmHandler: MenuHandler, x, y: int) =
+      requireLive(state)
+      if pm.items.len == 0:
+        return
+      let plan = planMenu(pm)
+      let popup = winMenu.buildPopup(plan)
+      try:
+        let scale = hostScale(state.handle)
+        let cmd = winMenu.popupMenuNative(state.handle, popup, cint(x), cint(y), cfloat(scale))
+        if cmd > 0 and int(cmd) <= plan.commands.len:
+          runMenuCommand(plan.commands[int(cmd) - 1], pmHandler, state)
+      finally:
+        winMenu.freeMenu(popup)
     result.minimize = proc() =
       requireLive(state)
       hostShow(state.handle, 6)

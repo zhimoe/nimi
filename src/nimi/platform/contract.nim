@@ -1,13 +1,28 @@
 ## The platform contract. Every backend implements this; core policy lives
-## above it. Calls and callbacks are main-thread only.
+## above it. Calls and callbacks are main-thread only unless noted.
 
 import ../keys
 import ../text/range
 export keys, range
 
 type
+  PlatformCapability* = enum
+    pcWebView
+    pcNativeUI
+    pcCustomScheme
+    pcTray
+    pcNotification
+    pcGlobalShortcut
+    pcLoginItem
+    pcNowPlaying
+    pcFileWatch
+    pcPopupMenu
+    pcClipboardHTML
+    pcSingleInstance
+
   AppOptions* = object
     name*: string
+    identifier*: string
 
   PlatformPoint* = object
     x*, y*: float32
@@ -29,6 +44,13 @@ type
     dark*: bool
     accentR*, accentG*, accentB*: float32
 
+  PlatformResource* = object
+    status*: int
+    mime*: string
+    data*: string
+
+  PlatformSchemeHandler* = proc(path: string): PlatformResource {.closure, gcsafe.}
+
   PlatformWindowOptions* = object
     title*: string
     width*, height*: int # Client dimensions in logical pixels (Windows: 96-DPI DIPs).
@@ -40,6 +62,8 @@ type
     content*: bool
     scheme*: string
     fileRoot*: string
+    serveScheme*: PlatformSchemeHandler
+    userDataDir*: string
     ephemeral*: bool
     ime*: bool
     # Withhold the click that makes a non-key window key from its content
@@ -59,14 +83,14 @@ type
     cut*: proc() {.closure.}
     paste*: proc() {.closure.}
     selectAll*: proc() {.closure.}
-    cancelInput*: proc(composition: bool) {.closure.} # Cancel pointer capture; optionally discard IME preedit.
+    cancelInput*: proc(composition: bool) {.closure.}
     undo*: proc() {.closure.}
     redo*: proc() {.closure.}
     insertText*: proc(text: string, replacement: TextRange) {.closure.}
     setMarkedText*: proc(text: string, selected, replacement: TextRange) {.closure.}
     unmarkText*: proc() {.closure.}
     hasMarkedText*: proc(): bool {.closure.}
-    textInputActive*: proc(): bool {.closure.} # Whether the focused control accepts text.
+    textInputActive*: proc(): bool {.closure.}
     markedRange*: proc(): TextRange {.closure.}
     selectedRange*: proc(): TextRange {.closure.}
     attributedSubstring*: proc(range: TextRange): string {.closure.}
@@ -138,7 +162,7 @@ type
 
   PlatformNowPlayingInfo* = object
     title*, artist*, album*: string
-    artwork*: seq[byte]  # PNG/JPEG bytes; empty means no artwork
+    artwork*: seq[byte]
     duration*, position*: float64
     playing*: bool
     commands*: set[PlatformMediaCommand]
@@ -188,7 +212,6 @@ type
     isVisible*: proc(): bool {.closure.}
     isMinimized*: proc(): bool {.closure.}
     isMaximized*: proc(): bool {.closure.}
-    # setSize uses logical client pixels. Windows setPosition uses physical desktop coordinates.
     setSize*: proc(width, height: int) {.closure.}
     setPosition*: proc(x, y: int) {.closure.}
     getSize*: proc(width, height: var int) {.closure.}
@@ -196,6 +219,7 @@ type
     setAppearance*: proc(dark: bool) {.closure.}
     setResizable*: proc(resizable: bool) {.closure.}
     setAlwaysOnTop*: proc(always: bool) {.closure.}
+    popupMenu*: proc(menu: PlatformMenu, h: MenuHandler, x, y: int) {.closure.}
     loadHTML*: proc(html: string, baseURL: string) {.closure.}
     loadURL*: proc(url: string) {.closure.}
     eval*: proc(js: string) {.closure.}
@@ -211,10 +235,11 @@ type
 
   Backend* = ref object
     name*: string
+    capabilities*: proc(): set[PlatformCapability] {.closure.}
     init*: proc(h: AppHandler, opts: AppOptions) {.closure.}
     run*: proc() {.closure.}
     quit*: proc() {.closure.}
-    shutdown*: proc() {.closure.} # Idempotent release after init, even if run was never entered.
+    shutdown*: proc() {.closure.}
     signal*: proc() {.closure.}
     step*: proc() {.closure.}
     wake*: proc() {.closure.}
@@ -235,8 +260,6 @@ type
     registerShortcut*: proc(accel: string, fn: proc()): bool {.closure.}
     unregisterShortcut*: proc(accel: string): bool {.closure.}
     unregisterAllShortcuts*: proc() {.closure.}
-    # Start at login. setOpenAtLogin raises BackendError when the platform
-    # cannot register the app; the queries return false instead.
     setOpenAtLogin*: proc(enabled: bool) {.closure.}
     openAtLogin*: proc(): bool {.closure.}
     wasOpenedAtLogin*: proc(): bool {.closure.}

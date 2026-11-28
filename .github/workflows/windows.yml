@@ -47,6 +47,7 @@ jobs:
             "test_windows_menu",
             "test_platform_contract",
             "test_cli_windows",
+            "test_host_foundation",
             "test_environment",
             "test_environment_model",
             "test_environment_storage",

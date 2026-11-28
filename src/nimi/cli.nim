@@ -1,17 +1,17 @@
-## The M1 `nimi` CLI. Kept intentionally small: generate, dev, build, init,
-## doctor. Packaging/signing/updater land in M7.
+## The `nimi` CLI: init, generate, dev, build (native + Zig Windows cross-build
+## + portable + macOS dylib bundling + Inno Setup script), smoke, and doctor.
 
-import std/[algorithm, dynlib, json, os, osproc, strtabs, strutils, times]
+import std/[algorithm, dynlib, json, os, osproc, strtabs, strutils, tables, times]
 
 const
-  Version = "0.1.0"
+  Version = "0.2.0"
   HelpText = """nimi — desktop apps in Nim
 
 Usage:
   nimi init [dir] [--native]
   nimi generate [dir]
   nimi dev [dir]
-  nimi build [dir]
+  nimi build [dir] [--target:windows-amd64|windows-arm64] [--portable] [--installer]
   nimi doctor
   nimi version
   nimi help
@@ -36,6 +36,12 @@ type
     notarize: bool
     keychainProfile: string
     entitlements: string
+    mm: string
+    nimFlags: seq[string]
+    beforeBuildCommand: string
+    devCommand: string
+    devUrl: string
+    watchDirs: seq[string]
     resources: seq[string]
     urlSchemes: seq[string]
 
@@ -51,8 +57,8 @@ proc libraryPath(): string =
     return local
   result = "src"
 
-proc runChecked(cmd: string): string =
-  let (output, code) = execCmdEx(cmd)
+proc runChecked(cmd: string, workingDir: string = ""): string =
+  let (output, code) = execCmdEx(cmd, workingDir = workingDir)
   if code != 0:
     stderr.write(output)
     raise fail("command failed (" & $code & "): " & cmd)
@@ -69,25 +75,38 @@ proc slugify(s: string): string =
       prevDash = true
   result = result.strip(chars = {'-'})
 
-proc loadConfig(dir: string): Config =
+proc strSeqField(node: JsonNode, key: string): seq[string] =
+  let arr = node{key}
+  if arr != nil and arr.kind == JArray:
+    for item in arr:
+      if item.kind == JString and item.getStr.len > 0:
+        result.add item.getStr
+
+proc loadConfig*(dir: string): Config =
   result.projectDir = absolutePath(dir)
   let path = result.projectDir / "nimi.json"
   if not fileExists(path):
     raise fail("nimi.json not found in " & result.projectDir)
   let node = parseFile(path)
-  result.name = node{"name"}.getStr("Nimi")
-  result.slug = node{"slug"}.getStr(slugify(result.name))
-  result.identifier = node{"identifier"}.getStr("com.example." & result.slug)
-  result.version = node{"version"}.getStr("0.1.0")
-  result.main = node{"main"}.getStr("src/main.nim")
-  result.bindings = node{"bindings"}.getStr("frontend/nimi.ts")
-  result.outDir = node{"out"}.getStr("dist")
-  let macos = node{"macos"}
   proc strField(n: JsonNode, key, default: string): string =
-    if n != nil and n.kind == JObject and n.hasKey(key):
+    if n != nil and n.kind == JObject and n.hasKey(key) and n[key].kind == JString:
       n[key].getStr(default)
     else:
       default
+  result.name = strField(node, "name", "Nimi")
+  result.slug = strField(node, "slug", slugify(result.name))
+  result.identifier = strField(node, "identifier", "com.example." & result.slug)
+  result.version = strField(node, "version", "0.1.0")
+  result.main = strField(node, "main", "src/main.nim")
+  result.bindings = strField(node, "bindings", "frontend/nimi.ts")
+  result.outDir = strField(node, "out", "dist")
+  result.mm = strField(node, "mm", "")
+  result.nimFlags = strSeqField(node, "nimFlags")
+  result.beforeBuildCommand = strField(node, "beforeBuildCommand", "")
+  result.devCommand = strField(node, "devCommand", "")
+  result.devUrl = strField(node, "devUrl", "")
+  result.watchDirs = strSeqField(node, "watchDirs")
+  let macos = node{"macos"}
   result.icon = strField(node, "icon", "resources/icon.png")
   let windows = node{"windows"}
   result.windowsIcon = strField(windows, "icon", result.icon)
@@ -97,16 +116,73 @@ proc loadConfig(dir: string): Config =
     macos.hasKey("notarize") and macos["notarize"].getBool(false)
   result.keychainProfile = strField(macos, "keychainProfile", "")
   result.entitlements = strField(macos, "entitlements", "")
-  let resources = node{"resources"}
-  if resources != nil and resources.kind == JArray:
-    for item in resources:
-      if item.kind == JString:
-        result.resources.add item.getStr
-  let schemes = node{"urlSchemes"}
-  if schemes != nil and schemes.kind == JArray:
-    for item in schemes:
-      if item.kind == JString:
-        result.urlSchemes.add item.getStr
+  result.resources = strSeqField(node, "resources")
+  result.urlSchemes = strSeqField(node, "urlSchemes")
+
+proc nimCompilerFlags(cfg: Config, release: bool): string =
+  var flags: seq[string]
+  if release:
+    flags.add "-d:release"
+  flags.add "--hints:off"
+  flags.add "--threads:on"
+  # Respect explicit `mm` in nimi.json or project `config.nims` if it sets `--mm:`.
+  var projectSetsMm = false
+  let nimsPath = cfg.projectDir / "config.nims"
+  if fileExists(nimsPath):
+    try:
+      let body = readFile(nimsPath)
+      if "--mm:" in body:
+        projectSetsMm = true
+    except CatchableError:
+      discard
+  if cfg.mm.len > 0:
+    flags.add "--mm:" & cfg.mm
+  elif not projectSetsMm:
+    flags.add "--mm:atomicArc"
+  for extra in cfg.nimFlags:
+    flags.add quoteShell(extra)
+  flags.add "--path:" & quoteShell(libraryPath())
+  flags.join(" ")
+
+const runtimeTemplate* = """export interface StreamOptions<TChunk = unknown> {
+  args?: unknown[];
+  onChunk?: (chunk: TChunk) => void;
+  signal?: AbortSignal;
+}
+
+export interface NimiBridge {
+  call(method: string, ...args: unknown[]): Promise<unknown>;
+  stream(method: string, options?: StreamOptions): Promise<unknown>;
+  cancel(id: number): void;
+  reportError(message: string): void;
+  on(name: string, fn: (payload: unknown) => void): () => void;
+}
+
+declare global {
+  interface Window {
+    nimi: NimiBridge;
+    mygo?: NimiBridge;
+  }
+}
+
+export function call<T>(method: string, ...args: unknown[]): Promise<T> {
+  return window.nimi.call(method, ...args) as Promise<T>;
+}
+
+export function stream<TResult = unknown, TChunk = unknown>(
+  method: string,
+  options?: StreamOptions<TChunk>,
+): Promise<TResult> {
+  return window.nimi.stream(method, options as StreamOptions) as Promise<TResult>;
+}
+
+export function on<TPayload = unknown>(
+  name: string,
+  fn: (payload: TPayload) => void,
+): () => void {
+  return window.nimi.on(name, fn as (payload: unknown) => void);
+}
+"""
 
 proc runGenerate(dir: string) =
   let cfg = loadConfig(dir)
@@ -120,11 +196,13 @@ proc runGenerate(dir: string) =
   let exe = cacheDir / "generate"
 
   echo "Compiling " & cfg.main & " for client generation…"
-  discard runChecked("nim c --hints:off --path:" & quoteShell(libraryPath()) &
-    " -d:nimiGenerate --out:" & quoteShell(exe) & " " & quoteShell(mainPath))
+  discard runChecked("nim c " & nimCompilerFlags(cfg, release = false) &
+    " -d:nimiGenerate --out:" & quoteShell(exe) & " " & quoteShell(mainPath),
+    workingDir = cfg.projectDir)
 
   let (output, code) = execCmdEx(
     quoteShell(exe),
+    workingDir = cfg.projectDir,
     options = {},
     env = block:
       var e = newStringTable()
@@ -136,22 +214,15 @@ proc runGenerate(dir: string) =
     stderr.write(output)
     raise fail("generation run failed (" & $code & ")")
 
-  # A tiny runtime stub so the generated client type-checks before the
-  # frontend installs nimi-runtime.
   let stub = parentDir(bindingsPath) / "nimi-runtime.ts"
   if not fileExists(stub):
-    writeFile(stub, """declare global {
-  interface Window {
-    nimi: { call(method: string, ...args: unknown[]): Promise<unknown> };
-    mygo?: { call(method: string, ...args: unknown[]): Promise<unknown> };
-  }
-}
-
-export function call<T>(method: string, ...args: unknown[]): Promise<T> {
-  return window.nimi.call(method, ...args) as Promise<T>;
-}
-""")
+    writeFile(stub, runtimeTemplate)
   echo "Generated " & bindingsPath
+
+proc runBeforeBuild(cfg: Config) =
+  if cfg.beforeBuildCommand.len > 0:
+    echo "Running beforeBuildCommand: " & cfg.beforeBuildCommand
+    discard runChecked(cfg.beforeBuildCommand, workingDir = cfg.projectDir)
 
 proc makeIcns(cfg: Config, resourcesDir: string): string =
   let iconPath = absolutePath(cfg.projectDir / cfg.icon)
@@ -186,27 +257,104 @@ proc makeIcns(cfg: Config, resourcesDir: string): string =
   copyFile(icns, dst)
   result = "AppIcon.icns"
 
-proc signApp(cfg: Config, appPath: string) =
+proc otoolNonSystemDeps(binaryPath: string): seq[string] =
+  let (outText, code) = execCmdEx("otool -L " & quoteShell(binaryPath))
+  if code != 0:
+    return @[]
+  let lines = outText.splitLines()
+  for i in 1 ..< lines.len:
+    let trimmed = lines[i].strip()
+    if trimmed.len == 0:
+      continue
+    let dep = trimmed.split(' ')[0]
+    if dep.len == 0 or
+        dep.startsWith("/System/") or
+        dep.startsWith("/usr/lib/") or
+        dep.startsWith("@executable_path/") or
+        dep.startsWith("@loader_path/") or
+        dep.startsWith("@rpath/"):
+      continue
+    if fileExists(dep):
+      result.add dep
+
+proc bundleMacosDylibs*(exePath, frameworksDir: string): seq[string] =
+  ## Recursively copy non-system Homebrew / local `.dylib` dependencies into
+  ## `Contents/Frameworks` and rewrite install names so `.app` is self-contained.
+  var queue = @[exePath]
+  var visited: seq[string]
+  var bundledByBase = initOrderedTable[string, string]()
+  while queue.len > 0:
+    let current = queue[0]
+    queue.delete(0)
+    if current in visited:
+      continue
+    visited.add current
+    let deps = otoolNonSystemDeps(current)
+    for dep in deps:
+      createDir(frameworksDir)
+      let base = lastPathPart(dep)
+      let dest = frameworksDir / base
+      if not bundledByBase.hasKey(base):
+        copyFile(dep, dest)
+        setFilePermissions(dest, {fpUserRead, fpUserWrite, fpUserExec,
+                                  fpGroupRead, fpGroupExec,
+                                  fpOthersRead, fpOthersExec})
+        discard runChecked("install_name_tool -id " &
+          quoteShell("@executable_path/../Frameworks/" & base) & " " &
+          quoteShell(dest))
+        bundledByBase[base] = dest
+        queue.add dest
+        result.add dest
+      discard runChecked("install_name_tool -change " & quoteShell(dep) & " " &
+        quoteShell("@executable_path/../Frameworks/" & base) & " " &
+        quoteShell(current))
+
+proc signApp(cfg: Config, appPath: string, dylibs: openArray[string] = []) =
   let identity = cfg.signingIdentity
-  var cmd = "codesign --force --deep --sign " & quoteShell(identity)
+  var commonFlags = "--force --sign " & quoteShell(identity)
   if identity != "-":
-    cmd.add " --options runtime --timestamp"
-    if cfg.entitlements.len > 0:
-      let ent = cfg.projectDir / cfg.entitlements
-      if fileExists(ent):
-        cmd.add " --entitlements " & quoteShell(ent)
-      else:
-        echo "warning: entitlements not found: " & ent
-  cmd.add " " & quoteShell(appPath)
-  discard runChecked(cmd)
+    commonFlags.add " --options runtime --timestamp"
+  # Sign embedded dylibs inside-out before signing the outer bundle.
+  for lib in dylibs:
+    if fileExists(lib):
+      discard runChecked("codesign " & commonFlags & " " & quoteShell(lib))
+  var appCmd = "codesign " & commonFlags
+  if identity != "-" and cfg.entitlements.len > 0:
+    let ent = cfg.projectDir / cfg.entitlements
+    if fileExists(ent):
+      appCmd.add " --entitlements " & quoteShell(ent)
+    else:
+      echo "warning: entitlements not found: " & ent
+  appCmd.add " " & quoteShell(appPath)
+  discard runChecked(appCmd)
   echo "Signed (" & identity & ")."
 
 proc makeDmg(cfg: Config, appPath, outRoot: string): string =
   let dmg = outRoot / (cfg.slug & "-" & cfg.version & ".dmg")
   if fileExists(dmg):
     removeFile(dmg)
-  discard runChecked("hdiutil create -volname " & quoteShell(cfg.dmgTitle) &
-    " -srcfolder " & quoteShell(appPath) & " -ov -format UDZO " & quoteShell(dmg))
+  let staging = cfg.projectDir / ".nimi" / "dmg-staging"
+  if dirExists(staging):
+    removeDir(staging)
+  createDir(staging)
+  try:
+    copyDir(appPath, staging / lastPathPart(appPath))
+    try:
+      createSymlink("/Applications", staging / "Applications")
+    except CatchableError:
+      discard
+    let createCmd = "hdiutil create -volname " & quoteShell(cfg.dmgTitle) &
+      " -srcfolder " & quoteShell(staging) & " -ov -format UDZO " & quoteShell(dmg)
+    for attempt in 0 .. 2:
+      let (outText, code) = execCmdEx(createCmd)
+      if code == 0:
+        break
+      if attempt == 2:
+        stderr.write(outText)
+        raise fail("command failed (" & $code & "): " & createCmd)
+      sleep(1000 * (attempt + 1))
+  finally:
+    try: removeDir(staging) except CatchableError: discard
   if cfg.signingIdentity != "-":
     discard runChecked("codesign --force --sign " & quoteShell(cfg.signingIdentity) &
       " " & quoteShell(dmg))
@@ -233,7 +381,7 @@ proc appendU32Le(s: var string, value: int) =
   s.add char((value shr 16) and 0xff)
   s.add char((value shr 24) and 0xff)
 
-proc pngDimensions(png: string): tuple[width, height: int] =
+proc pngDimensions*(png: string): tuple[width, height: int] =
   const signature = "\x89PNG\r\n\x1a\n"
   if png.len < 24 or png[0 ..< 8] != signature or png[12 ..< 16] != "IHDR":
     return (0, 0)
@@ -251,17 +399,17 @@ proc pngToIco*(png: string): string =
   if width > 256 or height > 256:
     raise fail("PNG icons must be at most 256x256; use an .ico for larger sizes")
   result = newStringOfCap(22 + png.len)
-  result.appendU16Le(0) # reserved
-  result.appendU16Le(1) # icon
-  result.appendU16Le(1) # one entry
+  result.appendU16Le(0)
+  result.appendU16Le(1)
+  result.appendU16Le(1)
   result.add char(if width == 256: 0 else: width)
   result.add char(if height == 256: 0 else: height)
-  result.add '\0' # palette entries
-  result.add '\0' # reserved
-  result.appendU16Le(1) # color planes
-  result.appendU16Le(32) # bits per pixel
+  result.add '\0'
+  result.add '\0'
+  result.appendU16Le(1)
+  result.appendU16Le(32)
   result.appendU32Le(png.len)
-  result.appendU32Le(22) # payload offset
+  result.appendU32Le(22)
   result.add png
 
 proc xmlEscape(value: string): string =
@@ -285,8 +433,6 @@ proc winVersion(version: string): string =
   result = parts.join(".")
 
 proc windowsManifest*(name, identifier, version: string): string =
-  ## Per-monitor DPI, long paths, and ordinary-user execution. The host also
-  ## sets DPI awareness programmatically; the manifest makes it explicit.
   result = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
   <assemblyIdentity type="win32" name="__IDENTIFIER__" version="__VERSION__" processorArchitecture="*"/>
@@ -316,12 +462,55 @@ proc windowsManifest*(name, identifier, version: string): string =
   result = result.replace("__VERSION__", xmlEscape(winVersion(version)))
   result = result.replace("__NAME__", xmlEscape(name))
 
+proc innoSetupScript*(name, slug, identifier, version: string): string =
+  ## Generate an Inno Setup 6 `.iss` installer definition for Windows builds.
+  let exeName = (if slug.len > 0: slug else: "app") & ".exe"
+  result = """[Setup]
+AppId={{""" & identifier & """}
+AppName=""" & name & """
+AppVersion=""" & version & """
+DefaultDirName={localappdata}\Programs\""" & slug & """
+DefaultGroupName=""" & name & """
+PrivilegesRequired=lowest
+OutputDir=installer
+OutputBaseFilename=""" & slug & "-setup-" & version & """
+Compression=lzma2/ultra64
+SolidCompression=yes
+WizardStyle=modern
+ArchitecturesAllowed=x64compatible
+ArchitecturesInstallIn64BitMode=x64compatible
+UninstallDisplayIcon={app}\""" & exeName & """
+
+[Files]
+Source: """" & exeName & """"; DestDir: "{app}"; Flags: ignoreversion
+Source: "WebView2Loader.dll"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "resources\*"; DestDir: "{app}\resources"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
+
+[Icons]
+Name: "{group}\""" & name & """"; Filename: "{app}\""" & exeName & """"
+Name: "{group}\{cm:UninstallProgram,""" & name & """}"; Filename: "{uninstallexe}"
+
+[Run]
+Filename: "{app}\""" & exeName & """"; Flags: nowait postinstall skipifsilent
+"""
+
 proc quoteRc(path: string): string =
   "\"" & path.replace('\\', '/').replace("\"", "\\\"") & "\""
 
+proc preparePngForIco(workDir, pngPath: string): string =
+  let raw = readFile(pngPath)
+  let (w, h) = pngDimensions(raw)
+  if w > 256 or h > 256:
+    let sips = findExe("sips")
+    if sips.len > 0:
+      let resized = workDir / "icon_256.png"
+      let (_, code) = execCmdEx(quoteShell(sips) & " -z 256 256 " &
+        quoteShell(pngPath) & " --out " & quoteShell(resized))
+      if code == 0 and fileExists(resized):
+        return readFile(resized)
+  raw
+
 proc buildWindowsResources(cfg: Config): string =
-  ## Compile an .ico and an embedded manifest into a COFF resource object.
-  ## Returns extra linker arguments, or "" when windres is unavailable.
   let workDir = cfg.projectDir / ".nimi"
   createDir(workDir)
   let manifestPath = workDir / "app.manifest"
@@ -337,7 +526,7 @@ proc buildWindowsResources(cfg: Config): string =
     elif lower.endsWith(".png"):
       try:
         let icoPath = workDir / "app.ico"
-        writeFile(icoPath, pngToIco(readFile(iconSource)))
+        writeFile(icoPath, pngToIco(preparePngForIco(workDir, iconSource)))
         iconPath = icoPath
       except CatchableError as e:
         echo "icon: " & e.msg & "; building without an icon"
@@ -358,15 +547,73 @@ proc buildWindowsResources(cfg: Config): string =
     " -o " & quoteShell(resPath))
   result = " --passL:" & quoteShell(resPath)
 
-proc runBuildWindows(dir: string) =
+proc assembleWindowsExtras(cfg: Config, outRoot: string,
+                           portable: bool, installer: bool) =
+  if portable:
+    writeFile(outRoot / (cfg.slug & ".portable"), "")
+    echo "Enabled portable marker: " & (outRoot / (cfg.slug & ".portable"))
+  if installer:
+    let issPath = outRoot / (cfg.slug & ".iss")
+    writeFile(issPath, innoSetupScript(cfg.name, cfg.slug, cfg.identifier, cfg.version))
+    echo "Generated Inno Setup script: " & issPath
+    let iscc = findExe("ISCC")
+    if iscc.len > 0:
+      discard runChecked(quoteShell(iscc) & " " & quoteShell(issPath), workingDir = outRoot)
+
+proc runBuildWindowsCross(dir, arch: string, portable, installer: bool) =
+  ## Cross-compile a Windows x64/arm64 package from macOS/Linux via `zig cc`.
+  let zig = findExe("zig")
+  if zig.len == 0:
+    raise fail("zig is required to cross-compile Windows targets from non-Windows hosts")
   let cfg = loadConfig(dir)
+  runBeforeBuild(cfg)
+  let mainPath = cfg.projectDir / cfg.main
+  if not fileExists(mainPath):
+    raise fail("main not found: " & mainPath)
+  let zigTarget = if arch == "arm64": "aarch64-windows-gnu" else: "x86_64-windows-gnu"
+  let loaderArch = if arch == "arm64": "arm64" else: "x64"
+  let outRoot = cfg.projectDir / cfg.outDir / ("windows-" & arch &
+    (if portable: "-portable" else: ""))
+  createDir(outRoot)
+  let resourcesDir = outRoot / "resources"
+  createDir(resourcesDir)
+  copyResources(cfg, resourcesDir)
+  let loader = libraryPath() / "nimi" / "platform" / "windows" / "webview2" /
+    "sdk" / loaderArch / "WebView2Loader.dll"
+  if fileExists(loader):
+    copyFile(loader, outRoot / "WebView2Loader.dll")
+
+  let workDir = cfg.projectDir / ".nimi" / ("zig-win-" & arch)
+  createDir(workDir)
+  let wrapper = workDir / "cc.sh"
+  writeFile(wrapper, "#!/bin/sh\nexec zig cc -target " & zigTarget & " \"$@\"\n")
+  setFilePermissions(wrapper, {fpUserRead, fpUserWrite, fpUserExec,
+                               fpGroupRead, fpGroupExec, fpOthersRead, fpOthersExec})
+  let exeName = if cfg.slug.len > 0: cfg.slug else: "app"
+  let exe = outRoot / (exeName & ".exe")
+  echo "Cross-building " & cfg.name & " (" & zigTarget & ")…"
+  discard runChecked("nim c " & nimCompilerFlags(cfg, release = true) &
+    " --os:windows --cpu:" & arch & " --cc:clang --app:gui" &
+    " --passC:-Os --passL:-Wl,--subsystem,windows --passL:-s" &
+    " --clang.exe:" & quoteShell(wrapper) &
+    " --clang.linkerexe:" & quoteShell(wrapper) &
+    " --nimcache:" & quoteShell(workDir / "nimcache") &
+    " --out:" & quoteShell(exe) & " " & quoteShell(mainPath),
+    workingDir = cfg.projectDir)
+  assembleWindowsExtras(cfg, outRoot, portable, installer)
+  echo "Built " & exe
+
+proc runBuildWindows(dir: string, portable = false, installer = false) =
+  let cfg = loadConfig(dir)
+  runBeforeBuild(cfg)
   let mainPath = cfg.projectDir / cfg.main
   if not fileExists(mainPath):
     raise fail("main not found: " & mainPath)
   const arch =
     when defined(arm64): "arm64"
     else: "amd64"
-  let outRoot = cfg.projectDir / cfg.outDir / ("windows-" & arch)
+  let outRoot = cfg.projectDir / cfg.outDir / ("windows-" & arch &
+    (if portable: "-portable" else: ""))
   createDir(outRoot)
   let resourcesDir = outRoot / "resources"
   createDir(resourcesDir)
@@ -381,14 +628,16 @@ proc runBuildWindows(dir: string) =
   let exe = outRoot / (exeName & ".exe")
   let resources = buildWindowsResources(cfg)
   echo "Building " & cfg.name & "…"
-  discard runChecked("nim c -d:release --hints:off --mm:atomicArc --threads:on " &
-    "--path:" & quoteShell(libraryPath()) &
+  discard runChecked("nim c " & nimCompilerFlags(cfg, release = true) &
     " --passL:-Wl,--subsystem,windows" & resources &
-    " --out:" & quoteShell(exe) & " " & quoteShell(mainPath))
+    " --out:" & quoteShell(exe) & " " & quoteShell(mainPath),
+    workingDir = cfg.projectDir)
+  assembleWindowsExtras(cfg, outRoot, portable, installer)
   echo "Built " & exe
 
 proc runBuildMacos(dir: string) =
   let cfg = loadConfig(dir)
+  runBeforeBuild(cfg)
   let mainPath = cfg.projectDir / cfg.main
   if not fileExists(mainPath):
     raise fail("main not found: " & mainPath)
@@ -400,16 +649,18 @@ proc runBuildMacos(dir: string) =
   let appPath = outRoot / (cfg.name & ".app")
   let macosDir = appPath / "Contents" / "MacOS"
   let resourcesDir = appPath / "Contents" / "Resources"
+  let frameworksDir = appPath / "Contents" / "Frameworks"
   createDir(macosDir)
   createDir(resourcesDir)
   copyResources(cfg, resourcesDir)
 
   echo "Building " & cfg.name & "…"
   let exe = macosDir / cfg.name
-  discard runChecked("nim c -d:release --hints:off --mm:atomicArc --threads:on " &
-    "--path:" & quoteShell(libraryPath()) & " --out:" & quoteShell(exe) & " " &
-    quoteShell(mainPath))
+  discard runChecked("nim c " & nimCompilerFlags(cfg, release = true) &
+    " --out:" & quoteShell(exe) & " " & quoteShell(mainPath),
+    workingDir = cfg.projectDir)
 
+  let bundledDylibs = bundleMacosDylibs(exe, frameworksDir)
   let iconFile = makeIcns(cfg, resourcesDir)
   var plist = """<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -442,7 +693,7 @@ proc runBuildMacos(dir: string) =
   writeFile(appPath / "Contents" / "Info.plist", plist)
   writeFile(appPath / "Contents" / "PkgInfo", "APPL????")
 
-  signApp(cfg, appPath)
+  signApp(cfg, appPath, bundledDylibs)
   echo "Built " & appPath
 
   let dmg = makeDmg(cfg, appPath, outRoot)
@@ -576,6 +827,7 @@ proc buildDeb(cfg: Config, outRoot, exeName: string, arch: string,
 
 proc runBuildLinux(dir: string) =
   let cfg = loadConfig(dir)
+  runBeforeBuild(cfg)
   let mainPath = cfg.projectDir / cfg.main
   if not fileExists(mainPath):
     raise fail("main not found: " & mainPath)
@@ -595,9 +847,9 @@ proc runBuildLinux(dir: string) =
   let exeName = if cfg.slug.len > 0: cfg.slug else: "app"
   let exe = outRoot / exeName
   echo "Building " & cfg.name & "…"
-  discard runChecked("nim c -d:release --hints:off --mm:atomicArc --threads:on " &
-    "--path:" & quoteShell(libraryPath()) & " --out:" & quoteShell(exe) & " " &
-    quoteShell(mainPath))
+  discard runChecked("nim c " & nimCompilerFlags(cfg, release = true) &
+    " --out:" & quoteShell(exe) & " " & quoteShell(mainPath),
+    workingDir = cfg.projectDir)
 
   var iconName = ""
   if fileExists(iconSource):
@@ -610,9 +862,35 @@ proc runBuildLinux(dir: string) =
   if deb.len > 0:
     echo "Built " & deb
 
-proc runBuild(dir: string) =
+proc runBuild(dir: string, args: seq[string]) =
+  var target = ""
+  var portable = false
+  var installer = false
+  for arg in args:
+    if arg.startsWith("--target:"):
+      target = arg["--target:".len .. ^1]
+    elif arg.startsWith("--target="):
+      target = arg["--target=".len .. ^1]
+    elif arg == "--portable":
+      portable = true
+    elif arg == "--installer":
+      installer = true
+
+  if target in ["windows", "windows-amd64", "windows-x64"]:
+    when defined(windows):
+      runBuildWindows(dir, portable, installer)
+    else:
+      runBuildWindowsCross(dir, "amd64", portable, installer)
+    return
+  elif target == "windows-arm64":
+    when defined(windows):
+      runBuildWindows(dir, portable, installer)
+    else:
+      runBuildWindowsCross(dir, "arm64", portable, installer)
+    return
+
   when defined(windows):
-    runBuildWindows(dir)
+    runBuildWindows(dir, portable, installer)
   elif defined(macosx):
     runBuildMacos(dir)
   elif defined(linux):
@@ -631,7 +909,7 @@ proc sourceSignature(cfg: Config): string =
     if path.endsWith(".nim") or path.endsWith(".nims"):
       let info = getFileInfo(path)
       parts.add path & ":" & $info.lastWriteTime.toUnix & ":" & $info.size
-  for name in ["nimi.json", "nimi.nims"]:
+  for name in ["nimi.json", "nimi.nims", "config.nims"]:
     let p = projectDir / name
     if fileExists(p):
       let info = getFileInfo(p)
@@ -640,22 +918,40 @@ proc sourceSignature(cfg: Config): string =
   result = parts.join("|")
 
 proc buildDev(cfg: Config, exe: string) =
-  discard runChecked("nim c --hints:off --path:" & quoteShell(libraryPath()) &
+  discard runChecked("nim c " & nimCompilerFlags(cfg, release = false) &
     " --out:" & quoteShell(exe) & " " &
-    quoteShell(cfg.projectDir / cfg.main))
+    quoteShell(cfg.projectDir / cfg.main),
+    workingDir = cfg.projectDir)
 
 var devProcess: Process
+var frontendProcess: Process
 var devStopping = false
+
+proc stopProcessSafe(p: var Process) =
+  if p != nil:
+    try:
+      if running(p):
+        terminate(p)
+        discard waitForExit(p)
+      close(p)
+    except CatchableError:
+      discard
+    p = nil
 
 proc stopDev() {.noconv.} =
   devStopping = true
-  if devProcess != nil:
-    try:
-      if running(devProcess):
-        terminate(devProcess)
-        discard waitForExit(devProcess)
-    except CatchableError:
-      discard
+  stopProcessSafe(devProcess)
+  stopProcessSafe(frontendProcess)
+
+proc spawnDevApp(cfg: Config, exe: string): Process =
+  var env = newStringTable()
+  for k, v in envPairs():
+    env[k] = v
+  env["NIMI_DEV"] = "1"
+  if cfg.devUrl.len > 0:
+    env["NIMI_DEV_URL"] = cfg.devUrl
+  startProcess(exe, workingDir = cfg.projectDir, env = env,
+               options = {poParentStreams})
 
 proc runDev(dir: string) =
   let cfg = loadConfig(dir)
@@ -666,11 +962,20 @@ proc runDev(dir: string) =
   createDir(cacheDir)
   let exe = cacheDir / (cfg.slug & "-dev")
 
+  if cfg.devCommand.len > 0:
+    echo "Starting frontend devCommand: " & cfg.devCommand
+    when defined(windows):
+      frontendProcess = startProcess("cmd", workingDir = cfg.projectDir,
+        args = @["/c", cfg.devCommand], options = {poParentStreams, poUsePath})
+    else:
+      frontendProcess = startProcess("/bin/sh", workingDir = cfg.projectDir,
+        args = @["-c", cfg.devCommand], options = {poParentStreams})
+
   echo "Building " & cfg.main & "…"
   buildDev(cfg, exe)
   var signature = sourceSignature(cfg)
   echo "Running " & exe & " (watching src/ and nimi.json; Ctrl+C to stop)"
-  devProcess = startProcess(exe, options = {poParentStreams})
+  devProcess = spawnDevApp(cfg, exe)
   setControlCHook(stopDev)
   try:
     while not devStopping:
@@ -687,22 +992,13 @@ proc runDev(dir: string) =
       if nextSignature != signature:
         signature = nextSignature
         echo "Change detected; rebuilding…"
-        if running(devProcess):
-          terminate(devProcess)
-          discard waitForExit(devProcess)
-        close(devProcess)
+        stopProcessSafe(devProcess)
         buildDev(cfg, exe)
         echo "Restarting…"
-        devProcess = startProcess(exe, options = {poParentStreams})
+        devProcess = spawnDevApp(cfg, exe)
   finally:
-    if devProcess != nil:
-      try:
-        if running(devProcess):
-          terminate(devProcess)
-          discard waitForExit(devProcess)
-        close(devProcess)
-      except CatchableError:
-        discard
+    stopProcessSafe(devProcess)
+    stopProcessSafe(frontendProcess)
 
 proc haveLib(names: openArray[string]): bool =
   for name in names:
@@ -717,7 +1013,7 @@ proc runDoctor() =
     let commands = ["nim --version", "gcc --version"]
   else:
     let commands = ["nim --version", "clang --version",
-                    "xcrun --show-sdk-version"]
+                    "xcrun --show-sdk-version", "zig version"]
   for cmd in commands:
     let (output, code) = execCmdEx(cmd)
     if code == 0:
@@ -760,13 +1056,22 @@ proc runInit(dir: string, native: bool) =
 """)
   if native:
     writeFile(root / "src" / "main.nim", """import nimi
+import nimi/ui
+
+var count = 0
+
+proc view(c: Context) =
+  c.column().fill().padding(24, 24).gap(12).children(c, proc() =
+    c.text("Hello from Nimi Native UI", size = 18, bold = true)
+    c.button("Count: " & $count, proc() = inc count)
+  )
 
 app.whenReady(proc() =
   discard newWindow(WindowOptions(
     title: "My App",
     width: 480,
     height: 320,
-    html: "<h1>Hello from Nimi</h1>"
+    content: uiView(view)
   ))
 )
 app.run()
@@ -809,7 +1114,7 @@ proc main() =
     of "generate", "gen":
       runGenerate(dir)
     of "build":
-      runBuild(dir)
+      runBuild(dir, args[1 .. ^1])
     of "dev":
       runDev(dir)
     of "init":

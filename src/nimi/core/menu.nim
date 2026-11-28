@@ -1,5 +1,9 @@
 ## Menu model. The backend translates PlatformMenu to NSMenu/Win32/GTK.
 
+import std/tables
+
+import ../platform/contract
+
 type
   MenuItemKind* = enum
     miNormal
@@ -98,3 +102,41 @@ proc setChecked*(m: Menu, label: string, checked: bool): bool =
     return false
   item.checked = checked
   result = true
+
+proc toPlatformKind(k: MenuItemKind): PlatformMenuItemKind =
+  case k
+  of miNormal: pmiNormal
+  of miSeparator: pmiSeparator
+  of miSubmenu: pmiSubmenu
+  of miCheckbox: pmiCheckbox
+
+proc buildPlatformItems(items: seq[MenuItem],
+                        nextId: var uint32,
+                        callbacks: var Table[uint32, proc()]): seq[PlatformMenuItem] =
+  for item in items:
+    var p = PlatformMenuItem(
+      label: item.label,
+      kind: toPlatformKind(item.kind),
+      role: item.role,
+      accelerator: item.accelerator,
+      checked: item.checked,
+      enabled: item.enabled)
+    if item.kind == miSubmenu:
+      p.submenu = buildPlatformItems(item.submenu, nextId, callbacks)
+    elif item.onSelect != nil:
+      inc nextId
+      p.id = nextId
+      callbacks[p.id] = item.onSelect
+    result.add p
+
+proc toPlatformMenu*(m: Menu): tuple[menu: PlatformMenu, handler: MenuHandler] =
+  if m == nil:
+    return (PlatformMenu(), MenuHandler())
+  var nextId = 0'u32
+  var callbacks: Table[uint32, proc()]
+  let platform = PlatformMenu(items: buildPlatformItems(m.items, nextId, callbacks))
+  let handler = MenuHandler(select: proc(id: uint32) =
+    let cb = callbacks.getOrDefault(id)
+    if cb != nil:
+      cb())
+  (platform, handler)

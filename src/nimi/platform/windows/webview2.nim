@@ -1,11 +1,14 @@
-## WebView2 host and the Nimi bridge. The COM/vtable shim lives in
-## webview2/webview2.c; this module owns the Nim callback context.
+## WebView2 host and the Nimi bridge.
+##
+## Custom schemes (`nimi://app/*`) are intercepted via `WebResourceRequested`
+## and routed through Nim's unified `FileServer` / `serveScheme` callback,
+## aligning Windows with macOS (`WKURLSchemeHandler`) and Linux (`WebKitGTK`).
 when not defined(windows):
   {.error: "WebView2 requires Windows".}
 
 import std/[os, strutils, tables, tempfiles, widestrs]
 
-import ../../core/[bridge, loop]
+import ../../core/[bridge, fileserver, loop, paths]
 import ../contract
 
 const
@@ -18,12 +21,22 @@ const
 {.passL: "-lole32 -luuid".}
 
 type
+  NativeWebResource {.importc: "NimiWebResource", header: header, bycopy.} = object
+    data: pointer
+    length: csize_t
+    mime: pointer
+    status: cint
+
   Callbacks {.importc: "NimiWebView2Callbacks", header: header, bycopy.} = object
     ready: proc(context: pointer) {.cdecl.}
     message: proc(context: pointer, text: cstring) {.cdecl.}
     error: proc(context: pointer, text: cstring) {.cdecl.}
     finalized: proc(context: pointer) {.cdecl.}
+    serve_resource: proc(context: pointer, path: cstring,
+                         outRes: ptr NativeWebResource): cint {.cdecl.}
+    free_resource: proc(res: ptr NativeWebResource) {.cdecl.}
     context: pointer
+
   NativeCookie {.importc: "NimiCookie", header: header, bycopy.} = object
     name, value, domain, path: WideCString
     secure, http_only: cint
@@ -36,8 +49,10 @@ type
     owner: pointer
     userId: uint64
     handler: WindowHandler
+    serveScheme: PlatformSchemeHandler
     error: string
     userDataDir: string
+    ephemeralDir: bool
     readyCallbacks: seq[ReadyCallback]
     cookieCallbacks: Table[uint, CookieCallback]
     nextCookieId: uint
@@ -86,8 +101,6 @@ const webView2Shim = """
 """
 
 proc bridgeScript*(secret, token: string): string =
-  ## Keep the page-side bridge identical to macOS; only the transport shim
-  ## changes from WKWebView message handlers to chrome.webview.
   webView2Shim & "\n" & bridgeJs
     .replace("__NIMI_SECRET__", secret)
     .replace("__NIMI_TOKEN__", token)
@@ -123,11 +136,53 @@ proc onError(context: pointer, text: cstring) {.cdecl.} =
   except IOError: discard
   completeReadiness(webview, false)
 
+proc allocCStringShared(s: string): pointer =
+  let buf = cast[ptr UncheckedArray[char]](allocShared(s.len + 1))
+  if s.len > 0:
+    copyMem(buf, unsafeAddr s[0], s.len)
+  buf[s.len] = '\0'
+  buf
+
+proc onServeResource(context: pointer, rawPath: cstring,
+                     outRes: ptr NativeWebResource): cint {.cdecl.} =
+  if outRes == nil:
+    return 0
+  let webview = webviews.getOrDefault(context)
+  if webview == nil or webview.serveScheme == nil:
+    return 0
+  try:
+    let path = if rawPath == nil: "/" else: $rawPath
+    let served = webview.serveScheme(path)
+    outRes.status = cint(if served.status > 0: served.status else: 404)
+    outRes.mime = allocCStringShared(
+      if served.mime.len > 0: served.mime else: "application/octet-stream")
+    outRes.length = csize_t(served.data.len)
+    if served.data.len > 0:
+      let body = allocShared(served.data.len)
+      copyMem(body, unsafeAddr served.data[0], served.data.len)
+      outRes.data = body
+    else:
+      outRes.data = nil
+    return 1
+  except CatchableError:
+    return 0
+
+proc onFreeResource(res: ptr NativeWebResource) {.cdecl.} =
+  if res == nil:
+    return
+  if res.data != nil:
+    deallocShared(res.data)
+    res.data = nil
+  if res.mime != nil:
+    deallocShared(res.mime)
+    res.mime = nil
+  res.length = 0
+
 proc onFinalized(context: pointer) {.cdecl.} =
   let webview = webviews.getOrDefault(context)
   if webview == nil:
     return
-  if webview.userDataDir.len > 0:
+  if webview.ephemeralDir and webview.userDataDir.len > 0:
     try:
       removeDir(webview.userDataDir)
     except CatchableError:
@@ -135,20 +190,53 @@ proc onFinalized(context: pointer) {.cdecl.} =
   webview.owner = nil
   webviews.del(context)
 
+proc resolveDefaultUserDataDir(): string =
+  ## Avoid WebView2's `<exe>.WebView2` fallback next to the executable, which
+  ## fails when installed under `C:\Program Files`. Respect explicit env override.
+  if getEnv("WEBVIEW2_USER_DATA_FOLDER").len > 0:
+    return ""
+  let slug = sanitizeSlug(try: splitFile(getAppFilename()).name except CatchableError: "nimi")
+  result = appCacheDir(slug) / "webview2"
+  try:
+    createDir(result)
+  except CatchableError:
+    result = ""
+
 proc newWebView2*(parent: pointer, userId: uint64, handler: WindowHandler,
                   scheme, fileRoot, secret, token: string,
-                  ephemeral: bool): WebView2 =
+                  ephemeral: bool,
+                  serveScheme: PlatformSchemeHandler = nil,
+                  userDataDir: string = ""): WebView2 =
   if parent == nil:
     raise newException(BackendError, "WebView2 requires a parent window")
-  result = WebView2(userId: userId, handler: handler)
+  var effectiveServe = serveScheme
+  if effectiveServe == nil and scheme.len > 0 and fileRoot.len > 0:
+    let fs = newFileServer(fileRoot, scheme)
+    effectiveServe = proc(path: string): PlatformResource {.gcsafe.} =
+      let r = fs.serve(path)
+      PlatformResource(status: r.status, mime: r.mime, data: r.data)
+
+  result = WebView2(
+    userId: userId,
+    handler: handler,
+    serveScheme: effectiveServe)
   if ephemeral:
     result.userDataDir = createTempDir("nimi-webview2-", "")
+    result.ephemeralDir = true
+  elif userDataDir.len > 0:
+    result.userDataDir = userDataDir
+    try: createDir(result.userDataDir) except CatchableError: discard
+  else:
+    result.userDataDir = resolveDefaultUserDataDir()
+
   let context = cast[pointer](result)
   let callbacks = Callbacks(
     ready: onReady,
     message: onMessage,
     error: onError,
     finalized: onFinalized,
+    serve_resource: (if effectiveServe != nil: onServeResource else: nil),
+    free_resource: onFreeResource,
     context: context)
   var error = newString(512)
   webviews[context] = result

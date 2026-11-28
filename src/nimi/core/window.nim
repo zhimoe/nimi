@@ -1,15 +1,21 @@
-## Core window model: WindowOptions, the window registry, page calls and
-## bridge message routing.
+## Core window model: WindowOptions, geometry persistence, bridge routing,
+## native context menus, and thread-safe host -> page event/stream delivery.
 
-import std/[json, strutils, sysrand, tables]
+import std/[json, os, strutils, sysrand, tables]
 
-import ./[content, events, fileserver, ipc, ipcpool]
+import ./[content, events, fileserver, ipc, ipcpool, loop, menu, pageevents, paths]
 import ../platform/contract
 
 type
   SessionMode* = enum
     smPersistent
     smEphemeral
+
+  SavedWindowState* = object
+    width*, height*: int
+    x*, y*: int
+    hasPosition*: bool
+    maximized*: bool
 
   WindowOptions* = object
     title*: string
@@ -20,8 +26,11 @@ type
     content*: Content
     files*: FileServer
     session*: SessionMode
+    userDataDir*: string
+    autosaveName*: string
     ime*: bool
     consumeActivationClick*: bool
+    onJsError*: proc(message: string) {.closure.}
 
   CloseEvent* = object
     prevented*: bool
@@ -36,6 +45,7 @@ type
     closedListeners*: seq[proc()]
     titleListeners*: seq[proc(title: string)]
     focusListeners*: seq[proc(focused: bool)]
+    jsErrorListeners*: seq[proc(message: string)]
     frameListeners*: seq[proc(time, dt: float64)]
     animationActive*: bool
     animationFps*: int
@@ -50,10 +60,84 @@ var
   nextWindowId*: uint64 = 1
   focusedWindowId*: uint64
   allClosedHook*: proc() {.closure.}
+  windowStateSlug*: string = "nimi"
 
 proc randomHex(n: int): string =
   for b in urandom(n):
     result.add toHex(b, 2)
+
+# --- Window state persistence ----------------------------------------------
+
+proc windowStatePath*(autosaveName: string, slug: string = ""): string =
+  let cleanApp = sanitizeSlug(if slug.len > 0: slug else: windowStateSlug)
+  let cleanWin = sanitizeSlug(autosaveName)
+  appDataDir(cleanApp) / ("window-" & cleanWin & ".json")
+
+proc loadSavedWindowState*(autosaveName: string,
+                           slug: string = ""): tuple[found: bool, state: SavedWindowState] =
+  if autosaveName.len == 0:
+    return (false, SavedWindowState())
+  let path = windowStatePath(autosaveName, slug)
+  if not fileExists(path):
+    return (false, SavedWindowState())
+  try:
+    let node = parseFile(path)
+    if node.kind != JObject:
+      return (false, SavedWindowState())
+    let w = node{"width"}.getInt(0)
+    let h = node{"height"}.getInt(0)
+    if w <= 0 or h <= 0:
+      return (false, SavedWindowState())
+    result.found = true
+    result.state = SavedWindowState(
+      width: max(200, w),
+      height: max(150, h),
+      x: node{"x"}.getInt(0),
+      y: node{"y"}.getInt(0),
+      hasPosition: node.hasKey("x") and node.hasKey("y"),
+      maximized: node{"maximized"}.getBool(false))
+  except CatchableError:
+    return (false, SavedWindowState())
+
+proc saveWindowState*(autosaveName: string, state: SavedWindowState,
+                      slug: string = "") =
+  if autosaveName.len == 0 or state.width <= 0 or state.height <= 0:
+    return
+  var node = %*{
+    "width": state.width,
+    "height": state.height,
+    "maximized": state.maximized,
+  }
+  if state.hasPosition:
+    node["x"] = %state.x
+    node["y"] = %state.y
+  try:
+    atomicWriteJson(windowStatePath(autosaveName, slug), node)
+  except CatchableError:
+    discard
+
+proc clampToDisplays(x, y, w, h: int): tuple[ok: bool, x, y: int] =
+  if currentBackend == nil or currentBackend.screens == nil:
+    return (true, x, y)
+  try:
+    let list = currentBackend.screens()
+    if list.len == 0:
+      return (true, x, y)
+    for d in list:
+      let dw = if d.workWidth > 0: d.workWidth else: d.width
+      let dh = if d.workHeight > 0: d.workHeight else: d.height
+      let dx = if d.workWidth > 0: d.workX else: d.x
+      let dy = if d.workHeight > 0: d.workY else: d.y
+      # Accept if at least a 80x40 header strip of the window intersects a display.
+      let overlapX = min(float32(x + w), dx + dw) - max(float32(x), dx)
+      let overlapY = min(float32(y + 60), dy + dh) - max(float32(y), dy)
+      if overlapX >= 80 and overlapY >= 24:
+        return (true, x, y)
+  except CatchableError:
+    return (true, x, y)
+  (false, 0, 0)
+
+# --- Lifecycle & IPC completion --------------------------------------------
 
 proc fireShouldClose*(w: Window): bool =
   if w.closed:
@@ -62,6 +146,27 @@ proc fireShouldClose*(w: Window): bool =
   for fn in w.closeListeners:
     fn(e)
   result = not e.prevented
+
+proc captureAndSaveGeometry(w: Window) =
+  if w == nil or w.closed or w.options.autosaveName.len == 0 or w.native == nil:
+    return
+  var width, height, x, y: int
+  var maximized = false
+  try:
+    if w.native.isMaximized != nil:
+      maximized = w.native.isMaximized()
+    if w.native.getSize != nil:
+      w.native.getSize(width, height)
+    var hasPos = false
+    if w.native.getPosition != nil:
+      w.native.getPosition(x, y)
+      hasPos = true
+    if width > 0 and height > 0:
+      saveWindowState(w.options.autosaveName, SavedWindowState(
+        width: width, height: height, x: x, y: y,
+        hasPosition: hasPos, maximized: maximized))
+  except CatchableError:
+    discard
 
 proc fireClosed*(w: Window) =
   ## Idempotent. Runs callbacks once, then drops every per-window listener so
@@ -77,14 +182,40 @@ proc fireClosed*(w: Window) =
   w.closeListeners.setLen(0)
   w.titleListeners.setLen(0)
   w.focusListeners.setLen(0)
+  w.jsErrorListeners.setLen(0)
   w.frameListeners.setLen(0)
   w.animationActive = false
 
 proc isClosed*(w: Window): bool =
   w == nil or w.closed
 
+proc deliverEventToWindow(w: Window, name, payloadJson: string) =
+  if w == nil or w.closed or w.native == nil or w.native.eval == nil:
+    return
+  let body = if payloadJson.len > 0: payloadJson else: "null"
+  w.native.eval("window.__nimi._event(" & $(%*name) & "," & body & ")")
+
+proc deliverPageEventMain(windowId: uint64, name, payloadJson: string) =
+  if windowId == 0:
+    for w in windows.values:
+      deliverEventToWindow(w, name, payloadJson)
+  else:
+    let w = windows.getOrDefault(windowId)
+    deliverEventToWindow(w, name, payloadJson)
+
+proc deliverStreamChunkMain(windowId: uint64, callId: int64, chunkJson: string) =
+  let w = windows.getOrDefault(windowId)
+  if w == nil or w.closed or w.native == nil or w.native.eval == nil:
+    return
+  let body = if chunkJson.len > 0: chunkJson else: "null"
+  w.native.eval("window.__nimi._chunk(" & $callId & "," & body & ")")
+
+setPageDeliveryHooks(deliverPageEventMain, deliverStreamChunkMain)
+
 proc completeIpcCall*(result: IpcResult) =
-  ## Main thread. Resolve a page promise after a background worker finishes.
+  ## Main thread. Flush any pending stream chunks first so chunks always arrive
+  ## before `_resolve` / `_reject`.
+  drainPageEvents()
   let w = windows.getOrDefault(result.windowId)
   if w == nil or w.closed or w.native == nil or w.native.eval == nil:
     return
@@ -118,8 +249,23 @@ proc handleMessage*(w: Window, msg: string) =
       return
     if node.kind != JObject or not node.hasKey("t"):
       return
-    if node["t"].getStr != "call":
+    let kind = node["t"].getStr
+    case kind
+    of "cancel":
+      if node.hasKey("id"):
+        discard cancelIpcCall(w.id, int64(node["id"].getInt))
       return
+    of "jserror":
+      let errMsg = node{"message"}.getStr("")
+      if errMsg.len > 0:
+        for fn in w.jsErrorListeners:
+          fn(errMsg)
+      return
+    of "call":
+      discard
+    else:
+      return
+
     let callId = node["id"].getInt
     let target = node["method"].getStr
     let args =
@@ -138,8 +284,6 @@ proc handleMessage*(w: Window, msg: string) =
       let encoded = %*e.msg
       w.native.eval("window.__nimi._reject(" & $callId & "," & $encoded & ")")
   except CatchableError:
-    # Malformed messages are ignored in M1; the secret/token checks and
-    # diagnostics land with the full bridge.
     discard
 
 proc invalidate*(w: Window) =
@@ -150,6 +294,10 @@ proc newWindow*(opts: WindowOptions): Window =
   if currentBackend == nil:
     raise newException(BackendError, "newWindow called before App.Run")
   var o = opts
+  let (hasSaved, saved) = loadSavedWindowState(o.autosaveName)
+  if hasSaved and not o.fixedSize:
+    o.width = saved.width
+    o.height = saved.height
   if o.width <= 0: o.width = 800
   if o.height <= 0: o.height = 600
   if o.title.len == 0: o.title = "Nimi"
@@ -160,6 +308,8 @@ proc newWindow*(opts: WindowOptions): Window =
   inc nextWindowId
   let win = Window(id: id, options: o,
                    secret: randomHex(16), token: randomHex(8))
+  if o.onJsError != nil:
+    win.jsErrorListeners.add o.onJsError
 
   var surface = SurfaceHandler(windowId: id)
   if o.content != nil:
@@ -206,7 +356,9 @@ proc newWindow*(opts: WindowOptions): Window =
       if w == nil:
         result = true
       else:
-        result = w.fireShouldClose(),
+        result = w.fireShouldClose()
+        if result:
+          w.captureAndSaveGeometry(),
     closed: proc(wid: uint64) =
       let w = windows.getOrDefault(wid)
       if w != nil:
@@ -244,8 +396,6 @@ proc newWindow*(opts: WindowOptions): Window =
     frame: proc(wid: uint64, time, dt: float64) =
       let w = windows.getOrDefault(wid)
       if w != nil:
-        # A listener may call stopAnimation() and clear the seq while this
-        # callback is running; index by a saved length instead of iterating it.
         let count = w.frameListeners.len
         for i in 0 ..< count:
           if i < w.frameListeners.len:
@@ -253,6 +403,13 @@ proc newWindow*(opts: WindowOptions): Window =
         w.invalidate(),
     surface: surface
   )
+
+  var schemeCallback: PlatformSchemeHandler = nil
+  if o.files != nil:
+    let fs = o.files
+    schemeCallback = proc(path: string): PlatformResource {.gcsafe.} =
+      let r = fs.serve(path)
+      PlatformResource(status: r.status, mime: r.mime, data: r.data)
 
   let popts = PlatformWindowOptions(
     title: o.title,
@@ -266,10 +423,21 @@ proc newWindow*(opts: WindowOptions): Window =
     content: o.content != nil,
     scheme: if o.files != nil: o.files.scheme else: "",
     fileRoot: if o.files != nil: o.files.root else: "",
+    serveScheme: schemeCallback,
+    userDataDir: o.userDataDir,
     ephemeral: o.session == smEphemeral,
     ime: o.ime,
     consumeActivationClick: o.consumeActivationClick)
   win.native = currentBackend.newWindow(popts, h)
+  if hasSaved:
+    if saved.hasPosition and win.native != nil and win.native.setPosition != nil:
+      let clamped = clampToDisplays(saved.x, saved.y, o.width, o.height)
+      if clamped.ok:
+        try: win.native.setPosition(clamped.x, clamped.y)
+        except CatchableError: discard
+    if saved.maximized and not o.fixedSize and win.native != nil and win.native.zoom != nil:
+      try: win.native.zoom()
+      except CatchableError: discard
   if o.content != nil:
     let wid = win.id
     o.content.engine.requestFrame = proc() =
@@ -282,9 +450,6 @@ proc newWindow*(opts: WindowOptions): Window =
       o.content.engine.clipboardWrite = proc(text: string) =
         currentBackend.clipboard.writeText(text)
   windows[id] = win
-  # AppKit may not deliver the first key-window notification when the app is
-  # launched from a terminal; treat the newly created window as focused and
-  # let blur/focus delegate events correct it later.
   focusedWindowId = id
   win.focused = true
   result = win
@@ -305,10 +470,6 @@ proc focusedWindow*(): Window =
 
 proc startAnimation*(w: Window, fps: int = 60,
                      fn: proc(time, dt: float64)) =
-  ## Add a main-thread frame callback, start the native frame timer, and
-  ## invalidate the surface immediately. Repeating the call adds another
-  ## listener; changing `fps` restarts the timer at the new rate. The callback
-  ## is not tied to the WebView or to a particular renderer.
   if w.closed:
     return
   if fn != nil:
@@ -326,8 +487,6 @@ proc startAnimation*(w: Window, fps: int = 60,
   w.invalidate()
 
 proc stopAnimation*(w: Window) =
-  ## Stop the native frame timer and remove all frame listeners. Safe to call
-  ## when no animation is running.
   w.frameListeners.setLen(0)
   w.animationActive = false
   if w.native != nil and w.native.stopAnimation != nil:
@@ -387,7 +546,6 @@ proc isFocused*(w: Window): bool =
     result = w.native.isFocused()
 
 proc isVisible*(w: Window): bool =
-  ## Whether the window is shown and not minimized.
   not w.isClosed() and w.native != nil and w.native.isVisible != nil and w.native.isVisible()
 
 proc isMinimized*(w: Window): bool =
@@ -424,13 +582,23 @@ proc setAlwaysOnTop*(w: Window, always: bool) =
   if w.native != nil and w.native.setAlwaysOnTop != nil:
     w.native.setAlwaysOnTop(always)
 
+proc popupMenu*(w: Window, m: Menu, x: int = -1, y: int = -1) =
+  ## Open a native context menu anchored at `(x, y)` in logical client coordinates
+  ## (or at the current pointer position when `x < 0` or `y < 0`).
+  if w == nil or w.closed or m == nil or w.native == nil or w.native.popupMenu == nil:
+    return
+  let (pm, handler) = toPlatformMenu(m)
+  w.native.popupMenu(pm, handler, x, y)
+
 proc close*(w: Window) =
   if not w.closed and w.native != nil:
+    w.captureAndSaveGeometry()
     w.native.close()
 
 proc destroy*(w: Window) =
   if w.closed:
     return
+  w.captureAndSaveGeometry()
   if w.native != nil:
     w.native.destroy()
   w.fireClosed()
@@ -469,14 +637,37 @@ proc onFocusChanged*(w: Window, fn: proc(focused: bool)) =
   if not w.closed:
     w.focusListeners.add fn
 
+proc onJsError*(w: Window, fn: proc(message: string)) =
+  if not w.closed:
+    w.jsErrorListeners.add fn
+
 proc emitPage*(w: Window, name: string, payload: JsonNode) =
-  ## Send a typed event to the page. `window.nimi.on(name, fn)` receives it.
-  if not w.closed and w.native != nil:
-    let encodedName = %*name
-    w.native.eval("window.__nimi._event(" & $encodedName & "," & $payload & ")")
+  ## Send a typed event to the page on the UI thread (`window.nimi.on(name, fn)`).
+  if isMainThread():
+    if w != nil:
+      deliverEventToWindow(w, name, $payload)
+  else:
+    if w != nil:
+      queuePageEvent(w.id, name, $payload)
 
 proc emitPage*[T](e: Event[T], w: Window, payload: T) =
   w.emitPage(e.name, e.encode(payload))
+
+proc emitWindow*(windowId: uint64, name: string, payloadJson: string = "{}") {.gcsafe.} =
+  ## Thread-safe event delivery to one window (`windowId`) from ANY thread.
+  {.cast(gcsafe).}:
+    if isMainThread():
+      deliverPageEventMain(windowId, name, payloadJson)
+      return
+  queuePageEvent(windowId, name, payloadJson)
+
+proc broadcastPage*(name: string, payloadJson: string = "{}") {.gcsafe.} =
+  ## Thread-safe event broadcast to all open windows from ANY thread.
+  {.cast(gcsafe).}:
+    if isMainThread():
+      deliverPageEventMain(0, name, payloadJson)
+      return
+  queuePageEvent(0, name, payloadJson)
 
 # --- Page methods ----------------------------------------------------------
 

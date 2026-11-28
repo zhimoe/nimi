@@ -264,6 +264,21 @@ proc installMenuForAll*(menu: PlatformMenu, handler: MenuHandler) =
   for window in linuxWindows.values:
     installMenu(window)
 
+proc popupWindowMenu*(w: LinuxWindow, menu: PlatformMenu, handler: MenuHandler) =
+  if w == nil or w.closed or menu.items.len == 0:
+    return
+  let popup = gtk_menu_new()
+  if popup == nil:
+    return
+  var actions: seq[MenuAction]
+  appendMenuItems(popup, menu.items, w.window, nil, handler, actions)
+  w.menuActions.add actions
+  gtk_widget_show_all(popup)
+  if gtk_menu_popup_at_pointer != nil:
+    gtk_menu_popup_at_pointer(popup, nil)
+  elif gtk_menu_popup != nil:
+    gtk_menu_popup(popup, nil, nil, nil, nil, 0, gtk_get_current_event_time())
+
 proc testMenuKey*(w: LinuxWindow, keyCode: int, modifiers: uint32) =
   ## Test hook mirroring the Windows accelerator-table lookup.
   var keyval: cuint

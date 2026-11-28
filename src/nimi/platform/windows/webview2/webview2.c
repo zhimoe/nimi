@@ -2,6 +2,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <ole2.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <wchar.h>
@@ -36,6 +37,8 @@ struct NimiWebView2 {
     NimiPending *pending_tail;
     EventRegistrationToken message_token;
     int has_message_token;
+    EventRegistrationToken resource_token;
+    int has_resource_token;
     int com_initialized;
     float scale;
     int visible;
@@ -64,6 +67,12 @@ typedef struct NimiMessageHandler {
     NimiWebView2 *owner;
 } NimiMessageHandler;
 
+typedef struct NimiResourceHandler {
+    ICoreWebView2WebResourceRequestedEventHandler iface;
+    LONG ref;
+    NimiWebView2 *owner;
+} NimiResourceHandler;
+
 typedef HRESULT (STDAPICALLTYPE *NimiCreateEnvironment)(
     PCWSTR, PCWSTR, ICoreWebView2EnvironmentOptions *,
     ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler *);
@@ -88,6 +97,16 @@ static wchar_t *wide_dup(const wchar_t *text) {
     wchar_t *copy = (wchar_t *)malloc(length * sizeof(wchar_t));
     if (copy) memcpy(copy, text, length * sizeof(wchar_t));
     return copy;
+}
+
+static wchar_t *utf8_to_wide(const char *utf8) {
+    if (!utf8) return NULL;
+    int length = MultiByteToWideChar(CP_UTF8, 0, utf8, -1, NULL, 0);
+    if (length <= 0) return NULL;
+    wchar_t *wide = (wchar_t *)calloc((size_t)length, sizeof(wchar_t));
+    if (!wide) return NULL;
+    MultiByteToWideChar(CP_UTF8, 0, utf8, -1, wide, length);
+    return wide;
 }
 
 static char *wide_to_utf8(const wchar_t *text) {
@@ -242,6 +261,7 @@ static void apply_pending(NimiWebView2 *owner) {
 }
 
 static NimiMessageHandler *message_handler_create(NimiWebView2 *owner);
+static NimiResourceHandler *resource_handler_create(NimiWebView2 *owner);
 
 /* --- controller completed handler -------------------------------------- */
 
@@ -319,7 +339,29 @@ static HRESULT STDMETHODCALLTYPE controller_Invoke(
         }
     }
 
-    if (owner->scheme && *owner->scheme && owner->file_root && *owner->file_root) {
+    if (owner->scheme && *owner->scheme && owner->callbacks.serve_resource) {
+        /* Route https://app.local/* through Nim's FileServer/VFS rather than
+           bypassing FileServer with SetVirtualHostNameToFolderMapping. */
+        if (FAILED(ICoreWebView2_AddWebResourceRequestedFilter(
+                owner->webview, L"https://app.local/*",
+                COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL))) {
+            fail(owner, "cannot register custom scheme resource filter");
+            return S_OK;
+        }
+        NimiResourceHandler *resHandler = resource_handler_create(owner);
+        if (!resHandler) {
+            fail(owner, "out of memory");
+            return E_OUTOFMEMORY;
+        }
+        HRESULT rhr = ICoreWebView2_add_WebResourceRequested(
+            owner->webview, &resHandler->iface, &owner->resource_token);
+        resHandler->iface.lpVtbl->Release(&resHandler->iface);
+        if (FAILED(rhr)) {
+            fail(owner, "cannot subscribe to WebView2 resource requests");
+            return S_OK;
+        }
+        owner->has_resource_token = 1;
+    } else if (owner->scheme && *owner->scheme && owner->file_root && *owner->file_root) {
         ICoreWebView2_3 *webview3 = NULL;
         if (FAILED(owner->webview->lpVtbl->QueryInterface(owner->webview,
                 &IID_ICoreWebView2_3, (void **)&webview3)) || !webview3) {
@@ -373,6 +415,160 @@ static NimiControllerHandler *controller_handler_create(NimiWebView2 *owner) {
     handler->iface.lpVtbl =
         (ICoreWebView2CreateCoreWebView2ControllerCompletedHandlerVtbl *)
         &controller_vtbl;
+    handler->ref = 1;
+    handler->owner = owner;
+    owner_addref(owner);
+    return handler;
+}
+
+/* --- web resource requested handler (unified FileServer/VFS) ----------- */
+
+static HRESULT STDMETHODCALLTYPE resource_QueryInterface(
+    ICoreWebView2WebResourceRequestedEventHandler *This,
+    REFIID riid, void **object) {
+    if (!object) return E_POINTER;
+    if (IsEqualIID(riid, &IID_IUnknown) ||
+        IsEqualIID(riid, &IID_ICoreWebView2WebResourceRequestedEventHandler)) {
+        *object = This;
+        This->lpVtbl->AddRef(This);
+        return S_OK;
+    }
+    *object = NULL;
+    return E_NOINTERFACE;
+}
+
+static ULONG STDMETHODCALLTYPE resource_AddRef(
+    ICoreWebView2WebResourceRequestedEventHandler *This) {
+    NimiResourceHandler *handler = (NimiResourceHandler *)This;
+    return (ULONG)InterlockedIncrement(&handler->ref);
+}
+
+static ULONG STDMETHODCALLTYPE resource_Release(
+    ICoreWebView2WebResourceRequestedEventHandler *This) {
+    NimiResourceHandler *handler = (NimiResourceHandler *)This;
+    ULONG refs = (ULONG)InterlockedDecrement(&handler->ref);
+    if (refs == 0) {
+        NimiWebView2 *owner = handler->owner;
+        handler->owner = NULL;
+        free(handler);
+        owner_release(owner);
+    }
+    return refs;
+}
+
+static IStream *create_memory_stream(const char *data, size_t length) {
+    IStream *stream = NULL;
+    if (!data || length == 0) {
+        CreateStreamOnHGlobal(NULL, TRUE, &stream);
+        return stream;
+    }
+    HGLOBAL mem = GlobalAlloc(GMEM_MOVEABLE, length);
+    if (!mem) return NULL;
+    void *locked = GlobalLock(mem);
+    if (!locked) {
+        GlobalFree(mem);
+        return NULL;
+    }
+    memcpy(locked, data, length);
+    GlobalUnlock(mem);
+    if (FAILED(CreateStreamOnHGlobal(mem, TRUE, &stream))) {
+        GlobalFree(mem);
+        return NULL;
+    }
+    return stream;
+}
+
+static HRESULT STDMETHODCALLTYPE resource_Invoke(
+    ICoreWebView2WebResourceRequestedEventHandler *This,
+    ICoreWebView2 *sender,
+    ICoreWebView2WebResourceRequestedEventArgs *args) {
+    NimiResourceHandler *handler = (NimiResourceHandler *)This;
+    NimiWebView2 *owner = handler->owner;
+    (void)sender;
+    if (!owner || owner->closed || !owner->environment || !args ||
+        !owner->callbacks.serve_resource) {
+        return S_OK;
+    }
+    ICoreWebView2WebResourceRequest *request = NULL;
+    if (FAILED(ICoreWebView2WebResourceRequestedEventArgs_get_Request(args, &request)) ||
+        !request) {
+        return S_OK;
+    }
+    LPWSTR uri = NULL;
+    HRESULT hr = ICoreWebView2WebResourceRequest_get_Uri(request, &uri);
+    ICoreWebView2WebResourceRequest_Release(request);
+    if (FAILED(hr) || !uri) {
+        return S_OK;
+    }
+    static const wchar_t hostPrefix[] = L"https://app.local";
+    size_t prefixLen = sizeof(hostPrefix) / sizeof(hostPrefix[0]) - 1;
+    if (_wcsnicmp(uri, hostPrefix, prefixLen) != 0) {
+        CoTaskMemFree(uri);
+        return S_OK;
+    }
+    const wchar_t *tail = uri + prefixLen;
+    char *utf8Path = wide_to_utf8((*tail) ? tail : L"/");
+    CoTaskMemFree(uri);
+    if (!utf8Path) {
+        return S_OK;
+    }
+
+    NimiWebResource res;
+    memset(&res, 0, sizeof(res));
+    int handled = owner->callbacks.serve_resource(owner->callbacks.context,
+                                                  utf8Path, &res);
+    free(utf8Path);
+    if (!handled) {
+        if (owner->callbacks.free_resource) owner->callbacks.free_resource(&res);
+        return S_OK;
+    }
+
+    int status = res.status > 0 ? res.status : 404;
+    const char *mime = (res.mime && *res.mime) ? res.mime : "application/octet-stream";
+    int isText = (strncmp(mime, "text/", 5) == 0 ||
+                  strcmp(mime, "application/json") == 0 ||
+                  strcmp(mime, "application/xml") == 0 ||
+                  strcmp(mime, "image/svg+xml") == 0);
+    char headerBuf[512];
+    snprintf(headerBuf, sizeof(headerBuf),
+             "Content-Type: %s%s\r\nAccess-Control-Allow-Origin: *",
+             mime, isText ? "; charset=utf-8" : "");
+    wchar_t *headersWide = utf8_to_wide(headerBuf);
+    IStream *stream = create_memory_stream(res.data, res.length);
+
+    if (headersWide && stream) {
+        const wchar_t *reason = (status == 200) ? L"OK"
+                              : (status == 404) ? L"Not Found"
+                              : L"Error";
+        ICoreWebView2WebResourceResponse *response = NULL;
+        if (SUCCEEDED(ICoreWebView2Environment_CreateWebResourceResponse(
+                owner->environment, stream, status, reason, headersWide,
+                &response)) && response) {
+            ICoreWebView2WebResourceRequestedEventArgs_put_Response(args, response);
+            response->lpVtbl->Release(response);
+        }
+    }
+    if (stream) stream->lpVtbl->Release(stream);
+    free(headersWide);
+    if (owner->callbacks.free_resource) {
+        owner->callbacks.free_resource(&res);
+    }
+    return S_OK;
+}
+
+static const ICoreWebView2WebResourceRequestedEventHandlerVtbl resource_vtbl = {
+    resource_QueryInterface,
+    resource_AddRef,
+    resource_Release,
+    resource_Invoke
+};
+
+static NimiResourceHandler *resource_handler_create(NimiWebView2 *owner) {
+    NimiResourceHandler *handler =
+        (NimiResourceHandler *)calloc(1, sizeof(*handler));
+    if (!handler) return NULL;
+    handler->iface.lpVtbl =
+        (ICoreWebView2WebResourceRequestedEventHandlerVtbl *)&resource_vtbl;
     handler->ref = 1;
     handler->owner = owner;
     owner_addref(owner);
@@ -784,7 +980,9 @@ NimiWebView2 *nimi_webview2_create(void *parent, const wchar_t *user_data_folder
     handler->ref = 1;
     handler->owner = owner;
     owner_addref(owner);
-    hr = createEnvironment(NULL, user_data_folder, NULL, &handler->iface);
+    const wchar_t *effectiveFolder =
+        (user_data_folder && *user_data_folder) ? user_data_folder : NULL;
+    hr = createEnvironment(NULL, effectiveFolder, NULL, &handler->iface);
     handler->iface.lpVtbl->Release(&handler->iface);
     if (FAILED(hr)) {
         set_error(error, error_size,
@@ -859,6 +1057,11 @@ void nimi_webview2_eval(NimiWebView2 *view, const wchar_t *js) {
 void nimi_webview2_close(NimiWebView2 *view) {
     if (!view || view->closed) return;
     view->closed = 1;
+    if (view->webview && view->has_resource_token) {
+        ICoreWebView2_remove_WebResourceRequested(view->webview,
+                                                  view->resource_token);
+        view->has_resource_token = 0;
+    }
     if (view->webview && view->has_message_token) {
         ICoreWebView2_remove_WebMessageReceived(view->webview,
                                                 view->message_token);

@@ -78,6 +78,8 @@ type
   MsgSendScheduledTimer* = proc(a: Id, s: SEL, interval: float64,
                                 target: Id, selector: SEL, info: Id,
                                 repeats: bool): Id {.cdecl.}
+  MsgSendPopupMenu* = proc(a: Id, s: SEL, item: Id, loc: NSPoint,
+                           view: Id): bool {.cdecl.}
 
 let libobjc* = loadLib("/usr/lib/libobjc.A.dylib")
 let appkit* = loadLib("/System/Library/Frameworks/AppKit.framework/AppKit")

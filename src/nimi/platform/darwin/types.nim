@@ -30,6 +30,7 @@ type
     trays*: Table[uint64, Id]
     trayTargets*: Table[uint64, Id]
     schemeRoots*: Table[pointer, string]
+    schemeCallbacks*: Table[pointer, PlatformSchemeHandler]
     schemeHandlers*: Table[uint64, Id]
     imeWindows*: Table[uint64, bool]
     inputContexts*: Table[pointer, Id]

@@ -94,6 +94,10 @@ proc shutdownLinux() =
 proc newLinuxBackend*(): Backend =
   result = newUnsupportedBackend("linux")
   result.name = "linux/gtk"
+  result.capabilities = proc(): set[PlatformCapability] =
+    {pcWebView, pcNativeUI, pcCustomScheme, pcTray, pcNotification,
+     pcGlobalShortcut, pcNowPlaying, pcFileWatch, pcPopupMenu,
+     pcClipboardHTML, pcSingleInstance}
   result.clipboard = newLinuxClipboard()
   result.dialogs = newLinuxDialogs()
   installShortcutBackend(result)

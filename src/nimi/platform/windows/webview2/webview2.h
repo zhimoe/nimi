@@ -1,5 +1,6 @@
 #ifndef NIMI_WEBVIEW2_H
 #define NIMI_WEBVIEW2_H
+#include <stddef.h>
 #include <stdint.h>
 #include <wchar.h>
 
@@ -15,13 +16,20 @@ typedef struct NimiCookie {
 typedef void (*NimiCookiesDone)(void *context, uintptr_t request, NimiCookie *cookies,
                                 unsigned count, int32_t status);
 
+typedef struct NimiWebResource {
+    const char *data;
+    size_t length;
+    const char *mime;
+    int status;
+} NimiWebResource;
+
 typedef struct NimiWebView2Callbacks {
     void (*ready)(void *context);
     void (*message)(void *context, char *text);
     void (*error)(void *context, char *text);
-    /* Called after the C owner has released every COM object, before it is
-       freed. The Nim side uses it to drop its callback context safely. */
     void (*finalized)(void *context);
+    int (*serve_resource)(void *context, char *path, NimiWebResource *out_res);
+    void (*free_resource)(NimiWebResource *res);
     void *context;
 } NimiWebView2Callbacks;
 

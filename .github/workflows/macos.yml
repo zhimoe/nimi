@@ -54,7 +54,7 @@ jobs:
           ./nimi build examples/shred-native
           ./nimi build examples/shred-metal
           for dmg in examples/*/dist/*/*.dmg; do
-            hdiutil verify "$dmg"
+            hdiutil verify "$dmg" || (sleep 2 && hdiutil verify "$dmg")
           done
 
       - name: Upload demo DMGs

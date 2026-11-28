@@ -5,7 +5,7 @@ import std/[math, monotimes, strutils, tables]
 
 import ../contract
 import ../../core/bridge
-import ./[objc, protocol, types]
+import ./[menu, objc, protocol, types]
 
 const
   NimiMessageHandlerName = "nimi"
@@ -605,8 +605,8 @@ proc createWindow*(state: DarwinState, opts: PlatformWindowOptions,
         send0(loadClass("WKWebsiteDataStore"), sel("defaultDataStore"))
     if dataStore != nil:
       sendVoidId(config, sel("setWebsiteDataStore:"), dataStore)
-    if opts.scheme.len > 0 and opts.fileRoot.len > 0:
-      discard attachSchemeHandler(config, opts.scheme, opts.fileRoot, id)
+    if opts.scheme.len > 0 and (opts.serveScheme != nil or opts.fileRoot.len > 0):
+      discard attachSchemeHandler(config, opts.scheme, opts.fileRoot, id, opts.serveScheme)
     let ucc = send0(config, sel("userContentController"))
     sendVoidId2(ucc, sel("addScriptMessageHandler:name:"), delegate,
                 nsString(NimiMessageHandlerName))
@@ -709,6 +709,26 @@ proc createWindow*(state: DarwinState, opts: PlatformWindowOptions,
     sendVoidInt(win, sel("setLevel:"),
                 if always: int(NSFloatingWindowLevel)
                 else: int(NSNormalWindowLevel))
+  result.popupMenu = proc(pm: PlatformMenu, handler: MenuHandler, x, y: int) =
+    let target = newMenuTarget(handler)
+    let nsMenu = buildMenu(pm.items, target)
+    let anchorView = if surfaceView != nil: surfaceView else: webView
+    if x >= 0 and y >= 0 and anchorView != nil:
+      let bounds = sendRect(anchorView, sel("bounds"))
+      let flipped = sendBool(anchorView, sel("isFlipped"))
+      let py = if flipped: CGFloat(y) else: bounds.h - CGFloat(y)
+      discard cast[MsgSendPopupMenu](msgSend)(
+        nsMenu, sel("popUpMenuPositioningItem:atLocation:inView:"),
+        nil, NSPoint(x: CGFloat(x), y: py), anchorView)
+    else:
+      let mouse = sendPoint(loadClass("NSEvent"), sel("mouseLocation"))
+      discard cast[MsgSendPopupMenu](msgSend)(
+        nsMenu, sel("popUpMenuPositioningItem:atLocation:inView:"),
+        nil, mouse, nil)
+    if gState != nil:
+      gState.menuTargets.del(target)
+    release(target)
+    release(nsMenu)
 
   if opts.content:
     result.loadHTML = proc(html: string, baseURL: string) = discard

@@ -49,9 +49,10 @@ type
   SchemeRoot = ref object
     scheme: string
     server: FileServer
+    callback: PlatformSchemeHandler
 
 var
-  schemeRoots: seq[SchemeRoot]
+  schemeRoots: Table[string, SchemeRoot]
   registeredSchemes: Table[string, bool]
   lastClickTime = 0.0
   lastClickX, lastClickY: float32
@@ -538,7 +539,14 @@ proc onSchemeRequest(request, data: pointer) {.cdecl.} =
       path = uri.path
   except ValueError:
     discard
-  let served = info.server.serve(path)
+  let served =
+    if info.callback != nil:
+      info.callback(path)
+    elif info.server != nil:
+      let r = info.server.serve(path)
+      PlatformResource(status: r.status, mime: r.mime, data: r.data)
+    else:
+      PlatformResource(status: 404, mime: "text/plain", data: "not found")
   var bytes: pointer
   if served.data.len > 0:
     bytes = g_bytes_new(served.data.cstring, csize_t(served.data.len))
@@ -554,8 +562,9 @@ proc onSchemeRequest(request, data: pointer) {.cdecl.} =
                                    served.mime.cstring)
   g_object_unref(stream)
 
-proc ensureScheme(context: pointer, scheme, fileRoot: string) =
-  if scheme.len == 0 or fileRoot.len == 0:
+proc ensureScheme(context: pointer, scheme, fileRoot: string,
+                  serveCb: PlatformSchemeHandler = nil) =
+  if scheme.len == 0 or (serveCb == nil and fileRoot.len == 0):
     return
   let target =
     if context != nil: context
@@ -564,6 +573,11 @@ proc ensureScheme(context: pointer, scheme, fileRoot: string) =
     raise newException(BackendError, "WebKitGTK context is unavailable")
   let key = $cast[uint](target) & ":" & scheme
   if registeredSchemes.hasKey(key):
+    let existing = schemeRoots.getOrDefault(key)
+    if existing != nil:
+      existing.callback = serveCb
+      if fileRoot.len > 0:
+        existing.server = newFileServer(fileRoot, scheme)
     return
   let security = webkit_web_context_get_security_manager(target)
   if security != nil:
@@ -571,9 +585,11 @@ proc ensureScheme(context: pointer, scheme, fileRoot: string) =
                                                           scheme.cstring)
     webkit_security_manager_register_uri_scheme_as_cors_enabled(security,
                                                                 scheme.cstring)
-  let info = SchemeRoot(scheme: scheme,
-                        server: newFileServer(fileRoot, scheme))
-  schemeRoots.add info
+  let info = SchemeRoot(
+    scheme: scheme,
+    server: (if fileRoot.len > 0: newFileServer(fileRoot, scheme) else: nil),
+    callback: serveCb)
+  schemeRoots[key] = info
   webkit_web_context_register_uri_scheme(target, scheme.cstring,
                                          cast[pointer](onSchemeRequest),
                                          cast[pointer](info), nil)
@@ -634,8 +650,8 @@ proc createWebView(w: LinuxWindow, opts: PlatformWindowOptions) =
                                 cast[pointer](onLoadFailed),
                                 cast[pointer](w), nil, 0)
   gtk_box_pack_start(w.box, view, 1, 1, 0)
-  if opts.scheme.len > 0 and opts.fileRoot.len > 0:
-    ensureScheme(context, opts.scheme, opts.fileRoot)
+  if opts.scheme.len > 0 and (opts.serveScheme != nil or opts.fileRoot.len > 0):
+    ensureScheme(context, opts.scheme, opts.fileRoot, opts.serveScheme)
   if opts.html.len > 0:
     webkit_web_view_load_html(view, opts.html.cstring, nil)
   elif opts.url.len > 0:
@@ -917,6 +933,9 @@ proc createLinuxWindow*(opts: PlatformWindowOptions,
   result.setAlwaysOnTop = proc(always: bool) =
     requireLive(w)
     gtk_window_set_keep_above(w.window, cint(always))
+  result.popupMenu = proc(pm: PlatformMenu, h: MenuHandler, x, y: int) =
+    requireLive(w)
+    popupWindowMenu(w, pm, h)
   result.loadHTML = proc(html: string, baseURL: string) =
     let view = requireWebView(w)
     if baseURL.len > 0:

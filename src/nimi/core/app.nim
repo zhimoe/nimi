@@ -1,8 +1,8 @@
-## The application singleton, lifecycle and the backend bridge.
+## The application singleton, lifecycle, capability probes, and backend bridge.
 
-import std/[os, tables]
+import std/os
 
-import ./[content, ipc, ipcpool, loop, menu, window]
+import ./[content, ipc, ipcpool, log, loop, menu, pageevents, paths, window]
 import ../platform/[contract, loginargs]
 
 when defined(macosx):
@@ -24,21 +24,68 @@ type
 
   App* = ref object
     name*: string
+    slug*: string
+    identifier*: string
     version*: string
+    fixGuiPathOnStart*: bool
     ready*: bool
     quitting*: bool
+    smokeQuitOnReady*: bool
     readyQueue*: seq[proc() {.closure.}]
     beforeQuitListeners*: seq[proc(e: var QuitEvent) {.closure.}]
     openURLListeners*: seq[proc(url: string) {.closure.}]
     menu*: Menu
 
-var app* = App(name: "Nimi", version: "0.1.0")
+var app* = App(
+  name: "Nimi",
+  slug: "nimi",
+  identifier: "com.nimi.app",
+  version: "0.2.0",
+  fixGuiPathOnStart: true,
+)
+
+proc effectiveSlug*(a: App): string =
+  if a.slug.len > 0 and a.slug != "nimi":
+    sanitizeSlug(a.slug)
+  elif a.name.len > 0:
+    sanitizeSlug(a.name)
+  else:
+    "nimi"
 
 proc setName*(a: App, name: string) =
   a.name = name
+  if a.slug == "nimi" and name.len > 0:
+    a.slug = sanitizeSlug(name)
+
+proc setSlug*(a: App, slug: string) =
+  a.slug = sanitizeSlug(slug)
+
+proc setIdentifier*(a: App, identifier: string) =
+  a.identifier = identifier
 
 proc setVersion*(a: App, version: string) =
   a.version = version
+
+proc dataDir*(a: App): string =
+  appDataDir(a.effectiveSlug())
+
+proc configDir*(a: App): string =
+  appConfigDir(a.effectiveSlug())
+
+proc cacheDir*(a: App): string =
+  appCacheDir(a.effectiveSlug())
+
+proc logDir*(a: App): string =
+  appLogDir(a.effectiveSlug())
+
+proc capabilities*(a: App): set[PlatformCapability] =
+  if currentBackend != nil and currentBackend.capabilities != nil:
+    currentBackend.capabilities()
+  else:
+    {}
+
+proc supports*(a: App, cap: PlatformCapability): bool =
+  cap in a.capabilities()
 
 proc isReady*(a: App): bool =
   a.ready
@@ -62,53 +109,19 @@ proc onOpenURL*(a: App, fn: proc(url: string)) =
   a.openURLListeners.add fn
 
 proc setOpenAtLogin*(a: App, enabled: bool) =
-  ## Add or remove the app as a login item. On macOS this needs an app
-  ## bundle; without one the backend raises BackendError. Call it after
-  ## App.Run has started, from ready or a main-thread callback.
   if currentBackend == nil or currentBackend.setOpenAtLogin == nil:
     raise newException(BackendError,
       "setOpenAtLogin requires a running application")
   currentBackend.setOpenAtLogin(enabled)
 
 proc openAtLogin*(a: App): bool =
-  ## Whether the app starts when the user logs in. False before App.Run.
   currentBackend != nil and currentBackend.openAtLogin != nil and
     currentBackend.openAtLogin()
 
 proc wasOpenedAtLogin*(a: App): bool =
-  ## Whether the system started this process as a login item, e.g. to open
-  ## it in the background. Call it from ready or later: macOS learns the
-  ## answer from the launch Apple Event while it finishes launching. The
-  ## command-line marker is recognized even when the platform has no
-  ## login-item backend.
   hasOpenedAtLoginArg(commandLineParams()) or
     (currentBackend != nil and currentBackend.wasOpenedAtLogin != nil and
      currentBackend.wasOpenedAtLogin())
-
-proc toPlatform(k: MenuItemKind): PlatformMenuItemKind =
-  case k
-  of miNormal: pmiNormal
-  of miSeparator: pmiSeparator
-  of miSubmenu: pmiSubmenu
-  of miCheckbox: pmiCheckbox
-
-proc buildItems(items: seq[MenuItem],
-                nextId: var uint32, callbacks: var Table[uint32, proc()]): seq[PlatformMenuItem] =
-  for item in items:
-    var p = PlatformMenuItem(
-      label: item.label,
-      kind: toPlatform(item.kind),
-      role: item.role,
-      accelerator: item.accelerator,
-      checked: item.checked,
-      enabled: item.enabled)
-    if item.kind == miSubmenu:
-      p.submenu = buildItems(item.submenu, nextId, callbacks)
-    elif item.onSelect != nil:
-      inc nextId
-      p.id = nextId
-      callbacks[p.id] = item.onSelect
-    result.add p
 
 proc installMenu*(a: App) =
   if currentBackend == nil:
@@ -116,15 +129,9 @@ proc installMenu*(a: App) =
   when defined(windows):
     if a.menu == nil:
       currentBackend.setMenu(PlatformMenu(), MenuHandler())
-      return # Clearing a Windows menu must detach the previous native menus.
+      return
   let m = if a.menu != nil: a.menu else: defaultMenu(a.name)
-  var nextId = 0'u32
-  var callbacks: Table[uint32, proc()]
-  let platform = PlatformMenu(items: buildItems(m.items, nextId, callbacks))
-  let handler = MenuHandler(select: proc(id: uint32) =
-    let cb = callbacks.getOrDefault(id)
-    if cb != nil:
-      cb())
+  let (platform, handler) = toPlatformMenu(m)
   currentBackend.setMenu(platform, handler)
 
 proc setMenu*(a: App, m: Menu) =
@@ -176,13 +183,33 @@ proc exit*(a: App, code: int) =
     currentBackend.quit()
   system.quit(code)
 
+proc reportFirstPaint*(a: App, metadata: string = "") =
+  ## Standardized first-paint smoke protocol (`--smoke` / `NIMI_SMOKE_OUT`).
+  let line = if metadata.len > 0: "first_paint " & metadata else: "first_paint"
+  let smokeOut = getEnv("NIMI_SMOKE_OUT")
+  if smokeOut.len > 0:
+    try:
+      writeFile(smokeOut, line & "\n")
+    except CatchableError:
+      discard
+  if a.smokeQuitOnReady or getEnv("NIMI_SMOKE") == "quit":
+    discard postMain(proc() = a.quit())
+
 proc run*(a: App) =
   ## Must be called from the process main thread.
   let generatePath = getEnv("NIMI_GENERATE")
   if generatePath.len > 0:
-    if services.len > 0:
+    if services.len > 0 or backgroundServices.len > 0:
       writeFile(generatePath, generateTypeScript())
     return
+
+  initLoop()
+  windowStateSlug = a.effectiveSlug()
+  if a.fixGuiPathOnStart:
+    fixGuiPath()
+  for arg in commandLineParams():
+    if arg in ["--smoke", "--nimi-smoke"]:
+      a.smokeQuitOnReady = true
 
   when defined(macosx) or defined(windows) or defined(linux):
     if currentBackend != nil:
@@ -224,10 +251,14 @@ proc run*(a: App) =
     handler.dispatch = proc() =
       drainMain()
       drainIpcPool()
+      drainPageEvents()
     try:
-      backend.init(handler, AppOptions(name: a.name))
+      backend.init(handler, AppOptions(name: a.name, identifier: a.identifier))
       installMenu(a)
       backend.run()
+    except CatchableError as e:
+      discard writeCrashLog("app.run", $e.name & ": " & e.msg, a.effectiveSlug())
+      raise
     finally:
       try:
         if backend.shutdown != nil: backend.shutdown()

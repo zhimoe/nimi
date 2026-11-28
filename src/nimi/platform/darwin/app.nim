@@ -125,6 +125,10 @@ proc newDarwinBackend*(): Backend =
     raise newException(BackendError, "libdispatch main queue is unavailable")
   let state = DarwinState(nextWindowId: 1, nextTrayId: 1, nextWatchId: 1)
   result = Backend(name: "darwin/wkwebview")
+  result.capabilities = proc(): set[PlatformCapability] =
+    {pcWebView, pcNativeUI, pcCustomScheme, pcTray, pcNotification,
+     pcGlobalShortcut, pcLoginItem, pcNowPlaying, pcFileWatch,
+     pcPopupMenu, pcClipboardHTML}
   result.clipboard = newDarwinClipboard()
   result.dialogs = newDarwinDialogs()
   installDesktopBackend(result)

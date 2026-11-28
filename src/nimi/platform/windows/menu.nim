@@ -5,6 +5,8 @@ const header = (currentSourcePath.parentDir / "menu.h").replace('\\', '/')
 {.compile: "menu.c".}
 {.passL: "-luser32".}
 proc testMenuKey*(window: pointer, key, modifiers: cuint) {.cdecl, importc: "nimi_menu_test_key", header: header.}
+proc popupMenuNative*(window, menu: pointer, x, y: cint, scale: cfloat): cuint
+  {.cdecl, importc: "nimi_menu_popup", header: header.}
 proc create(popup: cint): pointer {.cdecl, importc: "nimi_menu_create", header: header.}
 proc append(menu: pointer, label: WideCString, command: cuint, child: pointer,
   separator, enabled, checked: cint): cint {.cdecl, importc: "nimi_menu_append", header: header.}

@@ -68,3 +68,21 @@ void nimi_menu_test_key(void *window,unsigned key,unsigned modifiers) {
     free(entries);
     if(command) SendMessageW(window,WM_COMMAND,MAKEWPARAM(command,1),0);
 }
+
+unsigned nimi_menu_popup(void *window,void *menu,int x,int y,float scale) {
+    if(!window || !menu) return 0;
+    POINT pt;
+    if(x >= 0 && y >= 0) {
+        float s = scale > 0.0f ? scale : 1.0f;
+        pt.x = (LONG)(x * s + 0.5f);
+        pt.y = (LONG)(y * s + 0.5f);
+        ClientToScreen((HWND)window, &pt);
+    } else {
+        if(!GetCursorPos(&pt)) return 0;
+    }
+    SetForegroundWindow((HWND)window);
+    BOOL cmd = TrackPopupMenuEx((HMENU)menu,
+        TPM_RETURNCMD | TPM_RIGHTBUTTON | TPM_LEFTALIGN | TPM_TOPALIGN,
+        pt.x, pt.y, (HWND)window, NULL);
+    return cmd > 0 ? (unsigned)cmd : 0;
+}
