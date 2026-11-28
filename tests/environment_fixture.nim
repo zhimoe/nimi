@@ -2,9 +2,7 @@
 
 import std/[options, strutils]
 
-import nimi/core/environment
-
-import ../examples/environment/[model, service, state, storage]
+import ../examples/environment/[envstore, model, service, state, storage]
 
 type
   MemoryBackend* = ref object

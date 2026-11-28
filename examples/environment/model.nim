@@ -4,8 +4,8 @@
 
 import std/[algorithm, sequtils, sets, strutils]
 
-import nimi/core/environment
-export environment
+import ./envstore
+export envstore
 
 type
   Scope* = EnvironmentScope

@@ -3,8 +3,8 @@ when not defined(windows):
   {.error: "Windows registry environment store requires Windows".}
 
 import std/widestrs
-import ../../core/environment
-export environment
+import ./envstore
+export envstore
 
 type HKey = pointer
 proc RegOpenKeyExW(key: HKey, path: WideCString, options, access: uint32,

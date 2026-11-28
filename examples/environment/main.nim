@@ -6,7 +6,7 @@ import nimi
 import nimi/ui
 
 when defined(windows):
-  import nimi/platform/windows/environment
+  import ./win_envstore
   import nimi/platform/windows/app as winApp
 
 import ./[service, state, storage, view]

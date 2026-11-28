@@ -5,9 +5,7 @@ import std/[options, os, tempfiles, times]
 import nimi
 import nimi/ui
 import nimi/render/gdi
-import nimi/platform/windows/environment
-
-import ../examples/environment/[model, service, state, storage, view]
+import ../examples/environment/[model, service, state, storage, view, win_envstore]
 
 proc require(condition: bool, message: string) =
   if not condition: raise newException(ValueError, message)

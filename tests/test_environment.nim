@@ -1,5 +1,5 @@
 import std/[options, tables, unittest]
-import nimi/core/environment
+import ../examples/environment/envstore
 
 suite "environment editing":
   test "PATH is lossless, including empty segments and expansion tokens":

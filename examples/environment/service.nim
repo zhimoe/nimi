@@ -1,9 +1,7 @@
 ## Application service: validate, snapshot-before-write, merge with the
 ## latest registry state, then apply only the delta.
 
-import nimi/core/environment
-
-import ./[model, storage]
+import ./[envstore, model, storage]
 
 type
   ApplyResult* = object

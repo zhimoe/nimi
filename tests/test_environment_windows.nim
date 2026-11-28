@@ -1,6 +1,6 @@
 ## Windows integration: only a unique temporary HKCU value is touched.
 import std/[os, times, strutils, unittest]
-import nimi/platform/windows/environment
+import ../examples/environment/win_envstore
 
 suite "Windows environment registry":
   test "Unicode, expansion type, empty value, case-insensitive lookup and deletion":

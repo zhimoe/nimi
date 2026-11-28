@@ -9,6 +9,7 @@
 import std/[math, os]
 
 import nimi
+import nimi/effects
 import nimi/ui
 when defined(linux):
   import nimi/render/cairo

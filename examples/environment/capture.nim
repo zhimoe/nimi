@@ -4,11 +4,10 @@
 import std/[os, sets, strutils, times]
 
 import nimi/ui
-import nimi/core/environment
 when defined(macosx):
   import nimi/render/cg
 
-import ./[model, service, state, storage, theme, view]
+import ./[envstore, model, service, state, storage, theme, view]
 
 proc entry(name, value: string,
            kind: EnvironmentKind = ekString): EnvironmentEntry =
