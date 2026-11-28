@@ -1,5 +1,7 @@
 # M6 切片:基础 TextArea
 
+> 当前 `textArea` 支持 `noWrap` 横向滚动、行号、grapheme caret、选择和候选窗定位。[Windows UI 增强](32-windows-framework.md#ui-盒模型覆盖层与输入增强2026-11-16) 有交互和布局记录。
+
 > 2026-11-06：整改、当前限制与验收级别见 [最新基线](28-remediation-status.md)。历史验证记录不代表完整能力已经验收。
 
 > 日期:2026-11-05 · 对应 M6 多行文本编辑
@@ -33,7 +35,7 @@
 | 复用 `nkInput` + `multiline` 标记 | 单行/多行共享输入、焦点、hits 逻辑 |
 | 复用 `layoutText` 做换行 | 布局与 CoreText 绘制一致 |
 | TextArea 固定 viewport 高度 + 内部滚动 | 不自动增高;长文本通过 offset 滚动 |
-| caret 行/列通过 `lines` 粗略映射 | 换行文本准确;自动换行位置是近似值 |
+| caret 结合行起始字节与 grapheme 边界 | 统一换行后的位置、命中和选择 |
 | Enter 仅在 multiline 插入换行 | 单行 TextInput 保持原行为 |
 | TextArea 内部滚动用 Engine.scrollOffsets | 与 ScrollView 共用状态;不影响文档内容 |
 | caret 自动可见 | 键入/撤销/粘贴后调整 offset;鼠标点击按 offset 反算 caret |
@@ -54,16 +56,14 @@ NIMI_SMOKE=textarea nim c -r --path:src examples/form-native/main.nim
 
 ## 4. 已知限制
 
-- 没有水平滚动/惯性/滚动到行 API
-- 自动换行后的 caret/选择位置是近似映射
+- 没有惯性滚动和公共滚动到行 API
 - 没有富文本/代码高亮
 - IME 为 opt-in,真实输入法仍需人工验证
 - 没有 Tab 插入制表符(保持焦点切换)
-- 没有视觉行号/软换行标记
+- 没有软换行标记
 
 ## 5. 下一步
 
-1. TextArea 内部滚动条可拖动、滚动到行。
-2. 自动换行处的精确 caret/selection 映射。
-3. 富文本/代码编辑器与文档模型结合。
-4. 真实 IME 端到端测试。
+1. 补滚动到行与软换行提示。
+2. 将富文本/代码编辑器与文档模型结合。
+3. 在真实输入法中验收组合、选词和候选窗。

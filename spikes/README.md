@@ -1,5 +1,8 @@
 # Nimi 可行性原型
 
+> 这些是最初的可行性原型，其中 AppKit、WKWebView、CoreText 和 Metal 需要 macOS。当前三平台运行与验证入口见 [示例指南](../examples/README.md)。
+
+
 这些是验证 macOS 关键路径的最小 Nim 程序,不依赖 cgo、Objective-C 源文件或第三方绑定。
 
 环境:Nim 2.4.0、macOS 12+、Xcode Command Line Tools。

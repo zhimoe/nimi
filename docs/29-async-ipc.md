@@ -1,5 +1,7 @@
 # 异步 IPC 与工作池
 
+> 当前三平台都使用共享后台池。Windows 通过 Win32 消息、Linux 通过 GLib 主上下文、macOS 通过主队列唤醒 UI 线程；流式 IPC 及其验收条件见 [路线图](05-roadmap.md#当前执行计划)。
+
 > 2026-11-07 · 对应 `src/nimi/core/ipcpool.nim`、`src/nimi/core/ipc.nim`、
 > `src/nimi/core/window.nim`。本文解释“IPC 在 UI 线程同步 dispatch”的含义、
 > 为什么不能把所有服务直接搬到线程池，以及现在的使用方式和边界。

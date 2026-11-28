@@ -1,5 +1,7 @@
 # M5 切片:文档控制器
 
+> 当前保存先写入同目录临时文件，flush/close 后替换目标。失败保留 dirty 状态，自动测试覆盖失败保存。详见 [开发基线](28-remediation-status.md)。
+
 > 2026-11-06：整改、当前限制与验收级别见 [最新基线](28-remediation-status.md)。历史验证记录不代表完整能力已经验收。
 
 > 日期:2026-11-05 · 对应 M5 文档生命周期
@@ -14,7 +16,7 @@
   - `setText`, `save`, `reload`, `close`
   - `onChanged` / `onConflict` / `onSaved`
 - 外部变更:
-  - 通过 FSEvents 监视文档所在目录
+  - 通过平台文件监视器监视文档所在目录
   - `checkExternal()` 比较 mtime + size
   - 未修改 → 自动 reload;有未保存修改 → conflict 事件
 - 示例 `examples/document-native`:
@@ -56,7 +58,7 @@ NIMI_DOC_PATH=/tmp/nimi-document-demo.txt NIMI_SMOKE=document \
 
 - 没有自动保存定时器/失焦保存/退出询问
 - 没有最近文档列表/恢复会话
-- 没有原子写/备份/版本历史
+- 已使用同目录临时文件替换。断电持久性、备份与版本历史仍待实现。
 - 冲突只通知,不提供 diff/合并 UI
 - 外部删除文件时目前不会自动清空文档(后续补)
 - 监视父目录会收到大量事件,尚未按路径过滤优化
@@ -66,5 +68,5 @@ NIMI_DOC_PATH=/tmp/nimi-document-demo.txt NIMI_SMOKE=document \
 
 1. 自动保存策略(debounce、失焦、退出前询问)。
 2. 最近文档持久化 + File 菜单 role。
-3. 原子写、备份、版本历史。
+3. 备份、版本历史和崩溃恢复。
 4. 冲突 diff/合并界面与文档类型注册。

@@ -1,5 +1,7 @@
 # 工具链、IPC 与构建发布
 
+> 2026-11-24 复核。可直接运行的命令见 [快速开始](../README.md#快速开始)。当前配置由 [CLI](../src/nimi/cli.nim) 读取 `nimi.json`，`generate` 写入绑定和运行时客户端，`dev` 监听 Nim 源码和清单，`build` 按当前平台输出。下面的模板、配置和协议表包含扩展设计。
+
 > 2026-11-06 重评：本文包含目标设计，不能作为当前 API/线程安全/兼容性承诺。实现边界与后续验收以 [整改基线](28-remediation-status.md) 为准；历史工期不作为剩余工期。
 >
 > 2026-11-22：本地快照更新到 `9b0ae9ef`（MyGo v0.10.0+121）。除 preload、trusted/untrusted、下载/权限、自定义标题栏、页面尺寸、`WebViewAvailable`、GPU 进程 ID 外，本轮上游还包含流式调用 AbortSignal、自定义协议请求体长度等；Nimi 尚未对齐，见 [MyGo 能力对照](30-mygo-alignment.md) §7。
@@ -12,25 +14,20 @@
 
 ### 1.1 命令总览
 
-| 命令 | 作用 | 优先级 |
-|---|---|---|
-| `nimi init [dir]` | 创建项目(web / native 模板) | M1 |
-| `nimi generate` | 生成 TypeScript 客户端 | M1 |
-| `nimi dev [dir]` | 开发模式:构建、启动、热重载 | M1 |
-| `nimi build [dir]` | 生产构建 + 打包 | M1(macOS),M7(完整) |
-| `nimi doctor` | 检查工具链/系统依赖 | M1 |
-| `nimi keygen` | 生成更新签名密钥 | M7 |
-| `nimi i18n check` | 检查消息目录 | M5 |
-| `nimi migrate-ui` | 旧 API 迁移(如需要) | P2 |
-| `nimi version` / `help` | 版本/帮助 | M1 |
+| 命令 | Preview 行为 |
+|---|---|
+| `nimi init [dir] [--native]` | 在空目录生成 `nimi.json` 与 `src/main.nim`。默认模板含 IPC。 |
+| `nimi generate [dir]` | 根据绑定生成 TypeScript 客户端。默认路径是 `frontend/nimi.ts`。 |
+| `nimi dev [dir]` | 构建并启动，Nim 源码或项目清单变更时重建重启。 |
+| `nimi build [dir]` | 按系统构建 macOS App/DMG、Windows exe 或 Linux 程序和桌面包。 |
+| `nimi doctor` | 输出 Nim、C 工具链及部分平台依赖诊断。 |
+| `nimi version` / `nimi help` | 显示版本及用法。 |
+
+更新签名和 i18n 检查的后续范围见 [核心与工具链 backlog](backlog/core.md)。
 
 ### 1.2 `init`
 
-- `-template web|native`、`-name`、`-module`、`-nimi <path>`(本地开发)。
-- web 模板:Vite/TypeScript 前端 + `src/main.nim` + `nimi.json`。
-- native 模板:`src/main.nim` + `nimi.json` + 测试。
-- 生成 1024×1024 默认图标(纯 Nim 绘制:圆角方块 + 渐变 + 圆环)。
-- 运行 `nimble install -d`(如需要)、`bun install`(web)、首次 `nimi generate`。
+当前 `--native` 模板仍生成最小 HTML 窗口。自绘原生 UI 项目可从 [counter-native](../examples/counter-native) 起步。独立 Web 工程、默认图标与生成客户端接入见 §3 的模板设计。
 
 ### 1.3 `generate`
 

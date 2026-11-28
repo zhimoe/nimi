@@ -6,7 +6,7 @@
 
 ## WebView 与 IPC
 
-- 流式 IPC/Channel 与 AbortSignal 启停。
+- 共用 IPC 计划见 [核心与工具链](core.md)。
 - preload、trusted/untrusted 页面、下载与权限回调、`WebViewAvailable`、GPU 进程 ID。
 - Eval 返回值与页面导航失败回调。
 - 自定义协议：多 scheme/多 root、CORS、Range/分块、缓存与 SPA fallback。
@@ -31,6 +31,8 @@
 - 常开菜单、徽标对齐等 MyGo 菜单能力（Nimi 当前只有普通 NSMenu 项）。
 
 ## 打包与发布
+
+- 复核现有 macOS CI 的 `hdiutil verify` 失败，恢复 DMG artifact 上传。[CI 记录](https://github.com/zhimoe/nimi/actions/runs/44978676441)
 
 - 自动更新（manifest/delta）、release workflow、Sparkle 风格更新窗口。
 - DMG 背景/布局/Applications 链接。

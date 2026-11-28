@@ -1,19 +1,19 @@
 # Nimi Music
 
-macOS 原生音乐复刻的集成入口，使用 Nimi 自绘 UI 和独立导入的 `nimi/audio`。
+Nimi 自绘音乐播放器示例，通过 `nimi/audio` 接入 macOS AVAudioPlayer 与 Linux GStreamer。Windows 音频后端待实现。
 
 ```sh
 nim c -r --path:src examples/music/main.nim
 ./nimi build examples/music
 ```
 
-当前支持本地文件导入、自动/手动队列切换、顺序/单曲/列表循环、随机播放、历史返回、退出恢复、播放/暂停、进度拖动和音量。AVAudioPlayer 从系统解码支持的本地文件播放；实际格式覆盖尚未逐一验收。测试生成无声 WAV 并真实调用系统音频输出，不代表完成音质验收。
+当前支持本地文件导入、自动/手动队列切换、顺序/单曲/列表循环、随机播放、历史返回、退出恢复、播放/暂停、进度拖动和音量。本地文件格式取决于系统解码器或已安装的 GStreamer 插件。自动化测试使用生成的无声 WAV，真实输出设备和完整格式矩阵另需验证。
 
 会话保存在 `getConfigDir()/nimi-music/session.json`，版本 2 保存每首歌的路径、标题、歌手、专辑、来源、远程 ID、封面 ID 和时长；仍能读取版本 1 的纯路径会话并迁移为本地曲目。恢复队列、进度、音量与模式但不自动播放。正常退出保存，崩溃恢复与周期性检查点尚未实现。
 
-播放器通过 AVAudioPlayer delegate 接收真正的结束事件；暂停不触发自动切歌。播放器必须在主线程使用并显式 close（活动播放器注册表会持有对象）；切换文件先确认解码成功，再关闭旧播放器。解码发生在主线程，大文件的加载延迟尚待测量。当前每秒刷新 10 次，后续改为按播放状态驱动。
+播放器从 macOS delegate 或 Linux GStreamer 接收结束事件。暂停不触发自动切歌。播放器须在主线程使用并显式关闭。切歌时先确认新文件可加载，再关闭旧播放器。大文件的加载延迟尚待测量。
 
-远程歌曲的封面通过后台 `getCoverArt` 下载，缓存到 `getCacheDir()/nimi-music/covers`，当前播放区显示封面；会话保存封面路径。Now Playing 已接入 `MPNowPlayingInfoCenter`/`MPRemoteCommandCenter`：系统媒体控制显示标题/歌手/专辑/进度，播放/暂停/seek/上一首/下一首/停止回传到应用。待完成：流式播放、服务登录与 Keychain、真实媒体键人工验收、视觉和交互对齐参考应用。当前示例不是最终复刻验收结果。
+远程歌曲的封面通过后台 `getCoverArt` 下载，缓存到 `getCacheDir()/nimi-music/covers`，当前播放区显示封面；会话保存封面路径。macOS 通过 `MPNowPlayingInfoCenter` / `MPRemoteCommandCenter` 集成 Now Playing，Linux 通过 MPRIS2 集成系统媒体控制：系统媒体控制显示标题/歌手/专辑/进度，播放/暂停/seek/上一首/下一首/停止回传到应用。待完成：流式播放、服务登录与 Keychain、真实媒体键人工验收、视觉和交互对齐参考应用。真实媒体键与发布验收见 [平台清单](../../docs/backlog/README.md)。
 
 曲库使用固定行高虚拟列表；Now playing 将当前歌曲定位到可见区域。一万行构建数量和点击行为已有自动测试，真实大曲库性能尚待测量。
 

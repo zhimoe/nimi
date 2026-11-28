@@ -1,5 +1,7 @@
 # M1 实现状态与踩坑记录
 
+> 本页记录最初的 macOS WebView 切片。当前 Windows WebView2 与 Linux WebKitGTK 也接入页面、bridge、IPC 和自定义协议。后台服务的用法与关闭语义见 [异步 IPC](29-async-ipc.md)。
+
 > 日期:2026-11-04 · 对应路线图 M1(WebView + Core + IPC)
 
 ---

@@ -1,5 +1,7 @@
 # M3 切片:原生 Image 控件
 
+> 图像绘制现由 CoreGraphics/ImageIO、Windows GDI/WIC 和 Linux Cairo 承载。CoreGraphics 有原图与裁剪缓存条目上限，详见 [开发基线](28-remediation-status.md#后续框架功能图片缓存容量控制)。应用可通过父容器裁剪显示，Image 控件的 fit 和异步加载仍属后续。
+
 > 日期:2026-11-05 · 对应 M3 基础绘制原语
 
 ---

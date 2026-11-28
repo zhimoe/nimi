@@ -1,5 +1,7 @@
 # MyGo 当前能力对照与计划校准
 
+> 2026-11-24 复核。本地参考仓库仍为 `9b0ae9ef`。能力对照沿用该快照，Nimi 当前按三平台 Preview 管理。
+
 > 2026-11-22 macOS 增量回检使用本地 `mygo/main` `9b0ae9ef`（`v0.10.0-121-g9b0ae9ef`），比 `400ba3b1` 前进 91 个提交。本轮只跟进 Darwin 后端和跨平台窗口选项；Linux 首切片另见 [33](33-linux-framework.md)，增量结论见本文 §7。
 
 > 2026-11-19 Windows 回检使用本地 `mygo/main` `400ba3b1`，比此前本地 `46c97276` 前进 96 个提交。本轮直接跟进目录选择器的 WSL 共享路径兼容性，并复检 WebView2 生命周期、GDI 和桌面 API。实现与验收状态见 [Windows 框架状态](32-windows-framework.md)。
@@ -36,7 +38,7 @@
 |---|---|---|---|
 | WebView / IPC | 绑定服务、事件、Channel（1 MiB 窗口/ack）、trusted/untrusted、preload、注入脚本顺序、Eval、页面导航/下载/权限、`WebViewAvailable`、GPU 进程 ID | 类型化 IPC、事件、后台工作池（超时/窗口取消）、secret/token；无 Channel、preload、trust 细分、下载/权限 | 保留 `docs/04` 的目标协议；M1 剩余项改为“Channel、preload/trust、页面下载/权限、Eval 返回值”；后台池见 `29` |
 | 原生 UI | ~100 组件：editor、richtext、markdown、chart、video、table/tree/outline/grid、split/sidebar/toolbar、calendar/date/time/color、combobox/autocomplete/token、find bar/diff viewer；无障碍、RTL、transitions/motion/transforms/shaders、Tester、WASM 浏览器 | 少量基础控件、TextInput/TextArea、ScrollView、固定行高虚拟列表、基础 IME | `docs/03` 的 120 入口是旧快照；M3 只承诺基础控件；编辑器/富文本/图表/视频/无障碍进入 M6/M10/P2，不挤进 M3 |
-| 音频 | Go 内混音；WAV/MP3/Vorbis/FLAC/AAC/ALAC（含 MP4 容器）；流式解码、seek、loop、变速/保持音高；Now Playing/媒体键；三平台输出 | AVAudioPlayer 本地文件、播放/暂停/seek/音量；Track 元数据/会话 v2/远程封面缓存/Now Playing（含 artwork）已完成；无流式、混音、格式矩阵 | 音乐应用下一步做缓存管理与流式播放；通用音频引擎（混音、流式、格式注册）列为 M10/P2，不阻塞 1.0 |
+| 音频 | Go 内混音；WAV/MP3/Vorbis/FLAC/AAC/ALAC（含 MP4 容器）；流式解码、seek、loop、变速/保持音高；Now Playing/媒体键；三平台输出 | macOS AVAudioPlayer / Linux GStreamer 本地文件、播放/暂停/seek/音量；队列元数据、会话 v2、远程封面与系统媒体控制；流式与混音待实现 | 音乐应用下一步做缓存管理与流式播放；通用音频引擎（混音、流式、格式注册）列为 M10/P2，不阻塞 1.0 |
 | 原生模块 | Swift/Rust/Zig 实现 Go 接口，无 cgo；`mygo native build/add/check/call/publish`；视图/回调/缓冲区/纹理 | 未规划 | 新增 M10/P2 条目；明确 1.0 不做，插件/动态库继续走现有路线 |
 | 桌面 API | Now Playing/媒体键、Power、Network/Proxy、Secrets、权限（PermissionFlow）、Downloads、拖放、通知点击/权限、最近文档、Jump List、登录项、窗口状态、vibrancy、SetInputRegion | 菜单/托盘/通知/快捷键/对话框/剪贴板/屏幕/主题/窗口控制/Cookie 查询/文件监视/Document/Now Playing/登录项/首次激活点击 | `docs/14` 后补差距表；M4 增加 Power、Secrets、拖放、通知点击；M5 增加 Downloads、权限、窗口状态 |
 | 文档 | autosave、恢复副本、外部修改、File 菜单、最近文档、文件关联、每窗口文档 | Document 控制器、原子保存、外部冲突检测；无 autosave/recovery/recent 菜单 | M5 扩展验收：崩溃恢复、自动保存、最近文档、关闭/退出询问 |
@@ -51,7 +53,7 @@
 ## 3. 计划调整建议
 
 1. **参考版本改为双轨**：稳定设计对照 `v0.10.0`（`ebde9399`）；本地 `mygo/` HEAD `9b0ae9ef` 仅用于能力盘点和新特性跟踪。不要再写“锁定 0.7.4”。
-2. **保持 Nimi 1.0 的 macOS-first 范围**。MyGo 当前的 editor/richtext/markdown/video、原生模块、完整音频引擎、WASM 浏览器、Windows/Linux 三平台打包不进入 1.0 承诺；放到 M10/P2。
+2. **以三平台 Preview 安排后续**。编辑器、富文本、完整音频引擎、原生模块和浏览器后端保留为长线工作。当前分发与验证范围见 [路线图](05-roadmap.md)。
 3. **M3 不扩表**。M3 仍以基础控件、布局、滚动、Tester 为主；MyGo 的 100 组件清单作为 M6/M10 的参考，不作为 M3 验收。
 4. **M4/M5 增补桌面/文档能力**：Now Playing/artwork、Session、登录项已完成；后续补 Power、Secrets、Downloads、拖放、通知点击、窗口状态、autosave/recovery/recent documents、i18n。
 5. **M6 明确编辑器/富文本/视频是无障碍之外的独立大项**，不要与基础 TextArea/IME 混在一起估工期。

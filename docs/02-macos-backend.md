@@ -1,5 +1,7 @@
 # macOS 后端设计
 
+> 2026-11-24 复核。当前平台入口集中在 [Darwin 后端](../src/nimi/platform/darwin/)，其中 `window.nim` 同时负责 WKWebView 与原生 Surface。运行、验证和限制见 [桌面 API](14-macos-desktop-apis.md)、[IME](24-m6-ime.md) 和 [CI](18-macos-ci.md)。
+
 > 2026-11-06 重评：本文包含目标设计，不能作为当前 API/线程安全/兼容性承诺。实现边界与后续验收以 [整改基线](28-remediation-status.md) 为准；历史工期不作为剩余工期。
 >
 > 2026-11-22 实现备注：`NimiWebView`（含 `acceptsFirstMouse:` / `consumeActivationClick`）与登录项（`SMAppService` / LaunchAgent）已落地，见 [macOS 桌面 API](14-macos-desktop-apis.md) §8；本文其余内容仍是目标设计。

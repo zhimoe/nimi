@@ -56,8 +56,9 @@ nim c -r --hints:off --path:src tests/test_environment_storage.nim
 nim c -r --hints:off --path:src tests/test_environment_app.nim
 nim c -r --hints:off --path:src tests/test_environment_ui.nim   # macOS 写出 /tmp/nimi-env-ui-*.png
 
-# Windows 交叉编译（不执行）
-./scripts/windows-cross-build.sh
+# Windows 交叉编译（需要 Zig）
+./scripts/windows-cross-build.sh amd64
+./scripts/windows-cross-build.sh arm64
 ```
 
 Windows CI 会运行真实 Win32 绘制与 HKCU 临时变量测试 `tests/test_environment_app_windows.nim`，并构建 `nimi build examples/environment`。
@@ -77,7 +78,7 @@ nim c -r --path:src examples/environment/capture.nim /tmp/nimi-env-shot dark
 ## 当前限制
 
 - 使用系统标题栏 + DWM 深色，不提供自绘无边框标题栏。
-- GDI 渲染；无 D3D11/DirectComposition/DirectWrite，无图像四边形。
+- Windows 后端当前使用 GDI/WIC。D3D11、DirectComposition 和 DirectWrite 见 [Windows backlog](../../docs/backlog/windows.md)。
 - 批量编辑器在长行溢出时显示横向滚动条，可拖动滑块或使用横向滚轮、Shift+滚轮查看。窄窗口把预览放到编辑器下方，通过变量选择器切换目标。
 - 应用恢复之前的窗口尺寸和位置，并把整个窗口限制在可用的显示器工作区内。
 - 无安装器、代码签名、自动更新和无障碍（UIA）。

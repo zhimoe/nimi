@@ -1,4 +1,6 @@
-# Linux 后端：GTK3、Cairo、WebKitGTK 第一切片
+# Linux Preview：GTK3、Cairo 与 WebKitGTK
+
+> 当前为 Linux Preview。CI 与容器验证覆盖 Xvfb 和 D-Bus，GNOME/KDE、原生 Wayland 与实际安装另见 [Linux backlog](backlog/linux.md)。
 
 > 日期：2026-11-22 · 状态：第一切片已实现，待实机桌面复核
 > 关联：[Windows/Linux 规划](06-windows-linux.md)、[平台契约](../src/nimi/platform/contract.nim)、[Linux CI](../.github/workflows/linux.yml)
@@ -71,6 +73,14 @@ src/nimi/render/cairo.nim  # scene → Cairo：矩形/圆角/裁剪/文本/图�
 - 动画用 `g_timeout_add(1000/fps)`，单调时钟计算 `dt`，异常长帧钳制到 250 ms；`stopAnimation`/关窗会移除 source。
 - `setAppearance(dark)` 修改 `GtkSettings` 的 `gtk-application-prefer-dark-theme`，这是应用级设置；GTK3 没有逐窗口深色标题栏 API。
 
+### 2.4 输入与焦点
+
+- 鼠标：按下/释放/移动/滚轮；双击计数在 400 ms + 4 px 内累计到 3。
+- 滚轮：GTK 3.4+ smooth delta 优先，离散方向回退；Shift+滚轮走横向滚动。
+- 键盘：GDK keyval 映射到共享 UI 键名（导航键、F1–F24、可打印 Unicode）。`KeyShortcut` 在 Linux 上是 Control，与 Windows 一致。
+- `testClick`/`testKey`/`testKeyText`/`testKeyMods`/`testMenuKey` 已实现，测试不依赖合成原生事件。
+- IME 尚未接入 `GtkIMContext`：当前输入法组合走 GTK 默认处理或普通 keyval，marked text 不进入共享 engine。这是下一阶段优先项。
+
 ### 2.4.1 IME
 
 - 窗口 `ime: true` 时创建 `GtkIMContext`（`gtk_im_multicontext_new`），在 drawing area realize 后绑定 GdkWindow。
@@ -79,14 +89,6 @@ src/nimi/render/cairo.nim  # scene → Cairo：矩形/圆角/裁剪/文本/图�
 - `gtk_im_context_filter_keypress` 只在当前焦点控件接受文本时启用；否则 Space/Enter 仍按普通控件键处理。
 - 光标矩形来自 `SurfaceHandler.caretRect`，在 draw/鼠标/键盘/动画帧后更新。
 - 限制：`delete-surrounding` 尚未实现（共享 engine 缺少按范围删除 API），返回 false 让 GTK 回退；真实输入法/候选窗仍需实机验收。
-
-### 2.4 输入与焦点
-
-- 鼠标：按下/释放/移动/滚轮；双击计数在 400 ms + 4 px 内累计到 3。
-- 滚轮：GTK 3.4+ smooth delta 优先，离散方向回退；Shift+滚轮走横向滚动。
-- 键盘：GDK keyval 映射到共享 UI 键名（导航键、F1–F24、可打印 Unicode）。`KeyShortcut` 在 Linux 上是 Control，与 Windows 一致。
-- `testClick`/`testKey`/`testKeyText`/`testKeyMods`/`testMenuKey` 已实现，测试不依赖合成原生事件。
-- IME 尚未接入 `GtkIMContext`：当前输入法组合走 GTK 默认处理或普通 keyval，marked text 不进入共享 engine。这是下一阶段优先项。
 
 ### 2.5 菜单、对话框、剪贴板
 
@@ -170,7 +172,8 @@ Ubuntu 24.04 依赖：
 
 ```sh
 sudo apt-get install -y build-essential libgtk-3-dev libwebkit2gtk-4.1-dev \
-  libnotify-dev xvfb dbus-x11 fonts-dejavu-core
+  libnotify-dev libglib2.0-bin xvfb dbus dbus-x11 fonts-dejavu-core \
+  gstreamer1.0-plugins-base gstreamer1.0-plugins-good
 ```
 
 运行：
@@ -194,11 +197,11 @@ xvfb-run -a dbus-run-session -- ./scripts/test-linux.sh
 
 ### 3.2 CI
 
-`.github/workflows/linux.yml` 在 `ubuntu-24.04` 上安装 GTK3/WebKitGTK/notify/GStreamer/libglib2.0-bin(gdbus)/xvfb/dbus，执行同一脚本，然后构建 CLI 与 `counter-native`、`widgets-native`、`desktop-native`、`hello`、`notes`，并检查生成的 `.deb`。
+`.github/workflows/linux.yml` 在 `ubuntu-24.04` 上安装 GTK3/WebKitGTK/notify/GStreamer/libglib2.0-bin(gdbus)/xvfb/dbus，执行同一脚本，然后构建 CLI 与 `counter-native`、`widgets-native`、`desktop-native`、`hello`、`notes`、`shred-native`，并检查生成的 `.deb`。
 
 ## 4. 已验证 / 待验证
 
-已验证（2026-11-22，Ubuntu 24.04 arm64 容器 + Xvfb；Linux 套件 36 个程序、200 个测试用例全部通过）：
+已验证（2026-11-22，Ubuntu 24.04 arm64 容器 + Xvfb。2026-11-24 本轮复跑仍为 200 个测试用例通过，含 Subsonic fixture）：
 
 - `test_linux_render`：6 项通过（像素/裁剪/圆角/Pango/PNG/图片与纹理四边形方向）。
 - `test_linux_backend`：5 项通过（窗口/绘制/输入/菜单、ready 前退出、剪贴板、桌面 API、inotify）。

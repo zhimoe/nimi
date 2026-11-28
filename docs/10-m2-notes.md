@@ -1,5 +1,7 @@
 # M2 实现状态:原生 Surface + 布局/控件 + Counter
 
+> 本页记录 macOS 原生 UI 起步阶段。`counter-native` 同时用于 Windows 和 Linux 的原生窗口路径，控件、IME、滚动和离屏测试的现行入口见 [示例与验证](../examples/README.md)。
+
 > 日期:2026-11-04 · 对应路线图 M2
 
 ---

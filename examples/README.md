@@ -1,40 +1,35 @@
-# Nimi examples
+# Nimi 示例与验证
 
-每个示例都对应一条验收路径；不是所有历史切片都需要长期保留。完整回检见
-[docs/30-mygo-alignment.md](../docs/30-mygo-alignment.md)。
+在仓库根目录运行 `nim c -r --path:src examples/<示例>/main.nim`。也可用
+`./nimi dev examples/<示例>`（Windows PowerShell 用 `.\nimi.exe`）。
+各示例的 GUI 和系统集成依赖 [平台运行环境](../README.md#快速开始)。
 
-| 示例 | 验收内容 | 状态 / 建议 |
-|---|---|---|
-| `hello` | M1 WebView + bridge + typed IPC 最小闭环 | 保留 |
-| `counter-native` | M2 原生 UI、Tester、离屏 PNG | 保留 |
-| `form-native` | TextInput/TextArea、菜单、对话框、IME | 保留 |
-| `widgets-native` | Checkbox/Switch/Slider/Progress/Divider + Image + ScrollView | 保留（已合并原 image-native/scroll-native） |
-| `protocol-native` | 自定义 `nimi://` 协议/FileServer | 保留 |
-| `watch-native` | FSEvents 文件监视 | 保留 |
-| `document-native` | Document 控制器 | 保留 |
-| `desktop-native` | M4 桌面 API（菜单/托盘/通知/快捷键/对话框等） | 保留 |
-| `environment` | Windows 环境变量工具/桌面集成 | 保留 |
-| `notes` | WebView-first 完整应用：IPC、Markdown、导入导出 | 保留 |
-| `music` | 原生 UI + 音频 + 队列/会话 + Subsonic | 保留（主 dogfood） |
-| `shredder` | WebView/WebGL 碎纸效果 | 保留（唯一 WebView 效果路径） |
-| `shred-native` | CoreGraphics 纹理四边形/原生帧驱动 | 保留（CPU 路径） |
-| `shred-metal` | Metal mask + LayerEffect | 保留（GPU 路径） |
+| 示例 | 验证内容 |
+|---|---|
+| [hello](hello) | 三平台 WebView、类型化 IPC 和页面事件 |
+| [counter-native](counter-native) | 原生 UI、布局、键鼠、Tester |
+| [form-native](form-native) | TextInput/TextArea、菜单、对话框和原生 IME |
+| [widgets-native](widgets-native) | Checkbox、Switch、Slider、Progress、Image、ScrollView |
+| [protocol-native](protocol-native) | 自定义 `nimi://` 协议与 FileServer |
+| [watch-native](watch-native) | FSEvents、ReadDirectoryChangesW、inotify |
+| [document-native](document-native) | 文档状态、保存、重载和外部冲突 |
+| [desktop-native](desktop-native) | 各平台的显示、主题、托盘、快捷键等桌面 API |
+| [environment](environment/README.md) | Windows 环境变量、注册表、UAC 和原生 UI |
+| [notes](notes/README.md) | WebView Markdown 笔记、IPC、原生菜单和导入导出 |
+| [music](music/README.md) | macOS/Linux 本地音频、媒体控制、队列和 Subsonic |
+| [shredder](shredder) | WebView/WebGL 与 Nim 碎纸物理 |
+| [shred-native](shred-native) | CoreGraphics/GDI/Cairo 纹理四边形与帧驱动 |
+| [shred-metal](shred-metal) | macOS Metal mask 与 LayerEffect |
 
-## CI 构建
+Image 和 ScrollView 演示位于 `widgets-native`。沿用 `NIMI_SMOKE=image` 和
+`NIMI_SMOKE=scroll` 触发对应路径。
 
-当前 macOS workflow 构建并打包：
+## 自动化验证
 
-- `desktop-native`
-- `protocol-native`
-- `notes`
-- `music`
-- `shred-native`
-- `shred-metal`
+| 平台 | 测试与 CI 构建 |
+|---|---|
+| macOS | `./scripts/test.sh`。CI 构建并校验 `desktop-native`、`protocol-native`、`notes`、`music`、`shred-native`、`shred-metal` 的 DMG。 |
+| Windows | [Windows workflow](../.github/workflows/windows.yml) 运行原生测试并构建 `hello` 与 `environment`。用 Zig 执行 `./scripts/windows-cross-build.sh amd64` 或 `./scripts/windows-cross-build.sh arm64` 验证交叉编译。 |
+| Linux | `./scripts/test-linux.sh`。无显示环境时用 Xvfb + D-Bus，安装依赖见 [Linux 后端](../docs/33-linux-framework.md#31-本地)。CI 构建 `counter-native`、`widgets-native`、`desktop-native`、`hello`、`notes`、`shred-native` 并检查 `.deb`。 |
 
-其余示例按需编译即可。
-
-已退役：
-
-- `native-smoke`（被 counter-native/widgets-native 覆盖）
-- `image-native`（Image 区并入 widgets-native；`NIMI_SMOKE=image` 保留）
-- `scroll-native`（ScrollView 区并入 widgets-native；`NIMI_SMOKE=scroll` 保留）
+各平台最近一次 CI 结果与人工验收项见 [开发基线](../docs/28-remediation-status.md#自动化与实机验收)。

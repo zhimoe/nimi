@@ -1,5 +1,7 @@
 # 原生碎纸效果:帧驱动、纹理四边形与 Metal LayerEffect
 
+> 原生 CPU 示例现在通过 CoreGraphics、GDI 和 Cairo 绘制。Metal mask/LayerEffect 专用示例运行在 macOS。Linux 快照与自动化记录见 [Linux 后端](33-linux-framework.md)。
+
 > 日期:2026-11-05 · 对应 M3 动画/效果与 M6 Metal 切片
 
 ---

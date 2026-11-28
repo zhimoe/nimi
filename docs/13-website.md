@@ -1,6 +1,6 @@
 # 官网与 GitHub Pages
 
-> 日期:2026-11-04（2026-11-22 更新）· 源目录 `site/` · 目标域名 `nimi.zhi.moe`
+> 更新于 2026-11-24。源目录 `site/`，官网域名 `nimi.zhi.moe`。
 
 ---
 
@@ -8,7 +8,7 @@
 
 - 一个不依赖前端框架的静态官网,直接由 GitHub Pages 托管。
 - 首页介绍 Nimi、Nim 语言优势、框架能力、三平台 Preview 状态和 Nimi Notes 截图。
-- `docs.html` 提供安装、IPC、原生 UI、平台 Preview 与完整文档入口。
+- `docs.html` 提供 macOS/Linux 和 Windows PowerShell 快速开始、平台打包输出、IPC、原生 UI、示例与完整文档入口。
 - 未完成项与平台差距不放在首页，统一链接到 `docs/backlog/`。
 - 使用自定义域名 `https://nimi.zhi.moe/`;同时保留
   `https://zhimoe.github.io/nimi/` 作为 GitHub Pages 默认地址。
@@ -62,14 +62,11 @@ open http://127.0.0.1:8765/
 http://127.0.0.1:8765/?reveal=1
 ```
 
-## 5. 当前状态(2026-11-22)
+## 5. 源码与线上版本
 
-- 仓库已创建并公开:<https://github.com/zhimoe/nimi>。
-- `Deploy website` workflow 已成功运行,artifact 从 `site/` 部署。
-- Pages 已启用,Source 为 GitHub Actions,custom domain 为 `nimi.zhi.moe`。
-- DNS 与 HTTPS 已生效:`https://nimi.zhi.moe/` 返回 200。
-- 首页与 `docs.html` 已更新为 macOS / Windows / Linux Preview；
-  未完成项统一链接到 `docs/backlog/`。
+- 首页代码可单独编译，Notes 截图保留 macOS 来源说明。
+- 文档页连接 [平台能力与 CI](28-remediation-status.md)、[当前执行计划](05-roadmap.md#当前执行计划) 和 [backlog](backlog/README.md)。
+- 线上首页已通过 HTTPS 访问。最近一次部署是 2026-11-22 的 `babbeba2`。[Pages 运行记录](https://github.com/zhimoe/nimi/actions/runs/44989105116)
 
 ## 6. GitHub Pages 部署
 
@@ -119,7 +116,9 @@ curl -I https://zhimoe.github.io/nimi/
 
 检查项:
 
-- 首页包含 Nim 优势、框架能力与 Nimi Notes 截图。
+- 首页的 WebView 代码与文档页的原生 UI 代码均能独立编译。
+- 快速开始保留 Windows PowerShell 和 macOS/Linux 两套命令，Linux 依赖与分发说明可见。
+- 校验 HTML 锚点、CSS/图片/字体路径和仓库链接。
 - 移动端无横向溢出,导航可展开。
 - 文档页侧边栏在桌面端 sticky,移动端折叠为顶部目录。
 - 自定义域名 HTTPS 证书有效。

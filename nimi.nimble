@@ -1,4 +1,4 @@
-version       = "0.1.0"
+version       = "0.2.0"
 author        = "Nimi contributors"
 description   = "Desktop apps in Nim, with native UI or a web frontend."
 license       = "MIT"

@@ -24,6 +24,7 @@
 - 登录项：XDG autostart 与 `--nimi-opened-at-login` 标记；当前 `setOpenAtLogin` 抛不支持。
 - `WindowOptions.consumeActivationClick` 暂忽略。
 - 拖放、剪贴板图片/文件、Power/Network/Secrets、最近文档。
-- PKGBUILD/AppImage、签名与自动更新；真实桌面安装验收。
+- 在 GNOME/KDE 分别安装 `.deb` 并验证启动、系统依赖和 URL scheme 注册。
+- PKGBUILD/AppImage、签名与自动更新。
 
 详见 [Linux 后端](../33-linux-framework.md)。

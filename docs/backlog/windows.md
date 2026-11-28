@@ -1,7 +1,7 @@
 # Windows Backlog
 
 > 当前 Preview 已覆盖 Win32 窗口、WebView2/IPC、`nimi://`、GDI 渲染、
-> 原生菜单/IME/托盘/通知、文件监视、Cookie 查询与 exe/manifest 打包。
+> 原生菜单/IME/托盘/通知、文件监视、默认 Cookie 查询/清理与 exe/manifest 打包。
 > 以下为尚未完成或仍需实机验收的部分。
 
 ## 渲染与窗口
@@ -21,7 +21,7 @@
 ## 打包与发布
 
 - 安装器、签名、自动更新。
-- 真实 Windows 11 x64/ARM64 的 GUI 验收矩阵。
+- 完成 Windows 11 x64/ARM64 GUI 验收矩阵。现有 ARM64 虚拟机记录和 Windows CI 覆盖见 [验证记录](../32-windows-framework.md#验证)。
 - WebView2 Runtime 缺失/Loader 版本与真实页面视觉回归。
 
 详见 [Windows 框架状态](../32-windows-framework.md)。

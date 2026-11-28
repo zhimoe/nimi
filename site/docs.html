@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <title>文档 — Nimi</title>
-  <meta name="description" content="Nimi 文档:安装、快速开始、IPC、原生 UI、三平台架构与 Preview 状态。">
+  <meta name="description" content="Nimi 的 macOS、Windows、Linux 安装、快速开始、类型化 IPC、原生 UI、打包与验证指南。">
   <link rel="canonical" href="https://nimi.zhi.moe/docs.html">
   <link rel="icon" type="image/png" href="assets/icon.png">
   <script>document.documentElement.classList.add("js");</script>
@@ -66,47 +66,52 @@
       <div class="docs-body">
         <section id="install">
           <h2>安装</h2>
-          <p>
-            Nimi 以源码 Preview 形式使用。需要 <strong>Nim 2.4+</strong>;
-            macOS 12+ / Xcode Command Line Tools,Windows WebView2 Runtime,
-            Linux GTK3 与可选 WebKitGTK。
-          </p>
-          <pre><code>git clone https://github.com/zhimoe/nimi.git
-cd nimi
-nim c -o:nimi src/nimi/cli.nim
-./nimi doctor
-./nimi version</code></pre>
-          <div class="docs-callout">
-            <strong>提示:</strong> 公开仓库不包含 <code>mygo/</code>;
-            本地开发可放置只读参考副本。实际构建只需要 <code>src/</code>、
-            <code>examples/</code> 和 <code>config.nims</code>。
-          </div>
+          <p>使用源码构建 Nimi。安装 <strong>Nim 2.4+</strong> 和对应平台的 C 工具链。</p>
+          <ul>
+            <li><strong>macOS</strong> 需要 macOS 12+ 和 Xcode Command Line Tools。</li>
+            <li><strong>Windows</strong> 使用 GCC/MinGW。网页窗口需要 WebView2 Runtime。</li>
+            <li><strong>Linux</strong> 需要 GTK3 和桌面会话。网页窗口需要 WebKitGTK 4.1，后端也支持 4.0。</li>
+          </ul>
+          <h3>Ubuntu 24.04 运行依赖</h3>
+          <pre><code>sudo apt install libgtk-3-0t64 libwebkit2gtk-4.1-0 libnotify4 \
+  gstreamer1.0-plugins-base gstreamer1.0-plugins-good</code></pre>
         </section>
 
         <section id="quickstart">
           <h2>快速开始</h2>
-          <p>用 CLI 创建并运行一个项目:</p>
-          <pre><code>./nimi init my-app
-./nimi dev my-app
+          <p><code>hello</code> 运行系统 WebView 和 IPC，<code>counter-native</code> 运行自绘原生 UI。</p>
 
-# 打包 .app + DMG
-./nimi build my-app
-open "my-app/dist/darwin-arm64/My App.app"</code></pre>
-          <p>
-            <code>nimi dev</code> 会监听 <code>.nim</code>/<code>.nims</code> 与
-            <code>nimi.json</code>,源码变化后自动重建并重启。
-            <code>nimi build</code> 生成 Info.plist、PkgInfo、图标、可选签名和 DMG。
-          </p>
+          <h3>macOS / Linux</h3>
+          <pre><code>git clone https://github.com/zhimoe/nimi.git
+cd nimi
+nim c -o:nimi src/nimi/cli.nim
+./nimi doctor
+./nimi generate examples/hello
+./nimi dev examples/hello
 
-          <h3>直接运行仓库示例</h3>
-          <pre><code># WebView + 类型化 IPC
-nim c -r --path:src examples/hello/main.nim
-
-# 原生 UI 布局与交互
+# 关闭窗口后，试用原生 UI 并构建发布产物
 nim c -r --path:src examples/counter-native/main.nim
+./nimi build examples/hello</code></pre>
 
-# Markdown 笔记应用(WebView + 原生菜单/对话框)
-nim c -r --path:src examples/notes/main.nim</code></pre>
+          <h3>Windows PowerShell</h3>
+          <pre><code>git clone https://github.com/zhimoe/nimi.git
+cd nimi
+nim c -o:nimi.exe src/nimi/cli.nim
+.\nimi.exe doctor
+.\nimi.exe generate examples/hello
+.\nimi.exe dev examples/hello
+
+nim c -r --path:src examples/counter-native/main.nim
+.\nimi.exe build examples/hello</code></pre>
+          <p><code>nimi dev</code> 监听 <code>.nim</code>、<code>.nims</code> 和 <code>nimi.json</code>，变化后重建并重启。</p>
+
+          <h3>构建产物</h3>
+          <p>示例默认输出到 <code>examples/hello/dist/&lt;平台&gt;-&lt;架构&gt;/</code>。</p>
+          <ul>
+            <li>macOS 生成 <code>.app</code> 和 DMG，支持签名与公证配置。</li>
+            <li>Windows 生成内嵌 manifest 的 exe，并复制匹配架构的 <code>WebView2Loader.dll</code>。</li>
+            <li>Linux 生成可执行程序和 <code>.desktop</code>。安装 <code>dpkg-deb</code> 时也生成 <code>.deb</code>。</li>
+          </ul>
         </section>
 
         <section id="ipc">
@@ -128,12 +133,12 @@ bindService(greeter, greet)</code></pre>
           <p>页面通过注入的 bridge 调用:</p>
           <pre><code><span class="kw">const</span> text = <span class="kw">await</span> window.nimi.call(<span class="st">"Greeter.greet"</span>, <span class="st">"Nim"</span>);</code></pre>
           <p>
-            每个窗口有独立 secret 与 token;bridge 在 document start 注入,
-            页面无法直接访问文件系统或系统 API,只能调用显式绑定的服务。
+            Bridge 在文档开始时注入，IPC 请求携带窗口的 secret 与 token。
+            为应用自己的页面注册服务，耗时操作可用 <code>bindBackgroundService</code>。
           </p>
           <p>
             运行 <code>./nimi generate my-app</code> 会生成
-            <code>frontend/nimi.ts</code> 和运行时客户端,便于在 TypeScript 项目中获得补全。
+            <code>frontend/nimi.ts</code> 和运行时客户端。生成器识别基础标量，其他类型映射为 <code>unknown</code>。
           </p>
         </section>
 
@@ -143,8 +148,7 @@ bindService(greeter, greet)</code></pre>
             不需要 HTML 时,用 <code>uiView</code> 描述每帧的 Node 树。
             布局、测量、绘制、命中、焦点和键盘都走同一套实现。
           </p>
-          <pre><code><span class="kw">import</span> std/os
-<span class="kw">import</span> nimi
+          <pre><code><span class="kw">import</span> nimi
 <span class="kw">import</span> nimi/ui
 
 <span class="kw">type</span>
@@ -172,9 +176,8 @@ app.whenReady(<span class="kw">proc</span>() =
 )
 app.run()</code></pre>
           <p>
-            已实现的控件包括 Text、Button、Checkbox、Switch、Slider、Progress、
-            Divider 和单行 TextInput;文本换行、Tab/Enter 焦点、鼠标拖动和
-            <code>Tester</code> 无窗口测试都已可用。
+            已实现 Text、Button、Checkbox、Switch、Slider、Progress、Image、TextInput 和 TextArea。
+            长列表可使用 <code>virtualList</code>，<code>Tester</code> 可在无窗口环境验证布局和交互。
           </p>
         </section>
 
@@ -188,8 +191,8 @@ app.run()</code></pre>
               <tr><td><code>src/nimi/core/</code></td><td>app、window、IPC、loop、events、bridge、menu、dialog、clipboard</td></tr>
               <tr><td><code>src/nimi/platform/</code></td><td>平台契约与 Darwin / Windows / Linux 后端</td></tr>
               <tr><td><code>src/nimi/ui/</code></td><td>原生 UI 布局、控件、输入、焦点与 Tester</td></tr>
-              <tr><td><code>src/nimi/scene/</code></td><td>rect/text display list</td></tr>
-              <tr><td><code>src/nimi/render/</code></td><td>CoreGraphics / Cairo / GDI / Metal 场景渲染</td></tr>
+              <tr><td><code>src/nimi/scene/</code></td><td>rect/text/clip/image 等绘制操作</td></tr>
+              <tr><td><code>src/nimi/render/</code></td><td>CoreGraphics / Cairo / GDI 与专用 Metal 效果</td></tr>
               <tr><td><code>src/nimi/text/</code></td><td>CoreText / Pango / GDI 测量与换行</td></tr>
               <tr><td><code>src/nimi/cli.nim</code></td><td>init / generate / dev / build / doctor</td></tr>
               <tr><td><code>docs/</code></td><td>可行性、架构、平台后端、路线图与实现记录</td></tr>
@@ -215,17 +218,12 @@ app.run()</code></pre>
               <tr><td>Linux</td><td>Preview</td><td>GTK3、WebKitGTK、Cairo/Pango、X11/MPRIS/GStreamer</td></tr>
             </tbody>
           </table>
-          <ul>
-            <li><strong>WebView:</strong> 系统 WebView + 类型化 IPC + TS 生成 + 自定义协议。</li>
-            <li><strong>原生 UI:</strong> Surface、布局、控件、IME、滚动、Tester。</li>
-            <li><strong>桌面:</strong> 菜单、对话框、剪贴板、托盘、通知、快捷键、Now Playing。</li>
-            <li><strong>打包:</strong> macOS .app/DMG,Windows exe/manifest,Linux .desktop/.deb。</li>
-          </ul>
-          <p>
-            平台差异、真实设备验收与后续计划集中在
-            <a href="https://github.com/zhimoe/nimi/blob/main/docs/backlog/README.md" target="_blank" rel="noreferrer">项目 backlog ↗</a>,
-            不占用首页。
-          </p>
+          <p>本地媒体播放与系统媒体控制覆盖 macOS 和 Linux。托盘、快捷键、文件监视和 IME 的行为因系统与桌面环境而异。</p>
+          <div class="docs-links">
+            <a href="https://github.com/zhimoe/nimi/blob/main/docs/28-remediation-status.md" target="_blank" rel="noreferrer">平台能力矩阵与 CI 验证 ↗</a>
+            <a href="https://github.com/zhimoe/nimi/blob/main/docs/05-roadmap.md#当前执行计划" target="_blank" rel="noreferrer">路线图与通过条件 ↗</a>
+            <a href="https://github.com/zhimoe/nimi/blob/main/docs/backlog/README.md" target="_blank" rel="noreferrer">平台 backlog ↗</a>
+          </div>
         </section>
 
         <section id="examples">
@@ -235,38 +233,36 @@ app.run()</code></pre>
             Nim 负责 JSON 存储、原生菜单和文件对话框,最后打包成
             <code>Nimi Notes.app</code> 与 DMG。
           </p>
-          <pre><code>NIMI_NOTES_DIR=/tmp/nimi-notes-smoke NIMI_SMOKE=crud \
+          <pre><code>notes_dir=$(mktemp -d)
+NIMI_NOTES_DIR="$notes_dir" NIMI_SMOKE=crud \
   nim c -r --path:src examples/notes/main.nim
 # smoke crud: ok (1 -&gt; 2)
 
 ./nimi build examples/notes
-hdiutil verify examples/notes/dist/darwin-arm64/nimi-notes-0.1.0.dmg</code></pre>
-          <p>仓库里还有:</p>
+hdiutil verify examples/notes/dist/darwin-*/nimi-notes-0.1.0.dmg</code></pre>
+          <p>其他可运行示例：</p>
           <ul>
-            <li><code>examples/hello</code> — WKWebView + IPC + 50 次调用冒烟。</li>
+            <li><code>examples/hello</code> · 三平台 WebView、IPC 与页面事件。</li>
             <li><code>examples/counter-native</code> — 原生布局、鼠标、方向键、Tab+Enter。</li>
             <li><code>examples/widgets-native</code> — Checkbox/Switch/Slider/Progress/Divider。</li>
             <li><code>examples/form-native</code> — 原生表单、菜单、文件/消息对话框。</li>
-            <li><code>examples/shred-native</code> / <code>shred-metal</code> — Verlet 纸带、纹理四边形、Metal mask/LayerEffect。</li>
+            <li><code>examples/music</code> · macOS/Linux 原生音乐播放器、虚拟列表和系统媒体控制。</li>
+            <li><code>examples/environment</code> · Windows 原生 UI、注册表与 UAC。</li>
           </ul>
         </section>
 
         <section id="more">
           <h2>完整文档</h2>
-          <p>设计与实现细节在仓库 <code>docs/</code> 下持续更新;版本范围见 backlog:</p>
+          <p>仓库文档提供实现细节、运行示例、平台验证和开发计划。</p>
           <div class="docs-links">
-            <a href="https://github.com/zhimoe/nimi/blob/main/docs/backlog/README.md" target="_blank" rel="noreferrer">Backlog · Preview 版本范围 ↗</a>
-            <a href="https://github.com/zhimoe/nimi/blob/main/docs/00-feasibility.md" target="_blank" rel="noreferrer">00 · 可行性分析 ↗</a>
-            <a href="https://github.com/zhimoe/nimi/blob/main/docs/01-architecture.md" target="_blank" rel="noreferrer">01 · 架构设计 ↗</a>
-            <a href="https://github.com/zhimoe/nimi/blob/main/docs/02-macos-backend.md" target="_blank" rel="noreferrer">02 · macOS 后端 ↗</a>
-            <a href="https://github.com/zhimoe/nimi/blob/main/docs/03-native-ui.md" target="_blank" rel="noreferrer">03 · 原生 UI ↗</a>
-            <a href="https://github.com/zhimoe/nimi/blob/main/docs/04-tooling-and-ipc.md" target="_blank" rel="noreferrer">04 · 工具链与 IPC ↗</a>
-            <a href="https://github.com/zhimoe/nimi/blob/main/docs/05-roadmap.md" target="_blank" rel="noreferrer">05 · 实施路线图 ↗</a>
-            <a href="https://github.com/zhimoe/nimi/blob/main/docs/12-notes-demo.md" target="_blank" rel="noreferrer">12 · Nimi Notes 验收 ↗</a>
-            <a href="https://github.com/zhimoe/nimi/blob/main/docs/25-shredder.md" target="_blank" rel="noreferrer">25 · 碎纸效果 ↗</a>
-            <a href="https://github.com/zhimoe/nimi/blob/main/docs/26-native-shred.md" target="_blank" rel="noreferrer">26 · 原生碎纸与 Metal ↗</a>
-            <a href="https://github.com/zhimoe/nimi/blob/main/docs/27-project-review.md" target="_blank" rel="noreferrer">27 · 项目回检 ↗</a>
-            <a href="https://github.com/zhimoe/nimi" target="_blank" rel="noreferrer">GitHub 仓库 ↗</a>
+            <a href="https://github.com/zhimoe/nimi/blob/main/docs/README.md" target="_blank" rel="noreferrer">完整文档索引 ↗</a>
+            <a href="https://github.com/zhimoe/nimi/blob/main/examples/README.md" target="_blank" rel="noreferrer">示例与验证命令 ↗</a>
+            <a href="https://github.com/zhimoe/nimi/blob/main/docs/01-architecture.md" target="_blank" rel="noreferrer">架构设计 ↗</a>
+            <a href="https://github.com/zhimoe/nimi/blob/main/docs/03-native-ui.md" target="_blank" rel="noreferrer">原生 UI ↗</a>
+            <a href="https://github.com/zhimoe/nimi/blob/main/docs/29-async-ipc.md" target="_blank" rel="noreferrer">异步 IPC 与工作池 ↗</a>
+            <a href="https://github.com/zhimoe/nimi/blob/main/docs/14-macos-desktop-apis.md" target="_blank" rel="noreferrer">macOS 桌面 API ↗</a>
+            <a href="https://github.com/zhimoe/nimi/blob/main/docs/32-windows-framework.md" target="_blank" rel="noreferrer">Windows 后端 ↗</a>
+            <a href="https://github.com/zhimoe/nimi/blob/main/docs/33-linux-framework.md" target="_blank" rel="noreferrer">Linux 后端 ↗</a>
           </div>
         </section>
       </div>

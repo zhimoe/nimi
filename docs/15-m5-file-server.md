@@ -1,5 +1,7 @@
 # M5 切片:自定义协议与本地 FileServer
 
+> 当前共享 `FileServer` 由 macOS WKURLSchemeHandler、Windows WebView2 资源回调和 Linux WebKitGTK scheme 承载。Windows 限制和 Linux 会话支持分别见 [Windows](32-windows-framework.md) 与 [Linux](33-linux-framework.md)。
+
 > 日期:2026-11-05 · 对应 M5 协议/FileServer 部分
 
 ---

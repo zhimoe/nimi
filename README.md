@@ -5,7 +5,7 @@
 > 官网：<https://nimi.zhi.moe> · 仓库：<https://github.com/zhimoe/nimi>
 >
 > **Preview**：macOS、Windows、Linux 三平台均可运行。API 仍可能调整；
-> 版本范围、平台差异与后续计划统一维护在 [项目 backlog](docs/backlog/README.md)。
+> 查看 [平台能力与验证](docs/28-remediation-status.md)、[实施路线图](docs/05-roadmap.md#当前执行计划) 和 [项目 backlog](docs/backlog/README.md)。
 
 Nimi 保留 MyGo 的架构与开发体验——系统 WebView + 类型化 IPC + 自绘原生 UI +
 一套桌面 API——但用 Nim 编写，不依赖 cgo，也不依赖 Go 运行时。
@@ -14,18 +14,12 @@ Nimi 保留 MyGo 的架构与开发体验——系统 WebView + 类型化 IPC + 
 
 - **三平台后端**：macOS（AppKit / WKWebView / CoreGraphics / CoreText）、
   Windows（Win32 / WebView2 / GDI）、Linux（GTK3 / WebKitGTK / Cairo / Pango）。
-- **两条 UI 路径**：系统 WebView 承载页面，或完全自绘的原生 UI；两者共享窗口、
-  菜单、事件、输入法、滚动与测试设施。
-- **类型化 IPC**：`bindService`、编译期 TypeScript 客户端、secret/token、
-  后台工作池、超时与窗口关闭取消。
-- **桌面 API（按平台）**：菜单、托盘、通知、全局快捷键、文件对话框、剪贴板、
-  屏幕、主题、Now Playing、登录项、单实例/深链、文件监视、Cookie 与 Document 控制器。
-- **打包**：macOS `.app` / DMG / 签名钩子，Windows exe / manifest，
-  Linux `.desktop` / `.deb`。
-- **测试**：macOS 192 个、Linux 200 个测试用例；Windows 交叉构建与实机 GUI 回归。
-
-Preview 版本仍在快速迭代；各平台功能范围与真实设备验收状态只在
-[backlog](docs/backlog/README.md) 维护，首页不逐项列出。
+- **两条 UI 路径**：系统 WebView 承载页面，或完全自绘的原生 UI；两者共享窗口生命周期、
+  菜单和事件。原生 UI 提供布局、滚动、文本输入和 Tester。
+- **类型化与流式 IPC**：`bindService`、`bindBackground`、流式分块（`sendChunk` / `stream`）、`AbortSignal` 单请求取消、跨线程事件推送（`emitWindow` / `broadcastPage`）、secret/token，以及覆盖结构体/枚举/可选/数组的编译期 TypeScript 类型生成。
+- **桌面 API 与宿主基建**：菜单与原生右键弹出菜单（`popupMenu`）、托盘、通知、全局快捷键、文件对话框、剪贴板、屏幕、主题、Now Playing、登录项、单实例/深链、降噪文件监视、VFS 静态内嵌与多挂载点 `FileServer`、OS Shell 集成（`nimi/shell`）、规范化数据目录与便携模式（`nimi/paths`）、脱敏滚动日志（`nimi/log`）、窗口尺寸位置记忆（`autosaveName`）及平台能力探针（`app.supports`）。
+- **打包与跨平台构建**：macOS `.app`（自动捆绑第三方 `.dylib`） / DMG / 签名与公证钩子，Windows exe / manifest / `zig cc` 交叉编译绿色版与 Inno Setup 脚本，Linux `.desktop` / `.deb`。
+- **验证**：本地 macOS 192 项、Ubuntu 24.04 容器 200 项自动化测试通过。Windows CI 运行原生回归，另有 Windows 11 ARM64 虚拟机的部分 GUI 验证。构建和人工验收记录见 [开发基线](docs/28-remediation-status.md#自动化与实机验收)。
 
 ## 为什么
 
@@ -37,38 +31,56 @@ Nimi 不是 Go 源码兼容层，也不是 MyGo 的分支维护；它是一个�
 
 ## 快速开始
 
-需要 Nim 2.4+。macOS 需要 12+ 与 Xcode Command Line Tools；Linux 需要 GTK3
-（原生 UI）与可选 WebKitGTK 4.1（页面窗口）；Windows 需要 WebView2 Runtime。
+需要 Nim 2.4+ 和 C 工具链。下列命令从仓库根目录运行。
+
+| 平台 | 环境 |
+|---|---|
+| macOS | macOS 12+、Xcode Command Line Tools |
+| Windows | GCC/MinGW 工具链。运行网页窗口需要 WebView2 Runtime。 |
+| Linux | GTK3 和桌面会话。运行网页窗口需要 WebKitGTK 4.1（后端也支持 4.0）。 |
+
+### macOS / Linux
 
 ```sh
 git clone https://github.com/zhimoe/nimi.git
 cd nimi
-
-# 构建 CLI
 nim c -o:nimi src/nimi/cli.nim
+./nimi doctor
 
 # WebView + 类型化 IPC
 ./nimi generate examples/hello
 ./nimi dev examples/hello
 
-# 原生 UI：无 HTML，CoreGraphics/CoreText 自绘
+# 原生 UI
 nim c -r --path:src examples/counter-native/main.nim
 
-# 打包（macOS 产出 .app + DMG）
+# 在当前平台打包
 ./nimi build examples/hello
-open "examples/hello/dist/darwin-arm64/Hello Nimi.app"
 ```
 
-Linux 桌面依赖（Ubuntu 24.04）：
+Ubuntu 24.04 运行示例所需的常用依赖：
 
 ```sh
-sudo apt install libgtk-3-0t64 libwebkit2gtk-4.1-0 \
+sudo apt install libgtk-3-0t64 libwebkit2gtk-4.1-0 libnotify4 \
   gstreamer1.0-plugins-base gstreamer1.0-plugins-good
-./scripts/test-linux.sh
 ```
 
-macOS 运行测试：`./scripts/test.sh`。Windows 使用 `nimi build` 生成 exe 与
-manifest；WebView2 Runtime 缺失时页面窗口会给出明确错误。
+### Windows PowerShell
+
+```powershell
+git clone https://github.com/zhimoe/nimi.git
+cd nimi
+nim c -o:nimi.exe src/nimi/cli.nim
+.\nimi.exe doctor
+.\nimi.exe generate examples/hello
+.\nimi.exe dev examples/hello
+nim c -r --path:src examples/counter-native/main.nim
+.\nimi.exe build examples/hello
+```
+
+默认构建目录为 `examples/hello/dist/<平台>-<架构>/`。macOS 输出 `.app` 和 DMG，Windows 输出 exe 和 WebView2 Loader 并嵌入 manifest，Linux 输出程序和 `.desktop`，装有 `dpkg-deb` 时也生成 `.deb`。
+
+macOS 使用 `./scripts/test.sh`。Linux headless 依赖和 Windows CI 测试入口见 [验证指南](examples/README.md#自动化验证)。
 
 ## 示例
 
@@ -86,7 +98,7 @@ manifest；WebView2 Runtime 缺失时页面窗口会给出明确错误。
 | [`music`](examples/music) | 原生 UI + 音频 + 队列/会话 + Subsonic |
 | [`environment`](examples/environment) | Windows 环境变量工具与桌面集成 |
 | [`shredder`](examples/shredder) | WebGL 碎纸效果 + Nim Verlet 物理 |
-| [`shred-native`](examples/shred-native) | CoreGraphics/GDI 纹理四边形与帧驱动 |
+| [`shred-native`](examples/shred-native) | CoreGraphics/GDI/Cairo 纹理四边形与帧驱动 |
 | [`shred-metal`](examples/shred-metal) | Metal mask/LayerEffect |
 
 完整清单与验收路径见 [examples/README.md](examples/README.md)。
@@ -100,13 +112,14 @@ manifest；WebView2 Runtime 缺失时页面窗口会给出明确错误。
 | [macOS 后端](docs/02-macos-backend.md) | ObjC runtime、AppKit、WKWebView、Surface、CoreText、打包 |
 | [原生 UI](docs/03-native-ui.md) | Element/arena、布局、scene、文本、输入、控件、Tester |
 | [工具链与 IPC](docs/04-tooling-and-ipc.md) | CLI、配置、TS 生成、打包、插件与测试 |
-| [实施路线图](docs/05-roadmap.md) | M0–M10、范围与验收标准 |
+| [实施路线图](docs/05-roadmap.md) | 当前执行顺序、验收条件与 M0–M10 历史范围 |
+| [开发基线](docs/28-remediation-status.md) | 平台能力矩阵与 CI / 实机验证记录 |
 | [Windows/Linux](docs/06-windows-linux.md) | Win32/WebView2、GTK3/WebKitGTK 与跨平台设计 |
 | [API 映射](docs/07-api-mapping.md) | MyGo → Nimi 命名与语义对照 |
 | [Backlog](docs/backlog/README.md) | Preview 版本范围、平台差异与后续工作 |
 | [文档索引](docs/README.md) | 所有设计、实现、验证与平台文档 |
 
-建议阅读顺序：`00 → 01 → 05 → 02/03 → 04 → 06 → 07`。
+从 [文档索引](docs/README.md) 查找使用指南、平台细节和历史设计。
 
 ## 仓库结构
 
@@ -143,4 +156,4 @@ nimi/
   Copyright (c) 2026 MyGo contributors。
 - MyGo 的架构思想（分层、主线程调度、typed IPC、scene display list、
   CPU/GPU 双渲染器）是 Nimi 的基础。
-- Nimi 自身代码计划采用 MIT License（待定稿）。
+- Nimi 自身代码采用 [MIT License](LICENSE)。

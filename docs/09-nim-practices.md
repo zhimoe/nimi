@@ -1,5 +1,7 @@
 # Nim 实践参考
 
+> 当前项目通过 [config.nims](../config.nims) 启用 `atomicArc` 和线程。回调及 UI 状态遵循 [开发基线](28-remediation-status.md) 的主线程契约。后端 FFI 分别使用 Objective-C runtime、Win32 C shim 和 GTK 动态加载。
+
 > 参考仓库:[planetis-m/skills](https://github.com/planetis-m/skills)
 > 结论:**值得参考**。它不是框架代码,而是一组面向 Nim 库开发的工程规范;其中 C 绑定、回调、资源所有权和 API 设计几篇直接适用于 Nimi。
 

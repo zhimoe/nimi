@@ -1,5 +1,7 @@
 # Windows GUI 开发回检与环境变量工具
 
+> 当前开发和验收入口为 [Windows 后端](32-windows-framework.md) 与 [环境变量示例](../examples/environment/README.md)。本页保留 Win32 后端开发和 EnvMan 布局回检记录。
+
 > 2026-11-12 范围校正：主目标是补齐 **Nimi Windows 框架能力**；环境变量管理器只是驱动开发和验收的 demo，不作为独立产品持续扩展。Windows 自动化运行已由 `windows-latest` CI 覆盖（2026-11-13 首次全绿）；交互式人工验收仍需实机。下方历史记录中的“受阻”仅适用于人工运行验收，不能代表整个框架开发无法推进。
 >
 > 当前框架阶段：原生 GUI、WebView2 与 Win32 桌面 API 首版已接通，尚非完整 Windows 后端。已接入 core 生命周期、Win32 窗口/派发、GDI rect/text/clip/图像/多边形、动画帧驱动、基础输入、IME 组合/候选窗、菜单/文件对话框/剪贴板、WebView2 + IPC + `nimi://` 协议、显示/主题/光标/全局快捷键、环境变量注册表工具，以及 `nimi build` 的 exe/资源/manifest/WebView2Loader。仍缺托盘/通知/文件监视/Cookie/NowPlaying、图像四边形/文字 alpha/D3D11，以及 Windows 实机运行验收。

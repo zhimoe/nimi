@@ -1,5 +1,7 @@
 # Nimi 架构设计
 
+> 2026-11-24 复核。当前窗口后端为 AppKit、Win32、GTK3，默认场景渲染分别使用 CoreGraphics、GDI、Cairo。执行契约和平台差异见 [开发基线](28-remediation-status.md)。
+
 > 2026-11-06 重评：本文包含目标设计，不能作为当前 API/线程安全/兼容性承诺。实现边界与后续验收以 [整改基线](28-remediation-status.md) 为准；历史工期不作为剩余工期。
 
 > 状态:持续更新 · 日期:2026-11-05 · 关联文档:[可行性分析](00-feasibility.md)、[路线图](05-roadmap.md)
@@ -10,7 +12,7 @@
 ## 1. 设计原则
 
 1. **策略在 core,后端只做翻译。** 默认值、窗口注册表、事件顺序、退出流程、IPC 路由、菜单模型、协议与信任检查全部在平台无关层。后端只把 `platform` 契约翻译成原生调用,不发明行为。
-2. **平台层主线程专属。** 所有 `platform.*` 调用与回调都在主线程;后端内部不需要锁。公开 API 必须从任意线程安全调用。
+2. **平台层主线程专属。** 所有 `platform.*` 调用与回调都在主线程;后端内部不需要锁。应用状态、服务注册、窗口和控件操作沿用主线程约束。跨线程结果通过 `postMain` 投递。
 3. **Nim 惯用,而非 Go 仿写。** 公开 API 用 camelCase、`ref object`、`proc` 闭包、异常;不照搬 `context.Context`、goroutine、反射。
 4. **线程边界只传值。** 跨线程只传 JSON 字符串、值类型或 `Isolate[T]`;不共享可变 `ref` 图。IPC 天然满足这一点。
 5. **系统能力优先。** 文本用 CoreText/DirectWrite/Pango,窗口用 AppKit/Win32/GTK,GPU 用 Metal/D3D11/GL;不重写平台引擎。
@@ -21,6 +23,8 @@
 ---
 
 ## 2. 仓库与模块布局
+
+当前源码入口为 [公开门面](../src/nimi.nim)、[平台契约](../src/nimi/platform/contract.nim)、[原生 UI](../src/nimi/ui/context.nim)、[IPC](../src/nimi/core/ipc.nim) 及 [CLI](../src/nimi/cli.nim)。以下目录树包含当时规划的模块。
 
 ```text
 nimi/

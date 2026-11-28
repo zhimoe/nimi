@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <title>Nimi — 用 Nim 构建原生桌面应用</title>
-  <meta name="description" content="Nimi 是 MyGo 的 Nim 重实现:系统 WebView + 类型化 IPC + 自绘原生 UI + 一套桌面 API。当前为三平台 Preview。">
+  <meta name="description" content="用 Nim 构建 macOS、Windows、Linux 桌面应用。系统 WebView、类型化 IPC、自绘原生 UI 和平台打包。">
   <meta property="og:title" content="Nimi — 用 Nim 构建原生桌面应用">
   <meta property="og:description" content="系统 WebView + 类型化 IPC + 自绘原生 UI。macOS、Windows、Linux Preview。">
   <meta property="og:type" content="website">
@@ -51,9 +51,7 @@
           <p class="eyebrow"><span class="pulse"></span> Nim 2.4 · Preview · macOS / Windows / Linux</p>
           <h1>用 <em>Nim</em> 构建<br>原生桌面应用。</h1>
           <p class="lede">
-            Nimi 是 MyGo 的 Nim 重实现:系统 WebView + 类型化 IPC +
-            自绘原生 UI + 一套桌面 API。编译为原生代码,没有运行时 VM,
-            也没有 cgo。
+            Nimi 将 MyGo 的桌面开发模型带到 Nim。用系统 WebView 或自绘原生 UI 构建界面，通过同一套核心操作窗口、菜单和事件。
           </p>
           <div class="actions">
             <a class="button primary" href="docs.html">开始使用</a>
@@ -61,12 +59,6 @@
               在 GitHub 查看 <span aria-hidden="true">↗</span>
             </a>
           </div>
-          <ul class="hero-facts" aria-label="项目要点">
-            <li>三平台 Preview</li>
-            <li>编译为 C / ARC</li>
-            <li>系统 WebView + 原生 UI</li>
-            <li>类型化 JSON IPC</li>
-          </ul>
         </div>
 
         <div class="hero-code reveal" role="group" aria-label="Nimi 代码示例">
@@ -86,6 +78,15 @@
 
 <span class="kw">let</span> greeter = Greeter()
 bindService(greeter, greet)
+
+<span class="kw">const</span> page = <span class="st">"""
+&lt;p id="greeting"&gt;&lt;/p&gt;
+&lt;script&gt;
+  window.nimi.call("Greeter.greet", "Nim").then(text =&gt; {
+    document.getElementById("greeting").textContent = text;
+  });
+&lt;/script&gt;
+"""</span>
 
 app.whenReady(<span class="kw">proc</span>() =
   <span class="kw">discard</span> newWindow(WindowOptions(
@@ -107,7 +108,7 @@ app.run()</code></pre>
     <section class="demo-section" id="demo">
       <div class="wrap">
         <div class="section-head reveal">
-          <p class="eyebrow">真实应用,不是组件画廊</p>
+          <p class="eyebrow">WebView 示例</p>
           <h2>Nimi Notes<span class="accent">.</span></h2>
           <p>
             一个本地优先的 Markdown 笔记应用:侧边栏、搜索、实时预览、自动保存,
@@ -155,7 +156,6 @@ app.run()</code></pre>
 
         <div class="card-grid">
           <article class="feature-card reveal">
-            <span class="card-index">01</span>
             <h3>没有 VM,也没有 cgo</h3>
             <p>
               Nim 编译为 C,再交给系统编译器生成原生二进制。直接调用 ObjC runtime、
@@ -163,7 +163,6 @@ app.run()</code></pre>
             </p>
           </article>
           <article class="feature-card reveal">
-            <span class="card-index">02</span>
             <h3>确定性的内存模型</h3>
             <p>
               使用 <code>--mm:atomicArc</code>:引用计数 + 原子操作,避免 GC 停顿。
@@ -171,7 +170,6 @@ app.run()</code></pre>
             </p>
           </article>
           <article class="feature-card reveal">
-            <span class="card-index">03</span>
             <h3>小二进制,快启动</h3>
             <p>
               Nimi 应用没有 Chromium/Node 运行时。WebView 来自系统,
@@ -179,7 +177,6 @@ app.run()</code></pre>
             </p>
           </article>
           <article class="feature-card reveal">
-            <span class="card-index">04</span>
             <h3>宏生成类型化 IPC</h3>
             <p>
               <code>bindService(instance, procs...)</code> 在编译期生成 JSON 参数解码、
@@ -187,7 +184,6 @@ app.run()</code></pre>
             </p>
           </article>
           <article class="feature-card reveal">
-            <span class="card-index">05</span>
             <h3>系统 API 直接可达</h3>
             <p>
               NSMenu、NSOpenPanel、NSPasteboard、WKWebView、CoreText 都是普通 FFI 调用。
@@ -195,11 +191,10 @@ app.run()</code></pre>
             </p>
           </article>
           <article class="feature-card reveal">
-            <span class="card-index">06</span>
             <h3>同一套平台契约</h3>
             <p>
-              core 层只依赖 <code>platform/contract</code>。macOS 先落地,
-              Windows(Win32/WebView2/D3D11)和 Linux(GTK3/WebKitGTK/GL)沿用同一模型。
+              核心逻辑通过 <code>platform/contract</code> 调用 AppKit、Win32 或 GTK3。
+              原生绘制分别使用 CoreGraphics、GDI 和 Cairo。
             </p>
           </article>
         </div>
@@ -221,12 +216,11 @@ app.run()</code></pre>
           <article class="bento-card wide reveal">
             <div class="bento-head">
               <span class="tag">WebView-first</span>
-              <h3>系统 WebView,隔离的 Bridge</h3>
+              <h3>系统 WebView 与类型化 IPC</h3>
             </div>
             <p>
-              WKWebView 承载页面,Nim 通过注入的 bridge 处理
-              <code>window.nimi.call</code>。每个窗口有独立 secret/token,
-              页面只能调用显式绑定过的服务。
+              WKWebView、WebView2 或 WebKitGTK 承载应用页面。
+              <code>window.nimi.call</code> 调用显式注册的 Nim 服务，耗时工作可交给后台池。
             </p>
             <div class="mini-code"><code>page → secret + token → JSON dispatch → Nim proc</code></div>
           </article>
@@ -237,8 +231,8 @@ app.run()</code></pre>
               <h3>自绘,不依赖 HTML</h3>
             </div>
             <p>
-              Column/Row 布局、CoreText 换行、Checkbox/Slider/TextInput 等控件,
-              以及命中测试、焦点、Tab/Enter、离屏 PNG 和 Tester。
+              Column/Row 布局、TextInput/TextArea、滚动与固定行高虚拟列表，
+              支持命中测试、键盘焦点和系统输入法。
             </p>
           </article>
 
@@ -248,19 +242,20 @@ app.run()</code></pre>
               <h3>菜单、对话框、剪贴板</h3>
             </div>
             <p>
-              NSMenu 角色与快捷键、NSOpenPanel/NSSavePanel/NSAlert、
-              文本/HTML 剪贴板,以及 Finder 可启动的 <code>.app</code>。
+              系统菜单、打开和保存对话框、文本/HTML 剪贴板。
+              托盘、通知、全局快捷键和媒体控制的行为取决于平台。
             </p>
           </article>
 
           <article class="bento-card reveal">
             <div class="bento-head">
               <span class="tag">Tooling</span>
-              <h3>从模板到 DMG</h3>
+              <h3>从模板到平台构建</h3>
             </div>
             <p>
               <code>nimi init / generate / dev / build / doctor</code>。
-              开发时源码变更自动重启;构建时生成 Info.plist、icns、签名和 DMG。
+              Nim 源码变更可自动重启应用。构建命令输出 macOS .app/DMG、
+              Windows exe 或 Linux .desktop/.deb。
             </p>
           </article>
 
@@ -337,16 +332,15 @@ app.run()</code></pre>
           <p class="eyebrow">Preview</p>
           <h2>三平台预览,持续迭代。</h2>
           <p>
-            Nimi 现在是开发者预览版。系统 WebView、类型化 IPC、自绘原生 UI 和
-            桌面 API 已在 macOS、Windows、Linux 落地;API 仍可能调整。
+            Nimi 现在是开发者预览版，公开 API 仍可能调整。系统 WebView、类型化 IPC、自绘原生 UI 和
+            桌面 API 已在 macOS、Windows、Linux 落地。
           </p>
-          <a class="text-link" href="https://github.com/zhimoe/nimi/blob/main/docs/backlog/README.md" target="_blank" rel="noreferrer">查看项目 backlog ↗</a>
+          <a class="text-link" href="docs.html#platforms">查看平台依赖、验证和路线图 ↗</a>
         </div>
         <ol class="milestones reveal">
           <li class="done"><span>macOS</span><div><strong>AppKit + WKWebView</strong><small>CoreGraphics/CoreText、桌面 API、.app / DMG</small></div></li>
           <li class="done"><span>Windows</span><div><strong>Win32 + WebView2</strong><small>GDI、原生菜单/IME/托盘、exe / manifest</small></div></li>
           <li class="done"><span>Linux</span><div><strong>GTK3 + WebKitGTK</strong><small>Cairo/Pango、桌面 API、.deb / CI</small></div></li>
-          <li class="preview"><span>Preview</span><div><strong>API 可能调整</strong><small>平台差异与后续计划在 backlog 维护</small></div></li>
         </ol>
       </div>
     </section>
@@ -356,23 +350,21 @@ app.run()</code></pre>
         <div class="section-head reveal">
           <p class="eyebrow">Quick start</p>
           <h2>几分钟内跑起来。</h2>
-          <p>需要 Nim 2.4+。macOS 12+ / Xcode CLT,Windows WebView2 Runtime,Linux GTK3 / WebKitGTK。</p>
-          <a class="text-link" href="docs.html">查看完整文档 ↗</a>
+          <p>需要 Nim 2.4+ 和 C 工具链。运行网页示例前，请检查对应平台的 WebView 依赖。</p>
+          <a class="text-link" href="docs.html#quickstart">查看 Linux 依赖与 Windows PowerShell 命令 ↗</a>
         </div>
         <div class="terminal reveal">
           <div class="terminal-bar">
             <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
-            <span>zsh</span>
+            <span>macOS / Linux</span>
           </div>
-          <pre><code><span class="prompt">$</span> nim c -o:nimi src/nimi/cli.nim
-<span class="prompt">$</span> ./nimi init my-app
-<span class="prompt">$</span> ./nimi dev my-app
+          <pre><code><span class="prompt">$</span> git clone https://github.com/zhimoe/nimi.git
+<span class="prompt">$</span> cd nimi
+<span class="prompt">$</span> nim c -o:nimi src/nimi/cli.nim
+<span class="prompt">$</span> ./nimi dev examples/hello
 
-<span class="comment"># 原生 UI 示例:Markdown 笔记应用</span>
-<span class="prompt">$</span> nim c -r --path:src examples/notes/main.nim
-
-<span class="comment"># 打包 .app + DMG</span>
-<span class="prompt">$</span> ./nimi build examples/notes</code></pre>
+<span class="comment"># 原生 UI：计数器</span>
+<span class="prompt">$</span> nim c -r --path:src examples/counter-native/main.nim</code></pre>
         </div>
       </div>
     </section>

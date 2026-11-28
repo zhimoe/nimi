@@ -1,11 +1,15 @@
 # Nimi 设计文档
 
-> 状态:持续更新 · 日期:2026-11-22
->
-> Preview 阶段的版本范围、平台差距与后续计划集中在 [backlog](backlog/README.md)；
-> 本索引保留设计、实现记录与验证文档。
+> 更新于 2026-11-24。macOS、Windows、Linux 均已进入 Preview。
 
-## 索引
+| 需求 | 入口 |
+|---|---|
+| 运行第一个应用或构建安装产物 | [快速开始](../README.md#快速开始)、[示例与验证](../examples/README.md)、[官网文档](https://nimi.zhi.moe/docs.html) |
+| 查询平台能力和验收状态 | [开发基线](28-remediation-status.md)、[macOS](14-macos-desktop-apis.md)、[Windows](32-windows-framework.md)、[Linux](33-linux-framework.md) |
+| 了解当前优先级和任务 | [路线图](05-roadmap.md#当前执行计划)、[Backlog](backlog/README.md) |
+| 开发 WebView / 原生 UI | [异步 IPC](29-async-ipc.md)、[原生 UI](03-native-ui.md)、[输入法](24-m6-ime.md) |
+
+## 完整索引
 
 | 文档 | 内容 | 适合谁 |
 |---|---|---|
@@ -14,7 +18,7 @@
 | [02 macOS 后端](02-macos-backend.md) | ObjC/AppKit/WKWebView/Surface/Metal/CoreText/打包 | macOS 后端 |
 | [03 原生 UI](03-native-ui.md) | Element/arena、布局、scene、文本、输入、控件、Tester | UI/渲染 |
 | [04 工具链与 IPC](04-tooling-and-ipc.md) | CLI、配置、模板、TS 生成、打包、更新、插件 | 工具链 |
-| [05 实施路线图](05-roadmap.md) | M0–M10、任务、验收、估算、Gate | 项目管理 |
+| [05 实施路线图](05-roadmap.md) | 当前执行计划、验收条件和 M0–M10 历史工作包 | 项目管理 |
 | [06 Windows/Linux](06-windows-linux.md) | Win32/WebView2/D3D11、GTK3/WebKitGTK/GL、交叉编译 | 平台后端 |
 | [07 API 映射](07-api-mapping.md) | MyGo → Nimi 命名/语义/API 对照 | 迁移者、API 设计 |
 | [08 M1 实现状态](08-m1-notes.md) | 已实现内容、崩溃修复、已知限制、下一步 | 实现者、评审者 |
@@ -37,7 +41,7 @@
 | [25 碎纸效果](25-shredder.md) | MyGo shader 来源、Nim Verlet 物理、WebGL 纸带渲染、限制 | 实现者、评审者 |
 | [26 原生碎纸](26-native-shred.md) | NSTimer 帧驱动、scene 纹理四边形、Metal mask/LayerEffect | 实现者、评审者 |
 | [27 项目回检](27-project-review.md) | 2026-11-05 架构/文档/测试回检、已修复项与剩余债务 | 实现者、评审者 |
-| [28 整改基线](28-remediation-status.md) | 当前限制、优先级、验收门槛;整改与音乐进展;入口见 backlog | 所有人 |
+| [28 整改基线](28-remediation-status.md) | 平台能力矩阵、CI 与实机验收、共享契约、音乐集成 | 所有人 |
 | [29 异步 IPC](29-async-ipc.md) | UI 线程同步 dispatch、后台工作池、背压与关闭 | 实现者、评审者 |
 | [30 MyGo 能力对照](30-mygo-alignment.md) | v0.10.0/本地快照能力差异、计划校准、examples 回检 | 决策者、评审者 |
 | [31 Windows 环境变量工具](31-windows-environment.md) | EnvMan 对等界面、HKCU/系统变量、导入导出 | 实现者、评审者 |
@@ -45,22 +49,11 @@
 | [33 Linux 后端](33-linux-framework.md) | GTK3/Cairo/Pango、WebKitGTK、桌面 API、测试与未实现项 | 实现者、评审者 |
 | [Backlog](backlog/README.md) | Preview 版本范围、平台差距、里程碑状态与后续版本 | 所有人 |
 
-## 阅读顺序
+## 阅读说明
 
-1. **所有人**:00 → 01 → 05。
-2. **macOS 后端**:02 + `spikes/`。
-3. **UI/渲染**:03 + 02 的渲染/文本部分。
-4. **工具链**:04 + 01 §7/§9。
-5. **Windows/Linux**:06 + 01/02。
-6. **Preview 未完成项**:[backlog](backlog/README.md)。
-6. **API 迁移**:07。
-
-## 约定
-
-- "必须" = 设计约束;"建议" = 推荐但可调整;"待定" = 需要评审决定。
-- 工期为规划量级(±50%),不是承诺。
-- 所有原型结果来自 `spikes/` 的实际运行,命令见根 README。
-- 参考仓库 `mygo/` 的稳定基线是 MyGo v0.10.0(`ebde9399`);当前能力盘点快照是 `9b0ae9ef`(2026-11-22)。行数与能力差异见 [30](30-mygo-alignment.md);旧文档中的 v0.8.3 条目保留为历史设计基线。
+- 00–04、06–07 包含设计方案。引用当前 API 时请核对源码与开发基线。
+- 实现切片保留当时的决策和日志；实际平台差异及近期任务以开发基线与路线图为入口。
+- 原型运行方法见 [spikes](../spikes/README.md)。MyGo 参考版本见 [能力对照](30-mygo-alignment.md)。
 
 ## 变更
 
@@ -78,9 +71,4 @@
 | 2026-11-22 | Linux 第一切片：GTK3/Cairo/Pango、WebKitGTK、桌面 API、Linux CI;新增 33 |
 | 2026-11-22 | macOS 增量：SMAppService/LaunchAgent 登录项、首次激活点击、MyGo `9b0ae9ef` 回检;同步 README、00/02/03/04/05/07/11/14/18/24/28/30/32/33 的状态、规模与测试计数 |
 | 2026-11-22 | 官网与 README 改为三平台 Preview;未完成项集中到 `docs/backlog/`，新增 backlog 索引与平台清单 |
-
-当前整改和开发入口：[28 整改基线](28-remediation-status.md)。
-
-异步 IPC 说明：[29 异步 IPC 与工作池](29-async-ipc.md)。
-
-音乐应用集成入口：[Nimi Music](../examples/music/README.md)。
+| 2026-11-24 | 全量回检文档、官网和计划，补充跨平台快速开始、实现矩阵与 CI 证据。 |

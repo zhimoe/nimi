@@ -1,5 +1,7 @@
 # M6 切片:ScrollView
 
+> 普通 ScrollView 提供垂直滚动，TextArea 有独立的横向/纵向编辑视口。固定行高虚拟列表与程序化定位已实现。
+
 > 日期:2026-11-05 · 对应 M6 滚动/裁剪
 
 ---
@@ -60,16 +62,15 @@ NIMI_SMOKE=scroll nim c -r --path:src examples/widgets-native/main.nim
 - 没有水平滚动条、惯性/回弹、滚动条 hover 状态
 - 没有 `scrollTo`/Home/End 到内容边界
 - 没有嵌套滚动的优先级策略(当前取最深区域)
-- 没有 scroll anchoring/虚拟列表;40 行全量布局
-- TextArea 自身还没有内部滚动;需放在 ScrollView 或后续做编辑器滚动
+- `ScrollView` 构建全部子项。固定行高长列表可用 `virtualList`。
+- TextArea 使用独立的 [内部滚动](19-m6-textarea.md)。
 - 滚轮方向依赖自然滚动设置;需要实际设备确认
 
 ## 5. 下一步
 
 1. 滚动位置/焦点自动跟随,滚动条 hover/更细粒度交互。
 2. 水平滚动、`scrollTo`、Home/End 到内容边界。
-3. 虚拟列表/布局缓存,支持大列表。
-4. TextArea 内部滚动与 caret 自动可见。
+3. 可变行高虚拟列表、布局缓存与滚动锚点。
 
 ## 2026-11-06：固定行高虚拟列表
 

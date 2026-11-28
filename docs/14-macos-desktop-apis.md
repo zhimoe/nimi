@@ -1,5 +1,7 @@
 # macOS 桌面 API(M4 批次)
 
+> 2026-11-24 复核。当前 macOS 桌面 API 包括登录项、首次激活点击、上报播放状态和媒体命令。系统审批、真实媒体键和签名包验收列在 [macOS backlog](backlog/macos.md)。
+
 > 日期:2026-11-05 · 对应 M4 剩余项
 >
 > 2026-11-22：本地 MyGo 快照更新到 `9b0ae9ef`（v0.10.0+121）。其桌面面还包括 Power、Network/Proxy、Secrets、Downloads、权限、拖放、最近文档、Jump List、窗口状态、vibrancy、SetInputRegion 等。本文只记录 Nimi 已实现切片，差距与优先级见 [MyGo 能力对照](30-mygo-alignment.md)。

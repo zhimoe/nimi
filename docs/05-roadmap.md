@@ -1,13 +1,18 @@
 # 实施路线图
 
-> 2026-11-06：当前执行顺序调整为 **正确性 → 异步核心 → 虚拟列表/缓存/音频 → macOS 集成 → 发布验收**，见 [整改与开发基线](28-remediation-status.md)。下列 M0–M10 保留为范围分解；旧工期不是剩余排期，切片落地不代表整项验收完成。
->
-> 2026-11-22：Preview 未完成项与平台差距的集中入口是 [backlog](backlog/README.md)；本文保留完整范围与验收标准。
->
-> 2026-11-22：本地 MyGo 快照更新到 `9b0ae9ef`（v0.10.0+121）。其能力面仍远超 Nimi 已实现范围（编辑器/富文本/图表/视频、原生模块、完整音频引擎、自动化、三平台分发等）；这些进入 M6/M10/P2，不改变 1.0 的 macOS-first 范围。详见 [MyGo 能力对照](30-mygo-alignment.md)。
+> 更新于 2026-11-24。当前基线是 macOS、Windows、Linux 三平台 Preview。
+> 本页前半记录近期执行顺序和验收条件。M0–M10 的工作包保留最初的设计范围、历史工期和当时的验收记录。
 
-> 状态:草案 · 日期:2026-11-04 · 关联:[可行性](00-feasibility.md)、[架构](01-architecture.md)、[macOS 后端](02-macos-backend.md)、[原生 UI](03-native-ui.md)
-> 估算口径:1 名资深工程师全职 + AI 辅助;复用 MyGo 的 JS/协议/模板/示例;不移植着色器编译器;系统文本引擎。工期为规划量级(±50%)。
+## 当前执行计划
+
+| 顺序 | 工作 | 通过条件 |
+|---|---|---|
+| 1 | 核实并恢复 macOS CI，补齐三平台 Preview 验收记录 | macOS 测试与示例 DMG 构建通过。Windows 与 Linux 记录实际运行环境，分别复核真实输入法、窗口/DPI、托盘和快捷键。 |
+| 2 | 完善后台 IPC 和窗口关闭路径 | 慢调用不阻塞 UI。流式交付的背压、完成、页面离开与取消有自动化用例。 |
+| 3 | 补齐高频桌面能力和音乐示例体验 | 按平台复核通知交互、拖放和媒体键。音乐验证缓存清理、完整下载与后续流式播放的行为。 |
+| 4 | 验证分发与安装 | macOS 在干净设备验证签名、公证和 DMG。Windows 与 Linux 分别复核打包产物的安装或启动，记录 WebView 运行时与桌面环境条件。 |
+
+平台任务见 [Backlog](backlog/README.md)，实现与验证证据见 [开发基线](28-remediation-status.md)。MyGo 的编辑器、原生模块和浏览器后端等能力仍在 [能力对照](30-mygo-alignment.md) 中跟踪。
 
 ---
 
@@ -24,7 +29,7 @@
 
 ## 1. 里程碑总览
 
-| 里程碑 | 内容 | 工期 | 累计 | 状态 |
+| 里程碑 | 内容 | 原始估算 | 原始累计估算 | 已实现范围 |
 |---|---|---|---:|---|
 | M0 | 可行性原型 | 1–2 天 | 1–2 天 | ✅ 已完成 |
 | M1 | 仓库骨架 + core + macOS WebView + IPC + `hello` | 6–10 周 | 2–3 月 | 切片(WebView/IPC/TS/CLI 已跑通;Channel/preload/下载权限未完成) |
@@ -32,13 +37,13 @@
 | M3 | 控件/布局/滚动 + Metal 起步 + `gallery` 子集 | 10–16 周 | 7–10 月 | 切片(控件/ScrollView/Image/纹理四边形/NSTimer;Metal 专用效果/其余控件未完成) |
 | M4 | 桌面 API:菜单/托盘/通知/快捷键/对话框/剪贴板/登录项 | 8–12 周 | 9–13 月 | 切片(macOS 桌面 API 大部分;登录项与首次激活点击已落地;剪贴板图片/通知点击/托盘图标未完成) |
 | M5 | 文档/会话/Cookie/协议/文件监视/深链/单实例 | 8–12 周 | 11–16 月 | 切片(协议/FileServer/深链/Session/FSEvents/Cookie/文档;Linux 单实例已落地;其余未开始) |
-| M6 | 文本编辑/IME/可访问性 + Metal 完整 | 12–20 周 | 14–21 月 | 切片(TextInput/TextArea 含内部滚动/滚动条/选择/剪贴板/Undo/ScrollView/滚动条/IME;通用 Metal/可访问性/虚拟列表未开始) |
+| M6 | 文本编辑/IME/可访问性 + Metal 完整 | 12–20 周 | 14–21 月 | Preview（TextInput/TextArea、grapheme 编辑、IME、滚动及固定行高虚拟列表已实现） |
 | M7 | 打包/签名/公证/DMG/更新/CI | 6–10 周 | 16–23 月 | 切片(.app/DMG/签名/图标/CI 构建;更新/release/公证验证未完成) |
 | M8 | Windows:Win32 + WebView2 + D3D11 + 打包 | 4–8 月 | 20–31 月 | 切片(Win32/WebView2/GDI/菜单/IME/打包已落地;D3D11/实机验收待补) |
 | M9 | Linux:GTK3 + WebKitGTK + GL + 打包 | 4–8 月 | 24–39 月 | 切片(GTK3/WebKitGTK/Cairo/Pango/桌面 API/.deb 已落地;GL/ATK/Wayland 待补) |
 | M10 | 插件/i18n/音频/自动化/浏览器后端 | 持续 | | |
 
-> "累计"从 M1 开始按单人全职估算。3 人并行可压缩 macOS 阶段约 30–40%。
+> 表内工期为初稿按单人全职估算的量级。当前优先级见页首。
 
 ---
 
@@ -64,7 +69,7 @@
 
 **目标**:`examples/hello` 的 Nim 版。页面调用 Nim `Greeter.greet`,返回字符串;`nimi generate` 输出 TS;`nimi dev` 可启动;`nimi build` 产出 `.app`。
 
-**当前状态(2026-11-07)**:核心垂直切片已跑通。已实现 AppKit 窗口、WKWebView、bridge 注入、JS→Nim JSON 调用、`bindService` 宏、TS 生成、IPC secret/token、页面侧事件、`init/generate/dev/build/doctor` CLI、dev 文件监听/自动重启、`.app` 打包、单元测试。后台 IPC 已有显式服务注册、有界工作池和主线程结果回投，见 [异步 IPC](29-async-ipc.md)。50 次连续调用 + 关窗退出压测通过。剩余项:页面侧 Channel、`Eval` 返回值、trusted/untrusted 细分、更多 IPC 类型黄金测试。详见 [M1 实现状态](08-m1-notes.md)。
+**切片记录（2026-11-07）**:核心垂直切片已跑通。已实现 AppKit 窗口、WKWebView、bridge 注入、JS→Nim JSON 调用、`bindService` 宏、TS 生成、IPC secret/token、页面侧事件、`init/generate/dev/build/doctor` CLI、dev 文件监听/自动重启、`.app` 打包、单元测试。后台 IPC 已有显式服务注册、有界工作池和主线程结果回投，见 [异步 IPC](29-async-ipc.md)。50 次连续调用 + 关窗退出压测通过。剩余项:页面侧 Channel、`Eval` 返回值、trusted/untrusted 细分、更多 IPC 类型黄金测试。详见 [M1 实现状态](08-m1-notes.md)。
 
 ### 3.1 工作包
 
@@ -176,7 +181,7 @@
 
 **目标**:`examples/counter-native` 运行;点击/键盘改变数字;headless Tester 通过;CPU 渲染。
 
-**当前状态(2026-11-04)**:核心切片已跑通。`NSView` Surface、`drawRect:` → CGContext、CoreGraphics/CoreText 渲染、CoreText 真实文本测量、rune 级换行、Column/Row 布局、Text/Button、命中测试、鼠标事件、方向键、Tab/Enter 焦点、`ui.Tester`、离屏 PNG、`Window.invalidate()` 链路可用;`examples/counter-native` 和 `examples/widgets-native` 已实际截图验证,鼠标/键盘/焦点的坐标与 AppKit NSEvent 测试通过;`tests/test_ui.nim`/`test_render.nim` 无窗口测试通过。剩余项:ellipsis/maxLines、场景/像素 golden、TextInput、完整焦点模型、Scroll/List、Metal。详见 [M2 实现状态](10-m2-notes.md)。
+**切片记录（2026-11-04）**:核心切片已跑通。`NSView` Surface、`drawRect:` → CGContext、CoreGraphics/CoreText 渲染、CoreText 真实文本测量、rune 级换行、Column/Row 布局、Text/Button、命中测试、鼠标事件、方向键、Tab/Enter 焦点、`ui.Tester`、离屏 PNG、`Window.invalidate()` 链路可用;`examples/counter-native` 和 `examples/widgets-native` 已实际截图验证,鼠标/键盘/焦点的坐标与 AppKit NSEvent 测试通过;`tests/test_ui.nim`/`test_render.nim` 无窗口测试通过。剩余项:ellipsis/maxLines、场景/像素 golden、TextInput、完整焦点模型、Scroll/List、Metal。详见 [M2 实现状态](10-m2-notes.md)。
 
 ### 4.1 工作包
 
@@ -263,7 +268,7 @@
 
 **目标**:`gallery` 子集;常用表单/列表/弹层;60fps;Metal 渲染基础。
 
-**当前状态(2026-11-09)**:已新增 Checkbox/Switch/Slider/Progress/Divider、Image、ScrollView、
+**切片记录（2026-11-09）**:已新增 Checkbox/Switch/Slider/Progress/Divider、Image、ScrollView、
 固定行高虚拟列表、纹理四边形、`Window.startAnimation` 帧驱动,以及碎纸专用 Metal
 mask/LayerEffect 原型;List/Table/Tabs/Select、通用 Metal scene 合成器仍未开始。
 详见 [M3–M7 状态](11-m3-m7-status.md) 与 [原生碎纸](26-native-shred.md)。
@@ -334,7 +339,7 @@ mask/LayerEffect 原型;List/Table/Tabs/Select、通用 Metal scene 合成器仍
 
 ## 8. M6:文本编辑、IME、可访问性、Metal 完整(12–20 周)
 
-**当前状态(2026-11-05)**:单行 TextInput、基础 TextArea、modifier keys、选择、Cmd+A/C/X/V 剪贴板、Undo/Redo、ScrollView/裁剪/滚动条、opt-in IME(NSTextInputClient)、双击/三击选择、TextArea 内部滚动已实现;`form-native` 的 Notes 参与保存加载。真实 IME 验证/可访问性/通用 Metal scene 合成/虚拟列表未开始,见 [基础 TextArea](19-m6-textarea.md)、[选择与剪贴板](20-m6-selection.md)、[ScrollView](21-m6-scrollview.md) 与 [IME](24-m6-ime.md)。
+**Preview 实现**。TextInput/TextArea 提供 grapheme 编辑、选择、剪贴板、撤销、滚动和 IME。固定行高虚拟列表已用于 Music。真实系统输入法、无障碍与通用 Metal 合成仍待推进。详见 [TextArea](19-m6-textarea.md)、[ScrollView](21-m6-scrollview.md) 与 [IME](24-m6-ime.md)。
 
 - TextInput/TextArea 完整:selection/undo/redo/密码/剪贴板/多行滚动。
 - IME:NSTextInputClient 完整;中文/日文/韩文/死键/emoji;候选窗定位。
@@ -356,7 +361,7 @@ mask/LayerEffect 原型;List/Table/Tabs/Select、通用 Metal scene 合成器仍
 
 ## 9. M7:打包、签名、更新、CI(6–10 周)
 
-**当前状态(2026-11-05)**:`.app`、DMG、ad-hoc/Developer ID 签名配置、entitlements、图标(icns)、notarize 钩子、macOS CI 构建/测试/artifact 已实现;DMG 已 `hdiutil verify` 并挂载验证。自动更新、release workflow、实际公证未开始,见 [macOS CI](18-macos-ci.md)。
+**Preview 构建**。CLI 已支持 `.app`、DMG、ad-hoc/Developer ID 签名配置、entitlements、图标和公证钩子。最近一次 Actions 的 DMG 校验失败，详见 [macOS CI](18-macos-ci.md)。签名公证实测、自动更新和正式发布 workflow 仍待完成。
 
 - `.app` 完整:Info.plist/本地化/图标/Assets.car(可选)。
 - Universal binary(arm64 + amd64)。
@@ -452,7 +457,7 @@ mask/LayerEffect 原型;List/Table/Tabs/Select、通用 Metal scene 合成器仍
 
 ---
 
-## 14. 验收与发布标准
+## 14. 原始验收与发布目标
 
 ### 14.1 每个里程碑的 Definition of Done
 
@@ -463,7 +468,7 @@ mask/LayerEffect 原型;List/Table/Tabs/Select、通用 Metal scene 合成器仍
 - [ ] 二进制大小/性能记录。
 - [ ] 代码评审通过。
 
-### 14.2 1.0 发布标准(建议)
+### 14.2 历史提案中的 1.0 发布标准
 
 - macOS 12+;arm64 + amd64。
 - WebView + 原生 UI 均可运行。
@@ -475,7 +480,7 @@ mask/LayerEffect 原型;List/Table/Tabs/Select、通用 Metal scene 合成器仍
 - 8–12 个示例通过。
 - 无已知数据丢失/安全漏洞。
 
-### 14.3 版本策略
+### 14.3 历史提案中的版本策略
 
 - `0.x`:M1–M6,API 可能破坏;文档标注。
 - `1.0`:M7 完成,macOS 可用;Windows/Linux 标注 preview。
@@ -490,9 +495,3 @@ mask/LayerEffect 原型;List/Table/Tabs/Select、通用 Metal scene 合成器仍
 - 每季度对照 `docs/architecture.md` 和 `internal/platform` 变更,更新本设计;当前差异见 [30](30-mygo-alignment.md)。
 - 协议/TS 生成变更优先同步;平台细节按需。
 - 保留差异清单(`01-architecture.md` §10),避免无意识分叉。
-
----
-
-## 16. 当前下一步
-
-按 [整改基线](28-remediation-status.md) 的验收门槛执行。grapheme 编辑、IME UTF-16 range、窗口关闭失效、任务取消/超时、固定行高虚拟列表、缓存条目上限、本地音频与队列会话、Now Playing/artwork、macOS 登录项与窗口首次激活点击均已落地并有自动测试；后台 IPC 已有工作池，Linux 已有独立后端。真实拼音/日文输入法、媒体键和登录项系统审批仍需人工验收。下一阶段是后台 IPC 的流式返回、音乐缓存管理与流式播放、通知/拖放、macOS 发布验证。实际性能与音频原型完成后重新排期；不以原型通过推算完整框架交付日期。

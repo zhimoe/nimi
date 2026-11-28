@@ -1,64 +1,38 @@
 # macOS CI 与构建产物
 
-> 2026-11-06：整改、当前限制与验收级别见 [最新基线](28-remediation-status.md)。历史验证记录不代表完整能力已经验收。
+> 更新于 2026-11-24。覆盖 M7 中的自动化测试和示例打包。
 
-> 日期:2026-11-05 · 对应 M7 CI 部分
+## 工作流
 
----
+[macOS CI](../.github/workflows/macos.yml) 在 `macos-15` runner 上安装 Nim 2.4.0，运行
+`./scripts/test.sh`，编译 CLI，并构建 `desktop-native`、`protocol-native`、
+`notes`、`music`、`shred-native`、`shred-metal` 的 `.app` 与 DMG。
+DMG 通过 `hdiutil verify` 后作为 `nimi-demo-dmgs` 上传，保留 7 天。
 
-## 1. 已完成
+CLI 按构建架构使用 `dist/darwin-arm64/` 或 `dist/darwin-amd64/`。当前 workflow
+使用单一 runner。发布版双架构、Developer ID 签名、公证与升级验证见 [macOS backlog](backlog/macos.md)。
 
-`.github/workflows/macos.yml`:
+## 验证结果
 
-- 在 `macos-14` runner 上安装 Nim 2.4.0
-- 运行 `./scripts/test.sh`
-- 编译 CLI
-- 构建并校验五个示例的 `.app` + DMG:
-  - `desktop-native`
-  - `protocol-native`
-  - `notes`
-  - `shred-native`
-  - `shred-metal`
-- 上传 DMG artifact(保留 7 天)
-- 支持 `workflow_dispatch`、`push`、`pull_request`
+- 2026-11-24，本地 macOS arm64 / Nim 2.4.2 全量测试通过，共 192 项。CI 清单中的六个示例均重新构建并通过 DMG 校验。
+- 2026-11-22，GitHub Actions 的测试与 CLI 构建通过。示例构建阶段执行
+  `hdiutil verify` 检查 `nimi-protocol-0.1.0.dmg` 时返回 `Resource temporarily unavailable`，随后跳过 DMG 上传。
+  [失败运行](https://github.com/zhimoe/nimi/actions/runs/44978676441)
+- 最近一次完成 DMG 校验和上传的运行发生在此次回归之前。
+  [成功运行](https://github.com/zhimoe/nimi/actions/runs/44969596878)
 
-另外,`nimi build` 的输出目录现在按真实 CPU 架构生成:
-
-```text
-examples/.../dist/darwin-arm64/
-examples/.../dist/darwin-amd64/
-```
-
-## 2. 验证
-
-本地等价命令:
+## 本地复核
 
 ```sh
 ./scripts/test.sh
 nim c -d:release --hints:off -o:nimi src/nimi/cli.nim
-./nimi build examples/desktop-native
-./nimi build examples/protocol-native
-./nimi build examples/notes
-./nimi build examples/shred-native
-./nimi build examples/shred-metal
-for dmg in examples/*/dist/*/*.dmg; do hdiutil verify "$dmg"; done
+
+for example in desktop-native protocol-native notes music shred-native shred-metal; do
+  ./nimi build "examples/$example" || exit
+done
+for dmg in examples/*/dist/darwin-*/*.dmg; do
+  hdiutil verify "$dmg" || exit
+done
 ```
 
-GitHub Actions 结果在仓库 **Actions → macOS CI** 查看。
-
-2026-11-22 本地等价运行：macOS 套件 192 个测试用例通过；新增的 `test_window_options.nim` 与 `test_darwin_login.nim` 随 `scripts/test.sh` 进入 CI。Linux 套件在 Ubuntu 24.04 容器中 200 个用例通过，由独立的 `linux.yml` 运行。
-
-## 3. 已知限制
-
-- 没有 release 发布 workflow(标签触发、上传 GitHub Release、更新 feed)
-- 没有真正的 Developer ID 签名/公证(需要 secrets)
-- 没有缓存 Nim 编译产物/ccache
-- macOS runner 的架构取决于 GitHub 提供的 `macos-14` 镜像;产物目录会反映实际架构
-- 没有 benchmark、UI 截图回归、崩溃日志收集
-
-## 4. 下一步
-
-1. `release.yml`:tag → 构建 arm64/amd64 → 签名/公证 → GitHub Release。
-2. Nim/ccache 缓存。
-3. 用 App Store Connect API key 完成实际 notarytool 验证。
-4. 自动更新 manifest 与 Sparkle 风格更新窗口。
+其他平台以及系统交互的验收入口见 [开发基线](28-remediation-status.md#自动化与实机验收)。

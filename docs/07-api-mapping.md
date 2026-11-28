@@ -1,5 +1,7 @@
 # MyGo → Nimi API 映射
 
+> 2026-11-24 复核。映射用于理解 MyGo 与 Nimi 的设计语义。当前导出项见 [公开门面](../src/nimi.nim)，平台能力和错误边界见 [开发基线](28-remediation-status.md)。
+
 > 2026-11-06 重评：本文包含目标设计，不能作为当前 API/线程安全/兼容性承诺。实现边界与后续验收以 [整改基线](28-remediation-status.md) 为准；历史工期不作为剩余工期。
 >
 > 2026-11-22：命名对照仍以 0.7.4 的公开面为基础，当前上游快照为 `9b0ae9ef`（v0.10.0+121）。表中包含尚未实现的规划项，不能直接当作当前 API；已实现范围以源码、[整改基线](28-remediation-status.md) 和 [MyGo 能力对照](30-mygo-alignment.md) 为准。本轮新增的 `consumeActivationClick`、`openAtLogin`/`wasOpenedAtLogin` 已标在对应表中。

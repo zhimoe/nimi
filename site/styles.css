@@ -321,23 +321,6 @@ h1 em {
 }
 .button.ghost:hover { border-color: rgba(255, 243, 226, 0.32); }
 
-.hero-facts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
-  margin: 28px 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.hero-facts li {
-  padding: 5px 9px;
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  color: var(--faint);
-  font: 10.5px/1.4 var(--mono);
-}
-
 /* --- code window -------------------------------------------------------- */
 
 .hero-code { position: relative; }
@@ -583,14 +566,6 @@ figcaption {
   transform: translateY(-2px);
 }
 
-.card-index {
-  display: block;
-  margin-bottom: 26px;
-  color: var(--faint);
-  font: 10px/1 var(--mono);
-  letter-spacing: 0.1em;
-}
-
 .feature-card h3,
 .bento-card h3 {
   margin: 0 0 10px;
@@ -771,9 +746,6 @@ figcaption {
 }
 
 .milestones .done > span { color: var(--green); }
-.milestones .preview > span { color: var(--gold); }
-.milestones .partial > span { color: var(--gold); }
-.milestones .planned > span { color: var(--faint); }
 
 /* --- terminal ----------------------------------------------------------- */
 
@@ -1095,8 +1067,6 @@ figcaption {
 }
 
 @media (max-width: 480px) {
-  .hero-facts { gap: 5px; }
-  .hero-facts li { font-size: 9.5px; }
   .demo-points { grid-template-columns: 1fr; }
   .actions .button { width: 100%; }
   .cta-actions { flex-direction: column; width: 100%; }

@@ -1,5 +1,7 @@
 # Windows / Linux 后端规划
 
+> 2026-11-24 复核。当前 Windows 使用 GDI，Linux 使用 Cairo/Pango。D3D11、DirectWrite、GL 和无障碍仍是设计工作。参阅 [Windows 实现](32-windows-framework.md) 和 [Linux 实现](33-linux-framework.md)。
+
 > 状态:草案 · 日期:2026-11-04 · 关联:[架构](01-architecture.md)、[macOS 后端](02-macos-backend.md)、[路线图](05-roadmap.md)
 > 参考:MyGo `internal/windows`(20.5k 行非测试)、`internal/linux`(15.8k 行)、`internal/gpu/{d3d11,gl}`、`cmd/mygo` 打包
 >
@@ -7,13 +9,13 @@
 
 ---
 
-## 1. 共同原则
+## 1. 后端设计原则
 
 1. **契约不变。** Windows/Linux 后端实现与 macOS 相同的 `platform.Backend`/`Window`/`Surface`/handlers;core/UI/渲染器不感知平台差异。
 2. **主线程专属。** 所有平台调用与回调在主线程;跨线程经 `postMain`/`await`。
 3. **按需加载。** Linux 的 WebKitGTK 只在需要网页窗口时 `dlopen`;Windows 的 WebView2 Runtime 只在需要网页窗口时初始化。仅原生 UI 的 app 不依赖浏览器运行时。
 4. **后端只翻译。** 窗口几何、DPI、菜单、磁盘路径等平台策略可以在后端,但不得改变 core 的状态机。
-5. **构建与运行解耦。** Linux 后端用纯 `dlopen` 绑定,构建机不需要 GTK/WebKit 头文件;Windows 用 `winim`/COM vtable,构建机需要 MinGW 导入库但不需要 WebView2 SDK。
+5. **构建与运行解耦。** Linux 后端用纯 `dlopen` 绑定,构建机不需要 GTK/WebKit 头文件;Windows 由 Nim 调用 C shim。当前仓库随源码提供 WebView2 SDK 头文件和匹配架构的 Loader，构建使用 Windows C 工具链。
 
 ---
 

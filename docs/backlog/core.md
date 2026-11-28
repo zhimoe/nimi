@@ -4,6 +4,8 @@
 
 ## IPC 与 WebView
 
+优先补流式交付的端到端用例，覆盖背压、终止、页面离开与窗口关闭。
+
 - 流式 IPC/Channel、批处理与 AbortSignal 启停。
 - preload、trusted/untrusted、页面下载/权限、`WebViewAvailable`。
 - 复杂类型的自动 TypeScript 映射；当前基础标量之外为 `unknown`。
@@ -21,7 +23,7 @@
 
 ## 工具链与发布
 
-- `nimi init` 模板、`nimi dev` 热重载边界与更完整的 `doctor`。
+- 完善 `nimi init --native` 自绘模板、`nimi dev` 前端资源监听与 `doctor` 诊断。
 - 自动更新（manifest/delta/签名）、release workflow、更新窗口。
 - macOS 实际公证、Windows 安装器、Linux PKGBUILD/AppImage。
 - 崩溃日志、干净机器启动、升级/回滚验收。
@@ -37,7 +39,7 @@
 ## i18n 与文档
 
 - locale 匹配、消息目录、CLDR 复数/日期/数字、pseudo locale。
-- 新 API 的 README/官网示例与迁移说明。
+- 新增或变更 API 时同步 README、官网快速开始和迁移说明。
 - 多页文档与站内搜索;Windows/Linux 与浅色主题截图。
 - Pages workflow 前的链接检查/HTML 校验;继续保持零第三方脚本。
 - 许可证文件与自身许可定稿（当前 `nimi.nimble` 标注 MIT）。

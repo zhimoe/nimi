@@ -1,5 +1,7 @@
 # Windows 框架开发：契约、桌面 API、输入
 
+> 2026-11-24 复核。Windows CI 最近一次运行（2026-11-22）通过原生测试及 CLI、hello、environment 构建。实机验收按 [Windows backlog](backlog/windows.md) 继续。[CI 运行记录](https://github.com/zhimoe/nimi/actions/runs/44978288254)
+
 目标日期：2026-11-12。主线是框架；环境变量管理器用于回归验证。
 
 2026-11-19 对照 MyGo `400ba3b1` 复检。Windows 11 ARM64 已运行 GUI 专项回归，其他 Win32 和 WebView2 变更见各项验证记录。

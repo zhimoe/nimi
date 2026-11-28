@@ -1,5 +1,7 @@
 # 碎纸效果:MyGo shader 的 Nimi 复刻
 
+> 本页记录 WebView/WebGL 版本和共享物理。CoreGraphics、GDI、Cairo 与 macOS Metal 的原生路径见 [原生碎纸](26-native-shred.md)。
+
 > 日期:2026-11-05 · 对应 M3 动画/效果切片
 
 ---

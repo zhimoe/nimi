@@ -1,13 +1,13 @@
 # Nimi Notes
 
-一个本地优先的 Markdown 笔记应用,用来验证 Nimi 的 WebView-first 路径:
+本地 Markdown 笔记应用，用于验证 Nimi 的 WebView 路径。macOS 使用 WKWebView，Linux CI 也构建 WebKitGTK 版本。
 
-- WKWebView 页面 + 原生窗口
+- 系统 WebView 页面与原生窗口
 - Nim ↔ JS 类型化 JSON IPC
 - 原生菜单(新建/保存/导入/导出/搜索)
-- NSOpenPanel / NSSavePanel 导入、导出 Markdown
+- 系统文件对话框导入、导出 Markdown
 - 自动保存、搜索、实时预览、明暗主题
-- 笔记存放在 `~/Library/Application Support/Nimi Notes/notes.json`
+- `NIMI_NOTES_DIR` 可覆盖存储目录。默认沿用 `~/Library/Application Support/Nimi Notes/notes.json`，其他系统也使用同一相对主目录路径。
 - 可打包成 `.app` 与 DMG
 
 ## 运行
@@ -16,11 +16,11 @@
 nim c -r --path:src examples/notes/main.nim
 ```
 
-## 打包
+## 在 macOS 打包
 
 ```sh
 ./nimi build examples/notes
-open "examples/notes/dist/darwin-arm64/Nimi Notes.app"
+open "examples/notes/dist/darwin-$(uname -m | sed s/x86_64/amd64/)/Nimi Notes.app"
 ```
 
 ## 冒烟测试
@@ -28,8 +28,8 @@ open "examples/notes/dist/darwin-arm64/Nimi Notes.app"
 使用临时数据目录,避免碰真实笔记:
 
 ```sh
-rm -rf /tmp/nimi-notes-smoke
-NIMI_NOTES_DIR=/tmp/nimi-notes-smoke NIMI_SMOKE=crud \
+notes_dir=$(mktemp -d)
+NIMI_NOTES_DIR="$notes_dir" NIMI_SMOKE=crud \
   nim c -r --path:src examples/notes/main.nim
 # smoke crud: ok (1 -> 2)
 ```

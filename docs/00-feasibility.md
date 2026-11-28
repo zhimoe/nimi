@@ -1,10 +1,12 @@
 # Nimi 可行性分析:用 Nim 重实现 MyGo
 
+> 2026-11-24 复核。可行性论证和估算基于最初的 macOS 切片。三个桌面后端的现行能力及验证见 [开发基线](28-remediation-status.md)。
+
 > 2026-11-06 重评：本文包含目标设计，不能作为当前 API/线程安全/兼容性承诺。实现边界与后续验收以 [整改基线](28-remediation-status.md) 为准；历史工期不作为剩余工期。
 
-> 状态:草案 · 日期:2026-11-04 · 范围:macOS 优先,Windows/Linux 后续
-> 参考实现:`/Users/zhimoe/code/nimi/mygo`(稳定基线 MyGo v0.10.0 `ebde9399`;本地能力盘点快照 `9b0ae9ef`,MIT License)
-> 验证代码:`/Users/zhimoe/code/nimi/spikes/`(7 个可运行的 Nim 原型)
+> 状态:草案 · 日期:2026-11-04 · 初稿范围:macOS 优先
+> 参考实现:`mygo/`(稳定基线 MyGo v0.10.0 `ebde9399`;本地能力盘点快照 `9b0ae9ef`,MIT License)
+> 验证代码:[spikes/](../spikes/README.md)（7 个可运行的 Nim 原型）
 
 ---
 
@@ -35,7 +37,7 @@ Go 和 Nim 无法做到源码级兼容。这里的 fork 是**架构与行为层�
 
 > **关键判断**:如果目标是"现有 MyGo 应用不改代码就能用 Nim 编译",那不可行;如果目标是"同样的应用形态、同样的前端协议、类似的心智模型,用 Nim 重写",则完全可行。本方案按后者设计。
 
-### 1.3 非目标(v0.1)
+### 1.3 最初 macOS 切片的范围边界
 
 - Windows/Linux 后端(先留接口与桩)。
 - 浏览器/wasm 后端。

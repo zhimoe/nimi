@@ -1,5 +1,7 @@
 # M6 切片:选择与剪贴板
 
+> macOS 使用 Command，Windows 和 Linux 使用 Control。当前编辑按 grapheme 边界取整，TextArea 滚动跟随 caret，平台剪贴板经共享 hook 接入。
+
 > 2026-11-06：整改、当前限制与验收级别见 [最新基线](28-remediation-status.md)。历史验证记录不代表完整能力已经验收。
 
 > 日期:2026-11-05 · 对应 M6 选择/copy/paste
@@ -14,7 +16,7 @@
 - TextInput/TextArea 选择:
   - Shift + 左右/上下/Home/End 扩展选择
   - 鼠标按下/拖动设置 anchor 与 caret
-  - 双击选词、三击选整行/全文(UTF-8 字节级词边界)
+  - 双击选词、三击选整行/全文
   - `Cmd+A` 全选
   - 选择区绘制
 - 剪贴板:
@@ -67,16 +69,13 @@ NIMI_SMOKE=undo nim c -r --path:src examples/form-native/main.nim
 
 ## 4. 已知限制
 
-- 双击选词是字节级边界,复杂 Unicode/标点分词不精确
+- 双击选词按 grapheme 边界取整。复杂语言的分词仍有限。
 - 没有拖拽移动文本
 - 没有富文本/格式
-- 自动换行处的选择区间为近似映射
 - 菜单快捷键在窗口非激活/无 key window 时不会触发 responder
-- 没有滚动;选择不可见区域不可选
 
 ## 5. 下一步
 
-1. 双击选词、三击选段、拖拽移动文本。
-2. ScrollView + caret 自动滚动。
-3. IME/候选窗与选择区协同。
-4. 富文本/格式化与命令式编辑。
+1. 拖拽移动文本。
+2. 实测组合态、选择和候选窗的联动。
+3. 富文本/格式化与命令式编辑。

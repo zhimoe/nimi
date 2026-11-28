@@ -1,5 +1,7 @@
 # M6 切片:IME(NSTextInputClient)
 
+> 三平台原生 IME 入口分别为 NSTextInputClient、IMM32 与 GtkIMContext，共享引擎处理 marked text 和 UTF-16 范围。合成输入已纳入测试，真实中日韩候选窗和重转换仍按 [平台清单](backlog/README.md) 验收。
+
 > 2026-11-06：整改、当前限制与验收级别见 [最新基线](28-remediation-status.md)。历史验证记录不代表完整能力已经验收。
 
 > 日期:2026-11-05 · 对应 M6 输入法支持

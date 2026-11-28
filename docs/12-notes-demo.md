@@ -1,5 +1,7 @@
 # Nimi Notes:WebView-first GUI 验收
 
+> 本页的菜单、截图和 DMG 记录来自 macOS。Linux 也构建 Notes 并有 WebKitGTK 启动记录。运行和数据目录设置见 [示例说明](../examples/notes/README.md)。
+
 > 日期:2026-11-04 · 对应 `examples/notes`
 
 ---

@@ -1,4 +1,6 @@
-# M5 切片:FSEvents 文件监视
+# M5 切片与当前文件监视
+
+> 共享 `watch(path, fn)` 现连接 macOS FSEvents、Windows ReadDirectoryChangesW 和 Linux inotify。递归、路径和事件合并行为依各后端而异。[Document](23-m5-document.md) 已使用父目录监视。
 
 > 日期:2026-11-05 · 对应 M5 文件监视部分
 
@@ -60,4 +62,4 @@ NIMI_WATCH_DIR=/tmp/nimi-watch-demo NIMI_SMOKE=watch \
 1. 去抖/批量事件 API,支持 `debounce(ms)`。
 2. 忽略规则(`.git`、`node_modules`)与递归开关。
 3. 初始快照和目录树 diff,服务文档/IDE 类应用。
-4. 与文档控制器结合:外部修改冲突提示、自动重载。
+4. 补齐更多平台下的批量重命名、目录替换与长时运行验收。
